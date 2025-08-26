@@ -20,7 +20,6 @@ gameScene.preload = function(){
 };
 
 
-// once preload ends we use creat..
 gameScene.create = function() {
     // this.add.sprite(0,0,'background').setPosition(GameWidth/2, GameHeight/2).setScale(0.9,0.9);
 };
