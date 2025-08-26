@@ -18,7 +18,6 @@ gameScene.preload = function(){
     // this.load.image('background', 'assets/background.jpeg');
 };
 
-
 gameScene.create = function() {
     // this.add.sprite(0,0,'background').setPosition(GameWidth/2, GameHeight/2).setScale(0.9,0.9);
 };
