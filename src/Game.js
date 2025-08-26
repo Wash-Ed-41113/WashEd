@@ -4,8 +4,7 @@ const GameHeight = 360;
 
 
 let gameScene = new Phaser.Scene("Game");
-
-
+//njnsjksnjs
 let config = {
     type: Phaser.AUTO,
     width: GameWidth,
