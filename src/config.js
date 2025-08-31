@@ -6,8 +6,8 @@ const CONFIG = {
     rInner: 90,
     rOuter: 760,
     rSink: 32,
-    spawnInvervalMS: 1200,
-    germSpeer: 80,
+    spawnIntervalMs: 1200,
+    germSpeed: 80,
 
     words: ['wash','soap','clean','water','tap','filter','boil','rinse','scrub'], // todo later replace with database
 
