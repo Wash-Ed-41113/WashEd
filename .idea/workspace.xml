@@ -4,12 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="basic scene and matrix prototype.">
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/images/created/Sink.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Index.html" beforeDir="false" afterPath="$PROJECT_DIR$/Index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/Phaser v3.90.0 Tsugumi.js" beforeDir="false" afterPath="$PROJECT_DIR$/lib/phaser-3.90.0.js" afterDir="false" />
+    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Enemy movement and spawn logic">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/SoapSplash.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/SoapSplash.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/config.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.js" afterDir="false" />
     </list>
@@ -122,7 +118,7 @@
       <workItem from="1756563351927" duration="491000" />
       <workItem from="1756563852407" duration="13286000" />
       <workItem from="1756614937503" duration="14228000" />
-      <workItem from="1756636056986" duration="721000" />
+      <workItem from="1756636056986" duration="5614000" />
     </task>
     <task id="LOCAL-00001" summary="initial setup w/boilerplate">
       <option name="closed" value="true" />
@@ -172,7 +168,15 @@
       <option name="project" value="LOCAL" />
       <updated>1756613784744</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="Enemy movement and spawn logic">
+      <option name="closed" value="true" />
+      <created>1756636892778</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1756636892778</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -200,6 +204,7 @@
     <MESSAGE value="initial setup si w/boilerplate" />
     <MESSAGE value="assets and Lib added" />
     <MESSAGE value="basic scene and matrix prototype." />
-    <option name="LAST_COMMIT_MESSAGE" value="basic scene and matrix prototype." />
+    <MESSAGE value="Enemy movement and spawn logic" />
+    <option name="LAST_COMMIT_MESSAGE" value="Enemy movement and spawn logic" />
   </component>
 </project>
