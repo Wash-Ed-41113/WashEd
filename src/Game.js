@@ -17,12 +17,9 @@ let lives = 3;
 let timeLeft = 30; // seconds
 let gameOver = false;
 
-// Load images
+// Load germ image (optional)
 const germImg = new Image();
-germImg.src = "washed_mod_2__ICON.png"; // make sure file is in same folder
-
-const waterImg = new Image();
-waterImg.src = "water.png"; // optional (use aqua square if missing)
+germImg.src = "washed_mod_2__ICON.png"; // fallback to red square if missing
 
 // Spawn items
 function spawnItem() {
@@ -39,19 +36,20 @@ function spawnItem() {
 
 // Draw player hand
 function drawPlayer() {
-    ctx.fillStyle = "blue"; // replace with hand image if needed
+    ctx.fillStyle = "blue"; // simple block for hand
     ctx.fillRect(player.x, player.y, player.width, player.height);
 }
 
 // Draw items
 function drawItems() {
     items.forEach(item => {
-        if (item.type === "water" && waterImg.complete) {
-            ctx.drawImage(waterImg, item.x, item.y, item.width, item.height);
-        } else if (item.type === "germ" && germImg.complete) {
+        if (item.type === "water") {
+            ctx.fillStyle = "aqua";
+            ctx.fillRect(item.x, item.y, item.width, item.height);
+        } else if (item.type === "germ" && germImg.complete && germImg.naturalWidth !== 0) {
             ctx.drawImage(germImg, item.x, item.y, item.width, item.height);
         } else {
-            ctx.fillStyle = item.type === "water" ? "aqua" : "red";
+            ctx.fillStyle = "red";
             ctx.fillRect(item.x, item.y, item.width, item.height);
         }
     });
@@ -94,8 +92,9 @@ function updateItems() {
 
 // Game loop
 function update() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
     if (gameOver) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "black";
         ctx.font = "30px Arial";
         ctx.fillText("Game Over!", 120, 300);
@@ -103,7 +102,6 @@ function update() {
         return;
     }
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawPlayer();
     drawItems();
     drawUI();
@@ -142,7 +140,6 @@ setInterval(() => {
 
 // Start game
 update();
-
 
 
 
