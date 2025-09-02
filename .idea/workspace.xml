@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Enemy movement and spawn logic">
+    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Updated MOvement and spawning systems">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/SoapSplash.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/SoapSplash.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/config.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.js" afterDir="false" />
@@ -118,7 +118,9 @@
       <workItem from="1756563351927" duration="491000" />
       <workItem from="1756563852407" duration="13286000" />
       <workItem from="1756614937503" duration="14228000" />
-      <workItem from="1756636056986" duration="5614000" />
+      <workItem from="1756636056986" duration="6292000" />
+      <workItem from="1756692696551" duration="2111000" />
+      <workItem from="1756773805755" duration="1443000" />
     </task>
     <task id="LOCAL-00001" summary="initial setup w/boilerplate">
       <option name="closed" value="true" />
@@ -176,7 +178,15 @@
       <option name="project" value="LOCAL" />
       <updated>1756636892778</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="Updated MOvement and spawning systems">
+      <option name="closed" value="true" />
+      <created>1756641928347</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1756641928347</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -205,6 +215,7 @@
     <MESSAGE value="assets and Lib added" />
     <MESSAGE value="basic scene and matrix prototype." />
     <MESSAGE value="Enemy movement and spawn logic" />
-    <option name="LAST_COMMIT_MESSAGE" value="Enemy movement and spawn logic" />
+    <MESSAGE value="Updated MOvement and spawning systems" />
+    <option name="LAST_COMMIT_MESSAGE" value="Updated MOvement and spawning systems" />
   </component>
 </project>

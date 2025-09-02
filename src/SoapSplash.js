@@ -69,7 +69,7 @@ gameScene.create = function () {
         y: this.sinkSprite.y - this.sinkSprite.displayHeight * 0.5
     });
 
-    if(CONFIG.useCornerAim){
+    if(CONFIG.useSpawner){
         const cornerDist = Math.hypot(CONFIG.width - this.sinkPosition.x, 0 - this.sinkPosition.y);
 
 
@@ -79,14 +79,9 @@ gameScene.create = function () {
         const centerDeg = Phaser.Math.RadToDeg(Math.atan2(CONFIG.height, CONFIG.width));
         this.angleMinDeg = Math.max(0,  centerDeg - CONFIG.angleSpreadDeg);
         this.angleMaxDeg = Math.min(90, centerDeg + CONFIG.angleSpreadDeg);
-    } else {
-        this.rInner = CONFIG.rInner;
-        this.rOuter = CONFIG.rOuter;
-        this.angleMinDeg = CONFIG.angleMinDeg;
-        this.angleMaxDeg = CONFIG.angleMaxDeg;
     }
 
-    console.log('spawn band:', { rInner: this.rInner, rOuter: this.rOuter, angleMinDeg: this.angleMinDeg, angleMaxDeg: this.angleMaxDeg });
+
 
     this.germs = [];
     this.lastSpawn = 0;
