@@ -1,4 +1,23 @@
 
+/*
+* -----------------------------------------------------
+* THINGS TO KNOW
+* ---------------------------------------------------
+*
+* Scene lifecycle...
+* Phaser calls preload() once -> this loads every asset.
+* Phaser calls create() once after preload, This creates the login and sprites... as in adds in the logic
+* Phaser calls Update() every frame... this makes everything move...
+*
+*
+* Invisible spawn area
+* A triangel/ cone with its head (acute angle / smallest angle ) pointing at the sink..
+*
+*
+*
+* */
+
+
 
 const gameScene = new Phaser.Scene('SopeSplash');
 
@@ -11,19 +30,34 @@ gameScene.preload = function () { // todo update assets
 
 
 //  HELPERS
-function sampleAngle(minDeg, maxDeg){
+function sampleAngle(minDeg, maxDeg){ // gets a random angle in your cone
     const a0 = Phaser.Math.DegToRad(minDeg);
     const a1 = Phaser.Math.DegToRad(maxDeg);
     return Phaser.Math.FloatBetween(a0, a1);
 }
+/*sample angle gets a random angle in the triangle and and converts them into radians from degree
+* Phaser uses radians
+* Returns a Uniform random angle in min and max  ie between angle theta and 1
+*
+* A uniform angle here defines angles with no probable bias, so each spawn is equally likely */
+
+
 function sampleRadius(rInner, rOuter){
     const u = Math.random();
     return Math.sqrt(u * (rOuter*rOuter - rInner*rInner) + rInner*rInner);
 }
+/*
+* Gets a random distance form the sink...
+* */
+
+
 
 function polarToWorld(origin, r, theta) {
     return {x: origin.x + Math.cos(theta)*r, y: origin.y - Math.sin(theta)*r};
 }
+
+
+
 
 
 gameScene.spawnGerm = function () {

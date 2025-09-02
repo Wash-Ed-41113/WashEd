@@ -4,10 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Updated MOvement and spawning systems">
+    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="config.js Documentation">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/SoapSplash.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/SoapSplash.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/config.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -120,7 +119,8 @@
       <workItem from="1756614937503" duration="14228000" />
       <workItem from="1756636056986" duration="6292000" />
       <workItem from="1756692696551" duration="2111000" />
-      <workItem from="1756773805755" duration="1443000" />
+      <workItem from="1756773805755" duration="1522000" />
+      <workItem from="1756776197992" duration="2284000" />
     </task>
     <task id="LOCAL-00001" summary="initial setup w/boilerplate">
       <option name="closed" value="true" />
@@ -186,7 +186,15 @@
       <option name="project" value="LOCAL" />
       <updated>1756641928347</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="config.js Documentation">
+      <option name="closed" value="true" />
+      <created>1756775329002</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1756775329002</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -216,6 +224,7 @@
     <MESSAGE value="basic scene and matrix prototype." />
     <MESSAGE value="Enemy movement and spawn logic" />
     <MESSAGE value="Updated MOvement and spawning systems" />
-    <option name="LAST_COMMIT_MESSAGE" value="Updated MOvement and spawning systems" />
+    <MESSAGE value="config.js Documentation" />
+    <option name="LAST_COMMIT_MESSAGE" value="config.js Documentation" />
   </component>
 </project>
