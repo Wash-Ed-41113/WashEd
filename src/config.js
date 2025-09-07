@@ -24,13 +24,13 @@ const CONFIG = {
     angleMaxDeg: 90,
 
     // anti clumping...
-    minSpawnSeparationPx: 160, // reject new spawn too close to existing ones
+    minSpawnSeparationPx: 200, // reject new spawn too close to existing ones
     maxSpawnAttempts: 12, // how many tries per spawn to find a spot per tick
 
 
     // Pacing
     spawnIntervalMs: 1800,
-    germSpeed: 60,
+    germSpeed: 120,
     wobble: 0.50,
 
     // game rules

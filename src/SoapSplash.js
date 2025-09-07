@@ -1,5 +1,5 @@
 
-/*
+/**
 * -----------------------------------------------------
 * THINGS TO KNOW
 * ---------------------------------------------------
@@ -35,7 +35,8 @@ function sampleAngle(minDeg, maxDeg){ // gets a random angle in your cone
     const a1 = Phaser.Math.DegToRad(maxDeg);
     return Phaser.Math.FloatBetween(a0, a1);
 }
-/*sample angle gets a random angle in the triangle and and converts them into radians from degree
+/**
+sample angle gets a random angle in the triangle and and converts them into radians from degree
 * Phaser uses radians
 * Returns a Uniform random angle in min and max  ie between angle theta and 1
 *
@@ -43,33 +44,42 @@ function sampleAngle(minDeg, maxDeg){ // gets a random angle in your cone
 
 
 function sampleRadius(rInner, rOuter){
-    const u = Math.random();
+    const u = Math.random(); // the randomness...
     return Math.sqrt(u * (rOuter*rOuter - rInner*rInner) + rInner*rInner);
 }
-/*
+/**
 * Gets a random distance form the sink...
+* r^2 = U * (rOuter ^2 - rInner^2 ) + rInner^2
 * */
 
 
 
-function polarToWorld(origin, r, theta) {
-    return {x: origin.x + Math.cos(theta)*r, y: origin.y - Math.sin(theta)*r};
+function polarToWorld(origin, r, theta) { // converts polar cordinates to world cordinstes, x and y...
+    return {x: origin.x + Math.cos(theta)*r, y: origin.y - Math.sin(theta) *r}; // its a -ve sin caus y grows downwards
 }
 
+
+/**
+* germs are spawnning in an invisible wedge defined by direction and distance,
+* cone - picks a direction from sink and is ranged at angleMinDeg to angleMaxDeg....
+* radii - picks how far from the sink to spawn (rInner to rOuter)
+* intersection of cone and radai is spawn zone...
+* */
 
 
 
 
 gameScene.spawnGerm = function () {
-    let tries = CONFIG.maxSpawnAttempts || 10;
+    let tries = CONFIG.maxSpawnAttempts; // necessary to limit cpu usage
     let pos = null;
 
-    while (tries-- > 0) {
-        const theta = sampleAngle(this.angleMinDeg, this.angleMaxDeg);
-        const r     = sampleRadius(this.rInner, this.rOuter);
-        const p     = polarToWorld(this.sinkPosition, r, theta);
+    while (tries-- > 0) {  // no of times the loop runs in a frame... rn 12..
+        const theta = sampleAngle(this.angleMinDeg, this.angleMaxDeg); // got direction
+        const r     = sampleRadius(this.rInner, this.rOuter); // got distance
+        const p     = polarToWorld(this.sinkPosition, r, theta); // got exact point where to spawn
 
-        const sep = CONFIG.minSpawnSeparationPx || 0;
+        // this is what prevents clusters,
+        const sep = CONFIG.minSpawnSeparationPx;   // how much distance we want among germs...
         if (sep > 0) {
             let ok = true;
             for (let i = 0; i < this.germs.length; i++) {
@@ -80,29 +90,41 @@ gameScene.spawnGerm = function () {
             if (!ok) continue;
         }
 
-        pos = p; break;
+        pos = p; break; // valid spot found
     }
     if (!pos) return;
 
-    const sprite = this.add.sprite(pos.x, pos.y, 'Germ').setDepth(4).setScale(0.12);
-    const word   = CONFIG.words[(Math.random() * CONFIG.words.length) | 0];
+    const sprite = this.add.sprite(pos.x, pos.y, 'Germ').setDepth(4).setScale(0.12);      //  Germs Sprite TODO replace later
+    const word   = CONFIG.words[(Math.random() * CONFIG.words.length) ];
     const label  = this.add.text(pos.x, pos.y + 14, word, { fontFamily:'monospace', fontSize:'12px', color:'#fff' })
         .setOrigin(0.5, 0).setDepth(5);
     this.germs.push({ sprite, label, word });
-};
+}; // as long as there optimal space.. system will spawn germs...
+/*
+* try upto max spawn attempts, enforce a minimum distance of space between germs, */
 
 
+
+
+
+// World and scene creation
 gameScene.create = function () {
     this.sinkPosition = {x: 0, y: CONFIG.height}; // bottom left position for sink
 
-    this.add.sprite(CONFIG.width/2, CONFIG.height/2, 'Background').setDepth(0).setScale(2);
-    this.sinkSprite = this.add.sprite(this.sinkPosition.x, this.sinkPosition.y, 'Sink').setOrigin(0,1).setScale(4).setDepth(4);
+    this.add.sprite(CONFIG.width/2, CONFIG.height/2, 'Background').setDepth(0).setScale(2);     //  Background Sprite TODO replace later
+    this.sinkSprite = this.add.sprite(this.sinkPosition.x, this.sinkPosition.y, 'Sink').setOrigin(0,1).setScale(4).setDepth(4);   //  Sink's Sprite TODO replace later
+
+
+    /** gets the center of img of sinks.. for breaching TODO later make this into a circle of diameter of width of sprite.
+      todo maybe add jerky motion to sink when germs breach
+        */
 
     this.getSinkHitPoint = () => ({
         x: this.sinkSprite.x + this.sinkSprite.displayWidth  * 0.5,
         y: this.sinkSprite.y - this.sinkSprite.displayHeight * 0.5
     });
 
+    // configure the intercection that spawnnner will use
     if(CONFIG.useSpawner){
         const cornerDist = Math.hypot(CONFIG.width - this.sinkPosition.x, 0 - this.sinkPosition.y);
 
@@ -114,6 +136,7 @@ gameScene.create = function () {
         this.angleMinDeg = Math.max(0,  centerDeg - CONFIG.angleSpreadDeg);
         this.angleMaxDeg = Math.min(90, centerDeg + CONFIG.angleSpreadDeg);
     }
+    // todo later adjust population of germs and trigger spawnner once...  1st breach happens.
 
 
 
@@ -126,14 +149,22 @@ gameScene.create = function () {
     });
 };
 
+
+/**
+ * Frame Loop
+ */
+
 gameScene.update = function (time, delta) {
-    if (time - this.lastSpawn > CONFIG.spawnIntervalMs){
+    if (time - this.lastSpawn > CONFIG.spawnIntervalMs){ // if enough time has passed since last spawn make a new one..
         this.spawnGerm();
         this.lastSpawn = time;
     }
     this.moveGerms(delta);
     this.checkBreaches();
 };
+
+// movement
+
 
 gameScene.moveGerms = function (delta) {
 
@@ -164,6 +195,12 @@ gameScene.moveGerms = function (delta) {
     }
 };
 
+
+
+/**
+ * Remove any germ that reaches the sink center within radius rSink.
+ * Also increments the HUD counter. (Add lose-condition when breaches >= 5.)
+ */
 
 gameScene.checkBreaches = function () {
     const hit = this.getSinkHitPoint();

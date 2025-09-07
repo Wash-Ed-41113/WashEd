@@ -4,9 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="config.js Documentation">
+    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="soapsplash.ja Documentation incomplete">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/SoapSplash.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/SoapSplash.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/config.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -120,7 +121,11 @@
       <workItem from="1756636056986" duration="6292000" />
       <workItem from="1756692696551" duration="2111000" />
       <workItem from="1756773805755" duration="1522000" />
-      <workItem from="1756776197992" duration="2284000" />
+      <workItem from="1756776197992" duration="8975000" />
+      <workItem from="1756798388989" duration="3228000" />
+      <workItem from="1756866758594" duration="619000" />
+      <workItem from="1757051702980" duration="3356000" />
+      <workItem from="1757067222660" duration="3044000" />
     </task>
     <task id="LOCAL-00001" summary="initial setup w/boilerplate">
       <option name="closed" value="true" />
@@ -194,7 +199,15 @@
       <option name="project" value="LOCAL" />
       <updated>1756775329002</updated>
     </task>
-    <option name="localTasksCounter" value="10" />
+    <task id="LOCAL-00010" summary="soapsplash.ja Documentation incomplete">
+      <option name="closed" value="true" />
+      <created>1756778640294</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1756778640294</updated>
+    </task>
+    <option name="localTasksCounter" value="11" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -225,6 +238,7 @@
     <MESSAGE value="Enemy movement and spawn logic" />
     <MESSAGE value="Updated MOvement and spawning systems" />
     <MESSAGE value="config.js Documentation" />
-    <option name="LAST_COMMIT_MESSAGE" value="config.js Documentation" />
+    <MESSAGE value="soapsplash.ja Documentation incomplete" />
+    <option name="LAST_COMMIT_MESSAGE" value="soapsplash.ja Documentation incomplete" />
   </component>
 </project>
