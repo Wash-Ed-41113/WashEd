@@ -8,6 +8,8 @@ window.CONFIG = {
     useSpawner: true,
     maxGerms: 5,
     germSpriteSize: 0.12,
+    verticalSpaceLabel:55,
+    labelTextSize: 25,
 
     gameDurationMin: 1,
 

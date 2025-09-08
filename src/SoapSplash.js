@@ -76,6 +76,15 @@ gameScene.create = function () {
     });
 
     systems.timer.init(this);
+    this.gameStartAt = this.time.now;
+
+    systems.typing.init(this);
+
+    // (Optional) seed an initial target if germs already exist at create-time
+    if (!this.typing?.activeId && this.germs.length > 0) {
+        systems.typing.pickRandom(this);
+    }
+
 };
 
 gameScene.update = function (time, delta) {
@@ -93,7 +102,7 @@ gameScene.update = function (time, delta) {
         systems.rules.checkBreaches(this);
     }
 
-    systems.timer.updateHUD(this, time);
+    systems.timer.updateHUD(this, this.time.now);
 };
 
 const config = {
