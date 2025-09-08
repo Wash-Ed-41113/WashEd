@@ -5,40 +5,15 @@
             const a1 = Phaser.Math.DegToRad(maxDeg);
             return Phaser.Math.FloatBetween(a0, a1);
         },
-        /**
-         sample angle gets a random angle in the triangle and and converts them into radians from degree
-         * Phaser uses radians
-         * Returns a Uniform random angle in min and max  ie between angle theta and 1
-         *
-         * A uniform angle here defines angles with no probable bias, so each spawn is equally likely */
 
         sampleRadius(rInner, rOuter) {
             const u = Math.random();
             return Math.sqrt(u * (rOuter*rOuter - rInner*rInner) + rInner*rInner);
         },
 
-        /**
-         * Gets a random distance form the sink...
-         * r^2 = U * (rOuter ^2 - rInner^2 ) + rInner^2
-         * */
-
-
-
-
         polarToWorld(origin, r, theta) {
             return { x: origin.x + Math.cos(theta)*r, y: origin.y - Math.sin(theta)*r };
         },
-
-
-
-        /**
-         * germs are spawnning in an invisible wedge defined by direction and distance,
-         * cone - picks a direction from sink and is ranged at angleMinDeg to angleMaxDeg....
-         * radii - picks how far from the sink to spawn (rInner to rOuter)
-         * intersection of cone and radai is spawn zone...
-         * */
-
-
 
         addGerm(scene, pos, word) {
             const id = ++scene.germSeq;
@@ -46,17 +21,12 @@
                 .setDepth(4).setScale(CONFIG.germSpriteSize);
 
             const labelTyped = scene.add.text(pos.x, pos.y + CONFIG.verticalSpaceLabel, '', {
-                fontFamily: 'monospace', fontSize: CONFIG.labelTextSize + 'px', color: '#6cf96c'
+                fontFamily: 'monospace', fontSize: CONFIG.labelTextSize , color: '#6cf96c'
             }).setOrigin(0.5, 0).setDepth(5);
 
             const labelRemain = scene.add.text(pos.x, pos.y + CONFIG.verticalSpaceLabel, word, {
-                fontFamily: 'monospace', fontSize: CONFIG.labelTextSize + 'px', color: '#ffffff'
+                fontFamily: 'monospace', fontSize: CONFIG.labelTextSize , color: '#ffffff'
             }).setOrigin(0.5, 0).setDepth(5);
-
-            /**
-             * The idea is to split the word into 2 parts
-             * Green - what has already been typed
-             * White - what's left to type...**/
 
             const curBox = scene.add.rectangle(
                 pos.x, pos.y + CONFIG.verticalSpaceLabel, (0.6 * CONFIG.labelTextSize), CONFIG.labelTextSize, 0xffff, 0.50 ).setOrigin(0, 0)
@@ -92,7 +62,7 @@
             return CONFIG.words[idx];
         },
 
-        isOnScreen(scene, x, y, margin = 0) {
+        isOnScreen(scene, x, y, margin = 10) {
             const view = scene.cameras.main.worldView;
             return (
                 x >= view.x - margin &&
@@ -213,16 +183,25 @@
                         systems.helpers.removeGermByIndex(scene, i);
                         scene.breaches++;
 
-                        // keep HUD in sync
                         scene.hud?.setText(`Breaches: ${scene.breaches}/5`);
 
-                        // sticky-nearest: only repick if the active died, and only if something remains
+
+
                         if (wasActive) {
                             scene.typing.activeId = null;
                             if (scene.germs.length > 0) {
                                 systems.typing.pickNearest(scene);
                             }
                         }
+
+                        if (scene.typing) {
+                            scene.typing.score = Math.max(0, scene.typing.score - CONFIG.breachPenalty);
+                        }
+
+                        if (scene.breaches >= 5) {
+                            systems.timer.endGame(scene, CONFIG.breachStatement);
+                        }
+
 
                         // TODO: if (scene.breaches >= 5) systems.timer.endGame(scene);
                     }
@@ -257,7 +236,7 @@
                 scene.timerHud.setText(`Time: ${two(mm)}:${two(ss)}`);
             },
 
-            endGame(scene) {
+            endGame(scene, reason = CONFIG.reason) {
                 if (scene.gameOver) return;
                 scene.gameOver = true;
 
@@ -265,12 +244,15 @@
                     h.removeGermByIndex(scene, i);
                 }
 
+                const { score = 0, bestStreak = 0 } = (scene.typing || {});
+
+
                 scene.timerHud?.setText('Time: 00:00');
                 scene.endEvent?.remove(false);
 
                 const overlay = scene.add.text(
                     CONFIG.width / 2, CONFIG.height / 2,
-                    `Time's up!\nBreaches: ${scene.breaches}/5\nTap to restart`,
+                    `Game Over – ${reason}\nScore: ${score}\nBest Streak: ${bestStreak}\nBreaches: ${scene.breaches}/5\n\nTap to restart`,
                     { fontFamily: 'monospace', fontSize: '28px', color: '#fff', align: 'center' }
                 ).setOrigin(0.5).setDepth(20);
 
@@ -289,10 +271,17 @@
                   mistakes: 0,
                   startedAt: null,
                   locked: false,
+
+                  score: 0,
+                  streak: 0,
+                  bestStreak: 0,
+                  wordClean: true,
+                  wordsCompleted: 0,
               };
 
-              scene.typeHud = scene.add.text(15, CONFIG.height - 40, `Streak: 0`,
-                  { fontFamily: 'monospace', fontSize: '16px', color: '#fff' }).setDepth(10);
+              scene.typeHud = scene.add.text(15, CONFIG.height - 40,
+                  `Score: 0   Streak: 0`, { fontFamily: 'monospace', fontSize: '16px', color: '#fff'
+              }).setDepth(10);
 
               scene.input.keyboard.on('keydown', (e) => this.onKey(e, scene));
           },
@@ -421,6 +410,7 @@
                 } else {
                     g.errors++;
                     scene.typing.mistakes++;
+                    scene.typing.wordClean = false;
                     scene.tweens.add({
                         targets: g.labelRemain,
                         color: '#ff6b6b',
@@ -440,13 +430,28 @@
                 const idx = scene.germs.indexOf(g);
                 if (idx >= 0) systems.helpers.removeGermByIndex(scene, idx);
                 scene.typing.activeId = null;
+
+                scene.typing.wordsCompleted++;
+                if (scene.typing.wordClean) {
+                    scene.typing.streak++;
+                    scene.typing.bestStreak = Math.max(scene.typing.bestStreak, scene.typing.streak);
+                    scene.typing.score += 100;
+                } else {
+                    scene.typing.streak = 0;
+                    scene.typing.score += 50;
+                }
+                scene.typing.wordClean = true;
+
+                this.updateHud(scene);
                 this.pickNearest(scene);
+
             },
 
             updateHud(scene) {
-                let streak = 0;
-                scene.typeHud.setText(`Streak: ${streak}`);
+                const { score = 0, streak = 0 } = scene.typing || {};
+                scene.typeHud?.setText(`Score: ${score}   Streak: ${streak}`);
             },
+
 
 
 

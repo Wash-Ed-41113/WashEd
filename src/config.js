@@ -10,6 +10,9 @@ window.CONFIG = {
     germSpriteSize: 0.12,
     verticalSpaceLabel:55,
     labelTextSize: 30,
+    breachPenalty: 25,
+    breachStatement: "Its Okay try again!",
+    reason: "Time's Up!!",
 
     gameDurationMin: 1,
 
