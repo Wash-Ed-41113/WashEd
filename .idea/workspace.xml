@@ -4,9 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Typing engine. V1">
+    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Typing engine Cur update and bug fixed_random selection">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/config.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/systems.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/systems.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -129,7 +128,7 @@
       <workItem from="1756866758594" duration="619000" />
       <workItem from="1757051702980" duration="3356000" />
       <workItem from="1757067222660" duration="31254000" />
-      <workItem from="1757291782084" duration="3300000" />
+      <workItem from="1757291782084" duration="4006000" />
     </task>
     <task id="LOCAL-00001" summary="initial setup w/boilerplate">
       <option name="closed" value="true" />
@@ -235,7 +234,15 @@
       <option name="project" value="LOCAL" />
       <updated>1757293955637</updated>
     </task>
-    <option name="localTasksCounter" value="14" />
+    <task id="LOCAL-00014" summary="Typing engine Cur update and bug fixed_random selection">
+      <option name="closed" value="true" />
+      <created>1757295424310</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1757295424310</updated>
+    </task>
+    <option name="localTasksCounter" value="15" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -270,6 +277,7 @@
     <MESSAGE value="Sopasplash documentations." />
     <MESSAGE value="Population control" />
     <MESSAGE value="Typing engine. V1" />
-    <option name="LAST_COMMIT_MESSAGE" value="Typing engine. V1" />
+    <MESSAGE value="Typing engine Cur update and bug fixed_random selection" />
+    <option name="LAST_COMMIT_MESSAGE" value="Typing engine Cur update and bug fixed_random selection" />
   </component>
 </project>

@@ -17,7 +17,6 @@
             return Math.sqrt(u * (rOuter*rOuter - rInner*rInner) + rInner*rInner);
         },
 
-
         /**
          * Gets a random distance form the sink...
          * r^2 = U * (rOuter ^2 - rInner^2 ) + rInner^2
@@ -60,7 +59,7 @@
              * White - what's left to type...**/
 
             const curBox = scene.add.rectangle(
-                pos.x, pos.y + CONFIG.verticalSpaceLabel, (0.6 * CONFIG.labelTextSize), CONFIG.labelTextSize, 0xffffff, 0.20 ).setOrigin(0, 0)
+                pos.x, pos.y + CONFIG.verticalSpaceLabel, (0.6 * CONFIG.labelTextSize), CONFIG.labelTextSize, 0xffff, 0.50 ).setOrigin(0, 0)
                 .setDepth(5).setVisible(false);
 
             const germObject = { id, sprite, labelTyped, labelRemain, curBox, word, typedIdx: 0, errors: 0, active: false };
@@ -92,6 +91,17 @@
             const idx = Math.floor(Math.random() * CONFIG.words.length);
             return CONFIG.words[idx];
         },
+
+        isOnScreen(scene, x, y, margin = 0) {
+            const view = scene.cameras.main.worldView;
+            return (
+                x >= view.x - margin &&
+                y >= view.y - margin &&
+                x <= view.right + margin &&
+                y <= view.bottom + margin
+            );
+        },
+
 
     };
 
@@ -327,14 +337,24 @@
 
             pickNearest(scene) {
                 if (!scene.germs.length) { scene.typing.activeId = null; return; }
+
+                const candidates = scene.germs.filter(g =>
+                    h.isOnScreen(scene, g.sprite.x, g.sprite.y, 0)
+                );
+                if (!candidates.length) {
+                    scene.typing.activeId = null;
+                    return;
+                }
+
                 const hit = scene.getSinkHitPoint();
-                let best=null, bestDist=Infinity;
-                for (const g of scene.germs) {
+                let best = null, bestDist = Infinity;
+                for (const g of candidates) {
                     const d = Phaser.Math.Distance.Between(g.sprite.x, g.sprite.y, hit.x, hit.y);
                     if (d < bestDist) { bestDist = d; best = g; }
                 }
                 if (best) this.activate(scene, best);
             },
+
 
 
             renderTarget(g) {
