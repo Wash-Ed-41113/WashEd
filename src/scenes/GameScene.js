@@ -208,8 +208,6 @@ export default class GameScene extends Phaser.Scene {
                         duration: 120,
                         repeat: 1
                     });
-                    // TODO: start gameplay or go to next scene
-                    // this.scene.start('YourNextScene');
                 };
                 btn.on('pointerdown', choose);
                 txt.on('pointerdown', choose);
@@ -220,9 +218,10 @@ export default class GameScene extends Phaser.Scene {
 
             const gap = 78;
             const baseY = 120;
-            const b1 = makeBtn("Easy",   baseY + 0 * gap, "easy");
-            const b2 = makeBtn("Normal", baseY + 1 * gap, "normal");
+            const b1 = makeBtn("Easy",   baseY,           "easy");
+            const b2 = makeBtn("Normal", baseY + gap,     "normal");
             const b3 = makeBtn("Hard",   baseY + 2 * gap, "hard");
+
 
             content.add([title]);
 
