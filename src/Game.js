@@ -7,7 +7,7 @@ canvas.height = 500;
 
 // Background image
 const background = new Image();
-background.src = "sink-bg.png"; // replace with your background asset
+background.src = "assets/images/washed_mod_2/SINK3.png"
 
 // Word arrays
 const goodWords = ["Soap", "Water", "Clean"];
@@ -31,7 +31,7 @@ let gameOver = false;
 
 // Germ image
 const germImg = new Image();
-germImg.src = "assets/images/washed_mod_2/washed_mod_2_disease_water-AERO__TRANS.png"; // replace later if you want custom germ sprite
+germImg.src = "assets/images/washed_mod_2/washed_mod_2_disease_water-AERO__TRANS.png";
 
 // Spawn items
 function spawnItem() {
@@ -117,9 +117,14 @@ function update() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Draw background
-    if (background.complete) {
+    // Draw background (with fallback if image not loaded)
+    if (background.complete && background.naturalWidth !== 0) {
         ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+    } else {
+        ctx.fillStyle = "#add8e6"; // light blue fallback
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
+
 
     if (gameOver) {
         ctx.fillStyle = "black";
