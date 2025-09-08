@@ -116,7 +116,6 @@ function updateItems() {
 function update() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw background
     // Draw background (with fallback if image not loaded)
     if (background.complete && background.naturalWidth !== 0) {
         ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
