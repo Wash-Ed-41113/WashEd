@@ -1,10 +1,10 @@
-/*
-* CONFIG - all tunable knobs are here as in global configs
-* Everything is in world-pixels and milliseconds not css pixels. */// Make CONFIG global for non-module scripts
+
 window.CONFIG = {
     width: 1920,
     height: 1080,
 
+
+    fontFamily: 'monospace',
     useSpawner: true,
     maxGerms: 5,
     germSpriteSize: 0.12,
@@ -15,6 +15,7 @@ window.CONFIG = {
     reason: "Time's Up!!",
 
     gameDurationMin: 1,
+    gameDurationTextHud: '01:00',
 
     breachesFontSize: 20,
 

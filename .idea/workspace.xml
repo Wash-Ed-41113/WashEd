@@ -4,9 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Better cur">
+    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Breach, score and streaks">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/SoapSplash.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/SoapSplash.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/config.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/sys.js" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/systems.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/systems.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -129,7 +131,8 @@
       <workItem from="1756866758594" duration="619000" />
       <workItem from="1757051702980" duration="3356000" />
       <workItem from="1757067222660" duration="31254000" />
-      <workItem from="1757291782084" duration="7491000" />
+      <workItem from="1757291782084" duration="8173000" />
+      <workItem from="1757316405643" duration="1296000" />
     </task>
     <task id="LOCAL-00001" summary="initial setup w/boilerplate">
       <option name="closed" value="true" />
@@ -251,7 +254,15 @@
       <option name="project" value="LOCAL" />
       <updated>1757295933294</updated>
     </task>
-    <option name="localTasksCounter" value="16" />
+    <task id="LOCAL-00016" summary="Breach, score and streaks">
+      <option name="closed" value="true" />
+      <created>1757315745727</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1757315745727</updated>
+    </task>
+    <option name="localTasksCounter" value="17" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -288,6 +299,7 @@
     <MESSAGE value="Typing engine. V1" />
     <MESSAGE value="Typing engine Cur update and bug fixed_random selection" />
     <MESSAGE value="Better cur" />
-    <option name="LAST_COMMIT_MESSAGE" value="Better cur" />
+    <MESSAGE value="Breach, score and streaks" />
+    <option name="LAST_COMMIT_MESSAGE" value="Breach, score and streaks" />
   </component>
 </project>

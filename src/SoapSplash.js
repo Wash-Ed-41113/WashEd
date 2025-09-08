@@ -19,24 +19,24 @@
 
 const gameScene = new Phaser.Scene('SoapSplash');
 
-gameScene.preload = function () {
+gameScene.preload = function () { // TODO Update assets.
     this.load.image('Background', 'assets/images/created/background.png');
     this.load.image('Sink', 'assets/images/created/Sink.png');
     this.load.image('Germ', 'assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__GASTRO.png');
 };
 
 
-// World and scene creation
 
 gameScene.create = function () {
-    this.sinkPosition = { x: 0, y: CONFIG.height }; // bottom left position for sink
+    this.sinkPosition = { x: 0, y: CONFIG.height };
 
     this.add.sprite(CONFIG.width/2, CONFIG.height/2, 'Background')
-        .setDepth(0).setScale(2);    //  Background Sprite TODO replace later
+        .setDepth(0).setScale(2);
     this.sinkSprite = this.add.sprite(this.sinkPosition.x, this.sinkPosition.y, 'Sink')
-        .setOrigin(0, 1).setScale(4).setDepth(4);    //  Sink's Sprite TODO replace later
+        .setOrigin(0, 1).setScale(4).setDepth(4);
 
-    /** gets the center of img of sinks.. for breaching TODO later make this into a circle of diameter of width of sprite.
+    /**
+     TODO later make this into a circle of diameter of width of sprite.
      todo maybe add jerky motion to sink when germs breach
      */
     this.getSinkHitPoint = () => ({
@@ -44,9 +44,6 @@ gameScene.create = function () {
         y: this.sinkSprite.y - this.sinkSprite.displayHeight * 0.5
     });
 
-
-
-    // configure the intercection that spawnnner will use
 
     if (CONFIG.useSpawner) {
         const cornerDist = Math.hypot(CONFIG.width - this.sinkPosition.x, 0 - this.sinkPosition.y);
@@ -59,12 +56,10 @@ gameScene.create = function () {
     }
 
 
-// todo later adjust population of germs and trigger spawnner once...  1st breach happens.
-
-    this.germs = []; // Entire population of germs. everything that spawns gets pushed here
+    this.germs = [];
     this.lastSpawn = 0;
-    this.germSeq = 0; // todo auto increment
-    this.breaches = 0; // for UID later
+    this.germSeq = 0;
+    this.breaches = 0;
     this.gameOver = false;
 
 
@@ -80,7 +75,6 @@ gameScene.create = function () {
 
     systems.typing.init(this);
 
-    // (Optional) seed an initial target if germs already exist at create-time
     if (!this.typing?.activeId && this.germs.length > 0) {
         systems.typing.pickRandom(this);
     }
@@ -107,7 +101,7 @@ gameScene.update = function (time, delta) {
 
 const config = {
     type: Phaser.AUTO,
-    backgroundColor: '#0b1520',   // todo replace with assets probably
+    backgroundColor: '#0b1520',
     scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.NO_CENTER,

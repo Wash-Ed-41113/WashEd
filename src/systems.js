@@ -21,11 +21,11 @@
                 .setDepth(4).setScale(CONFIG.germSpriteSize);
 
             const labelTyped = scene.add.text(pos.x, pos.y + CONFIG.verticalSpaceLabel, '', {
-                fontFamily: 'monospace', fontSize: CONFIG.labelTextSize , color: '#6cf96c'
+                fontFamily: CONFIG.fontFamily, fontSize: CONFIG.labelTextSize , color: '#6cf96c'
             }).setOrigin(0.5, 0).setDepth(5);
 
             const labelRemain = scene.add.text(pos.x, pos.y + CONFIG.verticalSpaceLabel, word, {
-                fontFamily: 'monospace', fontSize: CONFIG.labelTextSize , color: '#ffffff'
+                fontFamily: CONFIG.fontFamily, fontSize: CONFIG.labelTextSize , color: '#ffffff'
             }).setOrigin(0.5, 0).setDepth(5);
 
             const curBox = scene.add.rectangle(
@@ -39,18 +39,17 @@
 
 
         removeGermByIndex(scene, i) {
-            const g = scene.germs[i];
-            if (!g) return;
+            const germ = scene.germs[i];
+            if (!germ) return;
 
-            if (g.curBox) {
-                scene.tweens.killTweensOf(g.curBox);
-                g.curBox.destroy();
+            if (germ.curBox) {
+                scene.tweens.killTweensOf(germ.curBox);
+                germ.curBox.destroy();
             }
 
-            // existing cleanup
-            g.sprite.destroy();
-            g.labelTyped.destroy();
-            g.labelRemain.destroy();
+            germ.sprite.destroy();
+            germ.labelTyped.destroy();
+            germ.labelRemain.destroy();
 
             scene.germs.splice(i, 1);
         },
@@ -91,17 +90,18 @@
                     const r = h.sampleRadius(scene.rInner, scene.rOuter);
                     const p = h.polarToWorld(scene.sinkPosition, r, theta);
 
-                    const sep = CONFIG.minSpawnSeparationPx;
-                    if (sep > 0) {
+                    const seperation = CONFIG.minSpawnSeparationPx;
+                    if (seperation > 0) {
                         let ok = true;
                         for (let i = 0; i < scene.germs.length; i++) {
                             if (Phaser.Math.Distance.Between(
                                 p.x, p.y, scene.germs[i].sprite.x, scene.germs[i].sprite.y
-                            ) < sep) { ok = false; break; }
+                            ) < seperation) { ok = false; break; }
                         }
                         if (!ok) continue;
                     }
-                    pos = p; break;
+                    pos = p;
+                    break;
                 }
                 if (!pos) return;
 
@@ -116,43 +116,36 @@
         },
 
         movement: {
-            // Corrected signature and references
             moveGerms(scene, delta) {
                 const speed = CONFIG.germSpeed * (delta / 1000);
 
                 for (let i = scene.germs.length - 1; i >= 0; i--) {
-                    const g = scene.germs[i];
+                    const germ = scene.germs[i];
 
-                    // vector toward sink
-                    const dx = scene.sinkPosition.x - g.sprite.x;
-                    const dy = scene.sinkPosition.y - g.sprite.y;
+                    const dx = scene.sinkPosition.x - germ.sprite.x;
+                    const dy = scene.sinkPosition.y - germ.sprite.y;
                     const mag = Math.hypot(dx, dy) || 1;
 
                     let ux = dx / mag, uy = dy / mag;
 
-                    // wobble
                     const wobble = CONFIG.wobble;
                     ux += (Math.random() - 0.5) * wobble;
                     uy += (Math.random() - 0.5) * wobble;
                     const mm = Math.hypot(ux, uy);
                     ux /= mm; uy /= mm;
 
-                    // move sprite
-                    g.sprite.x += ux * speed;
-                    g.sprite.y += uy * speed;
+                    germ.sprite.x += ux * speed;
+                    germ.sprite.y += uy * speed;
 
-                    // keep both labels glued to the sprite
-                    g.labelTyped.setPosition(g.sprite.x, g.sprite.y + 14);
-                    g.labelRemain.setPosition(g.sprite.x, g.sprite.y + 14);
+                    germ.labelTyped.setPosition(germ.sprite.x, germ.sprite.y + 14);
+                    germ.labelRemain.setPosition(germ.sprite.x, germ.sprite.y + 14);
 
-                    // keep caret right after the typed part
                     if (systems.typing && systems.typing.renderTarget) {
-                        systems.typing.renderTarget(g);
+                        systems.typing.renderTarget(germ);
                     }
 
-                    // despawn if far outside
-                    const m = CONFIG.despawnMargin;
-                    if (g.sprite.x > CONFIG.width + m || g.sprite.y > CONFIG.height + m) {
+                    const margin = CONFIG.despawnMargin;
+                    if (germ.sprite.x > CONFIG.width + margin || germ.sprite.y > CONFIG.height + margin) {
                         const wasActive = (scene.germs[i]?.id === scene.typing?.activeId);
                         systems.helpers.removeGermByIndex(scene, i);
                         if (wasActive) {
@@ -165,27 +158,19 @@
         },
 
         rules: {
-
-            /**
-             * Remove any germ that reaches the sink center within radius rSink.
-             * Also increments the HUD counter. (Add lose-condition when breaches >= 5.)
-             */
-
-
             checkBreaches(scene) {
                 const hit = scene.getSinkHitPoint();
                 for (let i = scene.germs.length - 1; i >= 0; i--) {
-                    const g = scene.germs[i];
-                    const dist = Phaser.Math.Distance.Between(g.sprite.x, g.sprite.y, hit.x, hit.y);
-                    if (dist <= CONFIG.rSink) {
-                        const wasActive = (g.id === scene.typing?.activeId);   // use g (stable ref)
+
+                    const germ = scene.germs[i];
+                    const distance = Phaser.Math.Distance.Between(germ.sprite.x, germ.sprite.y, hit.x, hit.y);
+                    if (distance <= CONFIG.rSink) {
+                        const wasActive = (germ.id === scene.typing?.activeId);
 
                         systems.helpers.removeGermByIndex(scene, i);
                         scene.breaches++;
 
                         scene.hud?.setText(`Breaches: ${scene.breaches}/5`);
-
-
 
                         if (wasActive) {
                             scene.typing.activeId = null;
@@ -199,11 +184,10 @@
                         }
 
                         if (scene.breaches >= 5) {
-                            systems.timer.endGame(scene, CONFIG.breachStatement);
+                            systems.timer.endGame(scene);
                         }
 
 
-                        // TODO: if (scene.breaches >= 5) systems.timer.endGame(scene);
                     }
                 }
             }
@@ -214,11 +198,10 @@
             init(scene) {
                 scene.gameOver = false;
                 scene.timerHud = scene.add.text(
-                    CONFIG.width - 140, 15, 'Time: 01:00',
-                    { fontFamily: 'monospace', fontSize: '16px', color: '#fff' }
+                    CONFIG.width - 140, 15, 'Time: ' + CONFIG.gameDurationTextHud,
+                    { fontFamily: CONFIG.fontFamily, fontSize: '16px', color: '#fff' }
                 ).setDepth(10);
 
-                // schedule end of game
                 scene.endEvent = scene.time.delayedCall(
                     CONFIG.gameDurationMin * 60 * 1000,
                     () => systems.timer.endGame(scene)
@@ -253,7 +236,7 @@
                 const overlay = scene.add.text(
                     CONFIG.width / 2, CONFIG.height / 2,
                     `Game Over – ${reason}\nScore: ${score}\nBest Streak: ${bestStreak}\nBreaches: ${scene.breaches}/5\n\nTap to restart`,
-                    { fontFamily: 'monospace', fontSize: '28px', color: '#fff', align: 'center' }
+                    { fontFamily: CONFIG.fontFamily, fontSize: '28px', color: '#fff', align: 'center' }
                 ).setOrigin(0.5).setDepth(20);
 
                 scene.input.once('pointerdown', () => {
@@ -280,7 +263,7 @@
               };
 
               scene.typeHud = scene.add.text(15, CONFIG.height - 40,
-                  `Score: 0   Streak: 0`, { fontFamily: 'monospace', fontSize: '16px', color: '#fff'
+                  `Score: 0   Streak: 0`, { fontFamily: CONFIG.fontFamily, fontSize: '16px', color: '#fff'
               }).setDepth(10);
 
               scene.input.keyboard.on('keydown', (e) => this.onKey(e, scene));
@@ -308,7 +291,7 @@
                     g.curBox.setVisible(true);
                     scene.tweens.add({
                         targets: g.curBox,
-                        alpha: 0.05,      // blink down to 5% then back to 20%
+                        alpha: 0.05,
                         duration: 500,
                         yoyo: true,
                         repeat: -1
@@ -373,7 +356,6 @@
                 if (scene.gameOver) return;
                 if (!scene.typing.startedAt) scene.typing.startedAt = scene.time.now;
 
-                // If we don't have an active yet, start with a RANDOM pick
                 if (!scene.typing.activeId) this.pickNearest(scene);
 
                 const g = scene.germs.find(x => x.id === scene.typing.activeId);
@@ -381,7 +363,6 @@
 
                 const key = e.key;
 
-                // Backspace
                 if (key === 'Backspace') {
                     if (g.typedIdx > 0) g.typedIdx--;
                     this.renderTarget(g);
@@ -390,7 +371,6 @@
                     return;
                 }
 
-                // Ignore non-character keys
                 if (key.length !== 1) return;
 
                 scene.typing.keystrokes++;
@@ -461,6 +441,5 @@
         },
     };
 
-    // expose globally
     window.systems = systems;
 })();
