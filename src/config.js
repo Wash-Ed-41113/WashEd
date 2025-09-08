@@ -9,7 +9,7 @@ window.CONFIG = {
     maxGerms: 5,
     germSpriteSize: 0.12,
     verticalSpaceLabel:55,
-    labelTextSize: 25,
+    labelTextSize: 30,
 
     gameDurationMin: 1,
 

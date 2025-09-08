@@ -59,13 +59,11 @@
              * Green - what has already been typed
              * White - what's left to type...**/
 
-            const cur = scene.add.rectangle(
-                pos.x, pos.y + CONFIG.verticalSpaceLabel,
-                4, CONFIG.labelTextSize,
-                0xffd166
-            ).setOrigin(0, 0).setDepth(6).setVisible(false);
+            const curBox = scene.add.rectangle(
+                pos.x, pos.y + CONFIG.verticalSpaceLabel, (0.6 * CONFIG.labelTextSize), CONFIG.labelTextSize, 0xffffff, 0.20 ).setOrigin(0, 0)
+                .setDepth(5).setVisible(false);
 
-            const germObject = { id, sprite, labelTyped, labelRemain, cur, word, typedIdx: 0, errors: 0, active: false };
+            const germObject = { id, sprite, labelTyped, labelRemain, curBox, word, typedIdx: 0, errors: 0, active: false };
             scene.germs.push(germObject);
             return id;
         },
@@ -75,10 +73,9 @@
             const g = scene.germs[i];
             if (!g) return;
 
-            // NEW: stop caret tween and remove caret
-            if (g.cur) {
-                scene.tweens.killTweensOf(g.cur);
-                g.cur.destroy();
+            if (g.curBox) {
+                scene.tweens.killTweensOf(g.curBox);
+                g.curBox.destroy();
             }
 
             // existing cleanup
@@ -132,7 +129,7 @@
                 h.addGerm(scene, pos, word);
 
                 if (!scene.typing?.activeId) {
-                    systems.typing.pickRandom(scene);
+                    systems.typing.pickNearest(scene);
                 }
 
             },
@@ -176,9 +173,12 @@
                     // despawn if far outside
                     const m = CONFIG.despawnMargin;
                     if (g.sprite.x > CONFIG.width + m || g.sprite.y > CONFIG.height + m) {
+                        const wasActive = (scene.germs[i]?.id === scene.typing?.activeId);
                         systems.helpers.removeGermByIndex(scene, i);
-                        // // optional: retarget if we just removed the active one
-                        if (systems.typing && systems.typing.pickActive) systems.typing.pickActive(scene);
+                        if (wasActive) {
+                            scene.typing.activeId = null;
+                            systems.typing.pickNearest(scene);
+                        }
                     }
                 }
             }
@@ -198,14 +198,27 @@
                     const g = scene.germs[i];
                     const dist = Phaser.Math.Distance.Between(g.sprite.x, g.sprite.y, hit.x, hit.y);
                     if (dist <= CONFIG.rSink) {
-                        h.removeGermByIndex(scene, i);
+                        const wasActive = (g.id === scene.typing?.activeId);   // use g (stable ref)
+
+                        systems.helpers.removeGermByIndex(scene, i);
                         scene.breaches++;
-                        if (systems.typing && systems.typing.pickActive) systems.typing.pickActive(scene);
-                        scene.hud.setText(`Breaches: ${scene.breaches}/5`);
+
+                        // keep HUD in sync
+                        scene.hud?.setText(`Breaches: ${scene.breaches}/5`);
+
+                        // sticky-nearest: only repick if the active died, and only if something remains
+                        if (wasActive) {
+                            scene.typing.activeId = null;
+                            if (scene.germs.length > 0) {
+                                systems.typing.pickNearest(scene);
+                            }
+                        }
+
                         // TODO: if (scene.breaches >= 5) systems.timer.endGame(scene);
                     }
                 }
             }
+
         },
 
         timer: {
@@ -275,25 +288,32 @@
           },
 
             deactivateAll(scene) {
-                for (const s of scene.germs) {
-                    s.active = false;
-                    if (s.cur) {
-                        s.cur.setVisible(false);
-                        scene.tweens.killTweensOf(s.cur);
+                for (const g of scene.germs) {
+                    g.active = false;
+                    if (g.curBox) {
+                        g.curBox.setVisible(false);
+                        scene.tweens.killTweensOf(g.curBox);
                     }
-                    s.sprite.clearTint();
-                    s.labelTyped.setAlpha(0.7);
-                    s.labelRemain.setAlpha(1);
+                    g.sprite.clearTint();
+                    g.labelTyped.setAlpha(0.7);
+                    g.labelRemain.setAlpha(1);
                 }
             },
+
 
             activate(scene, g) {
                 this.deactivateAll(scene);
                 g.active = true;
                 g.sprite.setTint(0xffe29f);
-                if (g.cur) {
-                    g.cur.setVisible(true);
-                    scene.tweens.add({ targets: g.cur, alpha: 0, duration: 500, yoyo: true, repeat: -1 });
+                if (g.curBox) {
+                    g.curBox.setVisible(true);
+                    scene.tweens.add({
+                        targets: g.curBox,
+                        alpha: 0.05,      // blink down to 5% then back to 20%
+                        duration: 500,
+                        yoyo: true,
+                        repeat: -1
+                    });
                 }
                 scene.typing.activeId = g.id;
                 this.renderTarget(g);
@@ -307,9 +327,8 @@
 
             pickNearest(scene) {
                 if (!scene.germs.length) { scene.typing.activeId = null; return; }
-
                 const hit = scene.getSinkHitPoint();
-                let best = null, bestDist = Infinity;
+                let best=null, bestDist=Infinity;
                 for (const g of scene.germs) {
                     const d = Phaser.Math.Distance.Between(g.sprite.x, g.sprite.y, hit.x, hit.y);
                     if (d < bestDist) { bestDist = d; best = g; }
@@ -317,56 +336,10 @@
                 if (best) this.activate(scene, best);
             },
 
-            // pickActive(scene){
-            //     if (scene.typing.locked && scene.typing.activeId) {
-            //         const g = scene.germs.find(x => x.id === scene.typing.activeId);
-            //         if (g) {
-            //             // ensure highlight stays correct
-            //             for (const s of scene.germs) {
-            //                 const isActive = (s === g);
-            //                 s.active = isActive;
-            //                 s.cur.setVisible(isActive);
-            //                 s.sprite.setTint(isActive ? 0xffe29f : 0xffffff);
-            //                 s.labelTyped.setAlpha(isActive ? 1 : 0.7);
-            //                 s.labelRemain.setAlpha(1);
-            //             }
-            //             systems.typing.renderTarget(g);
-            //             return;
-            //         }
-            //     }
-            //
-            //   const hit = scene.getSinkHitPoint();
-            //   let best = null, bestDist = Infinity;
-            //
-            //   for (const germObject of scene.germs) {
-            //       const distance = Phaser.Math.Distance.Between(germObject.sprite.x, germObject.sprite.y, hit.x, hit.y);
-            //       if (distance < bestDist) { bestDist = distance; best = germObject; }
-            //   }
-            //
-            //     // clear previous
-            //     for (const germObject of scene.germs) {
-            //         germObject.active = false;
-            //         germObject.cur.setVisible(false);
-            //         germObject.sprite.clearTint();
-            //         germObject.labelTyped.setAlpha(0.7);
-            //         germObject.labelRemain.setAlpha(1);
-            //     }
-            //
-            //     // set active
-            //     if (best) {
-            //         best.active = true;
-            //         best.cur.setVisible(true);
-            //         best.sprite.setTint(0xffe29f);
-            //         scene.typing.activeId = best.id;
-            //         systems.typing.renderTarget(best);
-            //     }
-            //
-            // },
 
             renderTarget(g) {
                 const baseY = g.sprite.y + CONFIG.verticalSpaceLabel;
 
-                // split typed/remaining
                 const typedStr  = g.word.slice(0, g.typedIdx);
                 const remainStr = g.word.slice(g.typedIdx);
                 g.labelTyped.setText(typedStr);
@@ -380,9 +353,9 @@
                 g.labelTyped.setOrigin(0, 0).setPosition(leftX, baseY);
                 g.labelRemain.setOrigin(0, 0).setPosition(leftX + typedW, baseY);
 
-                // caret (rectangle) placed right after typed text
-                g.cur?.setPosition(leftX + typedW, baseY);
+                g.curBox?.setPosition(leftX + typedW, baseY);
             },
+
 
 
 
@@ -392,7 +365,7 @@
                 if (!scene.typing.startedAt) scene.typing.startedAt = scene.time.now;
 
                 // If we don't have an active yet, start with a RANDOM pick
-                if (!scene.typing.activeId) this.pickRandom(scene);
+                if (!scene.typing.activeId) this.pickNearest(scene);
 
                 const g = scene.germs.find(x => x.id === scene.typing.activeId);
                 if (!g) return;
@@ -445,13 +418,8 @@
 
             onWordComplete(scene, g) {
                 const idx = scene.germs.indexOf(g);
-                if (idx >= 0) {
-                    systems.helpers.removeGermByIndex(scene, idx);
-                }
+                if (idx >= 0) systems.helpers.removeGermByIndex(scene, idx);
                 scene.typing.activeId = null;
-                this.locked = false;
-
-                // NEW LOGIC: jump to nearest-to-sink next
                 this.pickNearest(scene);
             },
 
