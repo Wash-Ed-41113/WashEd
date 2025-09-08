@@ -11,6 +11,7 @@ const config = {
     backgroundColor: "#1e1e1e",
     physics: { default: "arcade", arcade: { gravity: { y: 0 } } },
     scene: [PreloadScene, MenuScene, GameScene],
+    dom: { createContainer: true },
 };
 
 new Phaser.Game(config);
