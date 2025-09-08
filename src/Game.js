@@ -31,7 +31,7 @@ let gameOver = false;
 
 // Germ image
 const germImg = new Image();
-germImg.src = "assets/images/washed_mod_2/washed_mod_2_disease_water-AERO__TRANS.png";
+germImg.src = "assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT-ex__MALA.png";
 
 // Spawn items
 function spawnItem() {
