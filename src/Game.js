@@ -2,15 +2,15 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 // Set landscape size
-canvas.width = 800;
-canvas.height = 500;
+canvas.width = 1080;
+canvas.height = 920;
 
 // Background image
 const background = new Image();
 background.src = "assets/images/washed_mod_2/SINK3.png"
 
 // Word arrays
-const goodWords = ["Soap", "Water", "Clean"];
+const goodWords = ["Soap", "Bath", "Wash", ];
 const badWords = ["Germs", "Dirty", "Virus"];
 
 // Player (hand)
