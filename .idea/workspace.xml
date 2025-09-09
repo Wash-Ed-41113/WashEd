@@ -4,12 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Breach, score and streaks">
+    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Breach, score and streaks _ 2">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/SoapSplash.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/SoapSplash.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/config.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/sys.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/systems.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/systems.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -132,7 +130,11 @@
       <workItem from="1757051702980" duration="3356000" />
       <workItem from="1757067222660" duration="31254000" />
       <workItem from="1757291782084" duration="8173000" />
-      <workItem from="1757316405643" duration="1296000" />
+      <workItem from="1757316405643" duration="1407000" />
+      <workItem from="1757318294562" duration="910000" />
+      <workItem from="1757326995681" duration="656000" />
+      <workItem from="1757377693413" duration="1666000" />
+      <workItem from="1757379554382" duration="8393000" />
     </task>
     <task id="LOCAL-00001" summary="initial setup w/boilerplate">
       <option name="closed" value="true" />
@@ -262,7 +264,15 @@
       <option name="project" value="LOCAL" />
       <updated>1757315745727</updated>
     </task>
-    <option name="localTasksCounter" value="17" />
+    <task id="LOCAL-00017" summary="Breach, score and streaks _ 2">
+      <option name="closed" value="true" />
+      <created>1757317810783</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1757317810783</updated>
+    </task>
+    <option name="localTasksCounter" value="18" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -300,6 +310,7 @@
     <MESSAGE value="Typing engine Cur update and bug fixed_random selection" />
     <MESSAGE value="Better cur" />
     <MESSAGE value="Breach, score and streaks" />
-    <option name="LAST_COMMIT_MESSAGE" value="Breach, score and streaks" />
+    <MESSAGE value="Breach, score and streaks _ 2" />
+    <option name="LAST_COMMIT_MESSAGE" value="Breach, score and streaks _ 2" />
   </component>
 </project>

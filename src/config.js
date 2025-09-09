@@ -1,10 +1,15 @@
 
+/*
+* All functions and magic numbers have been
+* annotated to explain what they do, how they interact, and what they depend on.
+*/
+
 window.CONFIG = {
     width: 1920,
     height: 1080,
 
 
-    fontFamily: 'monospace',
+    fontFamily: 'montserrat',//montserrat
     useSpawner: true,
     maxGerms: 5,
     germSpriteSize: 0.12,
