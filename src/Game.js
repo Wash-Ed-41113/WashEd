@@ -10,7 +10,7 @@ const background = new Image();
 background.src = "assets/images/washed_mod_2/SINK3.png"
 
 // Word arrays
-const goodWords = ["Soap", "Bath", "Wash", ];
+const goodWords = ["Soap", "Bath", "Wash", "Cup", "Tap", "Well", "Pure", "Safe", "Care", "Flow", "Clean", "Fresh",  ];
 const badWords = ["Germs", "Dirty", "Virus"];
 
 // Player (hand)
