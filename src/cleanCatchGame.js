@@ -176,7 +176,8 @@ setInterval(() => {
     }
 }, 1000);
 
-// Start game
+// Start game refactored game names
+
 update();
 
 
