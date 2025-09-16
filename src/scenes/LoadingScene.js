@@ -86,7 +86,7 @@ export default class LoadingScene extends Phaser.Scene {
             //     yoyo: true,
             //     repeat: -1,
             //     delay: Phaser.Math.Between(0, 600),
-            // });
+            // });hi
 
             this.add.text(x, y, word, labelStyle).setOrigin(0.5).setDepth(3);
         });
