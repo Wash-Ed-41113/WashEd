@@ -6,6 +6,8 @@ import MenuScene from "./scenes/MenuScene.js";
 import GameScene from "./scenes/GameScene.js";
 import PlaygroundScene from "./scenes/PlaygroundScene.js";
 import SoapSplash from "./SoapSplash.js";
+
+
 const config = {
     type: Phaser.AUTO,
     parent: "game",
