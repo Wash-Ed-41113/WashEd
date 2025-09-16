@@ -1,6 +1,6 @@
 const SAND_KEY   = "sand";
 const SAND_PATH  = "assets/images/backgrounds/sand.png";
-
+//asdfadsfads
 const SCHOOL_KEY = "school";
 const SCHOOL_PATH = "assets/images/backgrounds/school.png";
 const SCHOOL_OFFSET_X = 160; // pull left from the right edge
