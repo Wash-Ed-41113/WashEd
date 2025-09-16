@@ -8,12 +8,12 @@ export default class MenuScene extends Phaser.Scene {
     create() {
         const { width, height } = this.scale;
 
-        // === add background ==
+        // === background ===
         this.add.image(0, 0, 'frontpage_background')
             .setOrigin(0, 0)
             .setDisplaySize(width, height);
 
-        // === title text ==
+        // === title ===
         this.add.text(width / 2, height * 0.35, "Kiko's Day", {
             fontFamily: "Arial",
             fontSize: "230px",
@@ -22,27 +22,53 @@ export default class MenuScene extends Phaser.Scene {
             strokeThickness: 6
         }).setOrigin(0.5);
 
-        // === button ===
-        const btn = this.add.rectangle(width / 2, height * 0.6, 240, 70, 0x00c2ff)
-            .setStrokeStyle(4, 0xffffff)
-            .setOrigin(0.5)
-            .setInteractive({ useHandCursor: true });
+        // helper to make consistent buttons
+        const makeButton = (x, y, label, onClick) => {
+            const btn = this.add.rectangle(x, y, 300, 76, 0x00c2ff, 1)
+                .setStrokeStyle(4, 0xffffff)
+                .setOrigin(0.5)
+                .setInteractive({ useHandCursor: true });
 
-        const label = this.add.text(btn.x, btn.y, "START GAME", {
-            fontFamily: "Arial",
-            fontSize: "28px",
-            color: "#111",
-            fontStyle: "bold"
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+            const txt = this.add.text(x, y, label, {
+                fontFamily: "Arial",
+                fontSize: "28px",
+                color: "#111",
+                fontStyle: "bold"
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-        // when click botton: name input popup
-        const openDialog = () => this.showNameDialog();
-        btn.on("pointerdown", openDialog);
-        label.on("pointerdown", openDialog);
+            const handler = () => onClick();
+            btn.on("pointerdown", handler);
+            txt.on("pointerdown", handler);
+            return { btn, txt };
+        };
 
-        // open pop up with enter (optional)
-        this.input.keyboard.once("keydown-ENTER", openDialog);
+        // open name dialog then go to a scene
+        const openNameThenStart = (sceneKey) => {
+            // If your dialog accepts a callback:
+            if (typeof this.showNameDialog === 'function' && this.showNameDialog.length >= 1) {
+                this.showNameDialog((playerName) => {
+                    this.scene.start(sceneKey, { playerName });
+                });
+            } else {
+                // Fallback: assume dialog stores name in registry
+                this.showNameDialog?.();
+                // small delay to let dialog store the name; adjust if needed
+                this.time.delayedCall(50, () => {
+                    const playerName = this.registry.get('playerName') || 'Player';
+                    this.scene.start(sceneKey, { playerName });
+                });
+            }
+        };
+
+        // === buttons ===
+        makeButton(width / 2, height * 0.58, "START GAME", () => openNameThenStart("GameScene"));
+        makeButton(width / 2, height * 0.70, "PLAY SOAP SPLASH", () => openNameThenStart("SoapSplash"));
+        makeButton(width / 2, height * 0.58, "START GAME", () => openNameThenStart("GameScene"));
+        makeButton(width / 2, height * 0.70, "PLAY SOAP SPLASH", () => openNameThenStart("SoapSplash"));
+        makeButton(width / 2, height * 0.82, "PLAY CLEAN CATCH", () => openNameThenStart("CleanCatch"));
+
     }
+
 
     // === name input popup ===
     showNameDialog() {
