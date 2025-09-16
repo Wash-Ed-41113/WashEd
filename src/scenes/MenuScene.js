@@ -63,6 +63,9 @@ export default class MenuScene extends Phaser.Scene {
         // === buttons ===
         makeButton(width / 2, height * 0.58, "START GAME", () => openNameThenStart("GameScene"));
         makeButton(width / 2, height * 0.70, "PLAY SOAP SPLASH", () => openNameThenStart("SoapSplash"));
+        makeButton(width / 2, height * 0.58, "START GAME", () => openNameThenStart("GameScene"));
+        makeButton(width / 2, height * 0.70, "PLAY SOAP SPLASH", () => openNameThenStart("SoapSplash"));
+        makeButton(width / 2, height * 0.82, "PLAY CLEAN CATCH", () => openNameThenStart("CleanCatch"));
 
     }
 
