@@ -10,8 +10,8 @@ const background = new Image();
 background.src = "assets/images/washed_mod_2/SINK3.png"
 
 // Word arrays
-const goodWords = ["Soap", "Bath", "Wash", "Cup", "Tap", "Well", "Pure", "Safe", "Care", "Flow", "Clean", "Fresh",  ];
-const badWords = ["Germs", "Dirty", "Virus"];
+const goodWords = ["Soap", "Bath", "Wash", "Cup", "Tap", "Well", "Pure", "Safe", "Care", "Flow", "Clean", "Fresh", "Water", "Rinse", "Towel", "Health", "Filter", "Toilet", "Health", "Filter", "Toilet", "Shower", "Dry"];
+const badWords = ["Germ", "Dirt", "Sick", "Mud", "Virus", "Waste", "Leak", "Rust", "Mold", "Scum", "Slime", "Crud", "Filth", "Ooze", "Rot", "Odor", "Pest", ""];
 
 // Player (hand)
 const player = {
@@ -150,13 +150,13 @@ document.addEventListener("keyup", e => {
     if (e.key === "ArrowLeft" || e.key === "ArrowRight") player.dx = 0;
 });
 
-// Controls - Mouse
-canvas.addEventListener("mousemove", e => {
+// Controls - Mouse, if touch screen users can use screen4
+canvas.addEventListener("pointermove", e => {
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     player.x = mouseX - player.width / 2;
 });
-
+//pointerMove - FOR TOUCH SCREEN
 // Move player
 function movePlayer() {
     player.x += player.dx;
