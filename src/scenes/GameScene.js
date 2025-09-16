@@ -154,7 +154,10 @@ export default class GameScene extends Phaser.Scene {
                 fontFamily: "Arial", fontSize: "44px", color: "#000000",
             }).setOrigin(0.5, 0).setAlpha(0.0);
 
-            const goToPlayground = () => {
+            let selectedDifficulty = null; // <- added
+
+            // CHANGED: accept selectedDifficulty and pass it to PlaygroundScene
+            const goToPlayground = (difficultyToStart) => {
                 if (this._navigating) return;
                 this._navigating = true;
 
@@ -165,7 +168,8 @@ export default class GameScene extends Phaser.Scene {
                         panelRect.destroy(); content.destroy();
                         this.cameras.main.fade(250, 0, 0, 0);
                         this.cameras.main.once("camerafadeoutcomplete", () => {
-                            this.scene.start("PlaygroundScene");
+                            const diff = difficultyToStart || this.registry.get("difficulty") || "normal";
+                            this.scene.start("PlaygroundScene", { difficulty: diff }); // <-- pass data
                         });
                     },
                 });
@@ -213,9 +217,11 @@ export default class GameScene extends Phaser.Scene {
                 [b1, b2, b3].forEach(({ btn, txt }) => { btn.disableInteractive(); txt.disableInteractive(); });
             };
 
+            // CHANGED: keep in registry AND pass via scene.start
             const finalizeSelection = (difficultyKey, btn, txt) => {
                 if (this._navigating) return;
                 this.registry.set("difficulty", difficultyKey);
+                selectedDifficulty = difficultyKey; // <- added
                 disableAll();
 
                 this.tweens.add({
@@ -223,12 +229,13 @@ export default class GameScene extends Phaser.Scene {
                     onComplete: () => {
                         this.tweens.add({
                             targets: panelRect, height: 10, duration: 160, ease: "Cubic.In",
-                            onComplete: goToPlayground,
+                            onComplete: () => goToPlayground(selectedDifficulty), // <- pass diff
                         });
                     },
                 });
             };
 
+            // keyboard shortcuts
             this.input.keyboard.once("keydown-ONE",   () => finalizeSelection("easy",   b1.btn, b1.txt));
             this.input.keyboard.once("keydown-TWO",   () => finalizeSelection("normal", b2.btn, b2.txt));
             this.input.keyboard.once("keydown-THREE", () => finalizeSelection("hard",   b3.btn, b3.txt));
