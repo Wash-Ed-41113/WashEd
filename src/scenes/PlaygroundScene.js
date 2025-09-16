@@ -1,4 +1,3 @@
-// --- Assets & layout constants ---
 const SAND_KEY   = "sand";
 const SAND_PATH  = "assets/images/backgrounds/sand.png";
 
