@@ -1,6 +1,6 @@
 const SAND_KEY   = "sand";
 const SAND_PATH  = "assets/images/backgrounds/sand.png";
-//asdfadsfadsasddsfaafsfdsa
+
 const SCHOOL_KEY = "school";
 const SCHOOL_PATH = "assets/images/backgrounds/school.png";
 const SCHOOL_OFFSET_X = 160; // pull left from the right edge
@@ -8,7 +8,7 @@ const SCHOOL_OFFSET_Y = 20;  // push down from the top edge
 
 const KIKO_BASE_KEY   = "kiko_base"; // assumed preloaded in PreloadScene
 const KIKO_CHEER_KEY  = "kiko_cheer";
-const KIKO_CHEER_PATH = "assets/images/WashEd_kiko_sprite/WashEd_kiko_sprite_cheer.png";
+const KIKO_CHEER_PATH = "assets/images/WashEd_kiko_sprite/kiko_run.png";
 
 // Optional: simple layer ordering (higher depth = in front)
 const LAYERS = { BG: 0, SCHOOL: 2, KIKO: 10, UI: 20 };
