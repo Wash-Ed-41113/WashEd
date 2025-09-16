@@ -6,7 +6,7 @@ export default class LoadingScene extends Phaser.Scene {
     words = ["TAP","WATER","RINSE","SOAP","TOWEL","WASH","HYGIENE","CLEAN"];
 
     preload() {
-        this.load.setPath("assets/images/LoadingScene/");
+        this.load.image("assets/images/LoadingScene/");
         this.load.image("bubble", "bubble.png");
     }
 
