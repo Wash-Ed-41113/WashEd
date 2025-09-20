@@ -1,3 +1,5 @@
+import systems from "../systems.js";
+
 const SAND_KEY   = "sand";
 const SAND_PATH  = "assets/images/backgrounds/sand.png";
 
@@ -12,6 +14,7 @@ const KIKO_CHEER_PATH = "assets/images/WashEd_kiko_sprite/kiko_run.png";
 
 // Optional: simple layer ordering (higher depth = in front)
 const LAYERS = { BG: 0, SCHOOL: 2, KIKO: 10, UI: 20 };
+
 
 export default class PlaygroundScene extends Phaser.Scene {
     constructor() {

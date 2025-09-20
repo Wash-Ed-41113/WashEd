@@ -1,4 +1,4 @@
-(function () {
+
     const h = {
         sampleAngle(minDeg, maxDeg) {
             const a0 = Phaser.Math.DegToRad(minDeg);
@@ -139,7 +139,7 @@
                         systems.typing.renderTarget(germ);
                     }
 
-                    const margin = CONFIG.despawnMargin;
+                    const margin = CONFIG.soapSplash.despawnMargin;
                     if (germ.sprite.x > CONFIG.soapSplash.width + margin || germ.sprite.y > CONFIG.soapSplash.height + margin) {
                         const wasActive = (scene.germs[i]?.id === scene.typing?.activeId);
                         systems.helpers.removeGermByIndex(scene, i);
@@ -470,5 +470,4 @@
 
     };
 
-    window.systems = systems;
-})();
+    export default systems;

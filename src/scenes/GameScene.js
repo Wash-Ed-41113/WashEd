@@ -1,4 +1,5 @@
 // src/scenes/GameScene.js
+import systems from "../systems.js";
 export default class GameScene extends Phaser.Scene {
     constructor() {
         super("GameScene");

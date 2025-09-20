@@ -1,5 +1,4 @@
-// src/cleanCatchGame.js
-// Turn the previous IIFE-style script into a reusable module function.
+import systems from "./systems.js";
 
 export function createCleanCatch(canvas) {
     const ctx = canvas.getContext("2d");

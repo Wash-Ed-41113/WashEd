@@ -1,6 +1,7 @@
 import "./config.js";
 import "./systems.js";
 
+
 import PreloadScene from "./scenes/PreloadScene.js";
 import MenuScene from "./scenes/MenuScene.js";
 import GameScene from "./scenes/GameScene.js";

@@ -1,3 +1,4 @@
+import systems from "../systems.js";
 export default class MenuScene extends Phaser.Scene {
     constructor() { super("MenuScene"); }
 
@@ -34,7 +35,10 @@ export default class MenuScene extends Phaser.Scene {
                     this.scene.start('GameScene', { playerName });
                 });
             }
+
         };
+
+        // systems.ui.button(this, width/2, height*ys.start, "START GAME", () => startWithName("GameScene"));
 
 
     }

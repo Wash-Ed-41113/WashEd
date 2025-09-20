@@ -1,3 +1,5 @@
+import systems from "./systems.js";
+
 export default class SoapSplash extends Phaser.Scene {
     constructor() {
         super('SoapSplash');
