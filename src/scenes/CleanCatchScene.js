@@ -9,26 +9,49 @@ export default class CleanCatchScene extends Phaser.Scene {
     }
 
     create() {
-        const { width, height } = this.scale;
+        const CC = CONFIG.cleanCatch;
+        const { width, height } = CC;
 
-        // Background (optional dim)
-        this.add.rectangle(0, 0, width, height, 0x0b1520, 1).setOrigin(0);
 
-        // Panel container with a canvas we control
+        this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x0b1520, 1).setOrigin(0);
+
+
         const html = `
-      <div style="display:flex;align-items:center;justify-content:center;width:${width}px;height:${height}px;">
-        <canvas id="cleanCatchCanvas" width="${Math.floor(width)}" height="${Math.floor(height)}" style="max-width:100%;max-height:100%;outline:none;"></canvas>
+      <div style="display:flex;align-items:center;justify-content:center;width:${this.scale.width}px;height:${this.scale.height}px;pointer-events:none;">
+        <canvas id="cleanCatchCanvas" width="${width}" height="${height}"
+          style="max-width:100%;max-height:100%;outline:none;pointer-events:auto;"></canvas>
       </div>`;
-        this._dom = this.add.dom(width/2, height/2).createFromHTML(html);
+        this._dom = this.add.dom(this.scale.width / 2, this.scale.height / 2).createFromHTML(html);
         this._dom.setOrigin(0.5);
 
         const canvas = this._dom.getChildByID("cleanCatchCanvas");
-        // Kick off the vanilla game inside our canvas
         const { destroy } = createCleanCatch(canvas);
         this._teardown = destroy;
 
-        // Simple ESC to return to menu
-        this.input.keyboard.once("keydown-ESC", () => this.scene.start("MenuScene"));
+        // ESC → back to GameScene
+        this.input.keyboard.once("keydown-ESC", () => {
+            const playerName = this.registry.get("playerName");
+            this.scene.start("GameScene", { playerName });
+        });
+
+
+        const backBtn = this.add.text(20, 20, "↩ Back", {
+            fontFamily: CONFIG?.ui?.fontFamily || "Arial",
+            fontSize: "22px",
+            color: "#ff6b6b",
+            fontStyle: "bold",
+            backgroundColor: "#222",
+        })
+            .setPadding(6)
+            .setOrigin(0, 0)
+            .setDepth(200)
+            .setScrollFactor(0)
+            .setInteractive({ useHandCursor: true });
+
+        backBtn.on("pointerup", () => {
+            const playerName = this.registry.get("playerName");
+            this.scene.start("GameScene", { playerName });
+        });
     }
 
     shutdown() {

@@ -18,25 +18,24 @@
         addGerm(scene, pos, word) {
             const id = ++scene.germSeq;
             const sprite = scene.add.sprite(pos.x, pos.y, 'Germ')
-                .setDepth(4).setScale(CONFIG.germSpriteSize);
+                .setDepth(4).setScale(CONFIG.soapSplash.germSpriteSize);
 
-            const labelTyped = scene.add.text(pos.x, pos.y + CONFIG.verticalSpaceLabel, '', {
-                fontFamily: CONFIG.fontFamily, fontSize: CONFIG.labelTextSize , color: '#6cf96c'
+            const labelTyped = scene.add.text(pos.x, pos.y + CONFIG.soapSplash.verticalSpaceLabel, '', {
+                fontFamily: CONFIG.soapSplash.fontFamily, fontSize: CONFIG.soapSplash.labelTextSize , color: '#6cf96c'
             }).setOrigin(0.5, 0).setDepth(5);
 
-            const labelRemain = scene.add.text(pos.x, pos.y + CONFIG.verticalSpaceLabel, word, {
-                fontFamily: CONFIG.fontFamily, fontSize: CONFIG.labelTextSize , color: '#ffffff'
+            const labelRemain = scene.add.text(pos.x, pos.y + CONFIG.soapSplash.verticalSpaceLabel, word, {
+                fontFamily: CONFIG.soapSplash.fontFamily, fontSize: CONFIG.soapSplash.labelTextSize , color: '#ffffff'
             }).setOrigin(0.5, 0).setDepth(5);
 
             const curBox = scene.add.rectangle(
-                pos.x, pos.y + CONFIG.verticalSpaceLabel, (0.6 * CONFIG.labelTextSize), CONFIG.labelTextSize, 0xffff, 0.50 ).setOrigin(0, 0)
+                pos.x, pos.y + CONFIG.soapSplash.verticalSpaceLabel, (0.6 * CONFIG.soapSplash.labelTextSize), CONFIG.soapSplash.labelTextSize, 0xffff, 0.50 ).setOrigin(0, 0)
                 .setDepth(5).setVisible(false);
 
             const germObject = { id, sprite, labelTyped, labelRemain, curBox, word, typedIdx: 0, errors: 0, active: false };
             scene.germs.push(germObject);
             return id;
         },
-
 
         removeGermByIndex(scene, i) {
             const germ = scene.germs[i];
@@ -54,11 +53,9 @@
             scene.germs.splice(i, 1);
         },
 
-
-
         pickWord() {
-            const idx = Math.floor(Math.random() * CONFIG.words.length);
-            return CONFIG.words[idx];
+            const idx = Math.floor(Math.random() * CONFIG.soapSplash.words.length);
+            return CONFIG.soapSplash.words[idx];
         },
 
         isOnScreen(scene, x, y, margin = 10) {
@@ -70,8 +67,6 @@
                 y <= view.bottom + margin
             );
         },
-
-
     };
 
     const systems = {
@@ -80,9 +75,9 @@
         spawn: {
             spawnGerm(scene) {
                 if (scene.gameOver) return;
-                if (scene.germs.length >= CONFIG.maxGerms) return;
+                if (scene.germs.length >= CONFIG.soapSplash.maxGerms) return;
 
-                let tries = CONFIG.maxSpawnAttempts;
+                let tries = CONFIG.soapSplash.maxSpawnAttempts;
                 let pos = null;
 
                 while (tries-- > 0) {
@@ -90,7 +85,7 @@
                     const r = h.sampleRadius(scene.rInner, scene.rOuter);
                     const p = h.polarToWorld(scene.sinkPosition, r, theta);
 
-                    const seperation = CONFIG.minSpawnSeparationPx;
+                    const seperation = CONFIG.soapSplash.minSpawnSeparationPx;
                     if (seperation > 0) {
                         let ok = true;
                         for (let i = 0; i < scene.germs.length; i++) {
@@ -117,7 +112,7 @@
 
         movement: {
             moveGerms(scene, delta) {
-                const speed = CONFIG.germSpeed * (delta / 1000);
+                const speed = CONFIG.soapSplash.germSpeed * (delta / 1000);
 
                 for (let i = scene.germs.length - 1; i >= 0; i--) {
                     const germ = scene.germs[i];
@@ -128,7 +123,7 @@
 
                     let ux = dx / mag, uy = dy / mag;
 
-                    const wobble = CONFIG.wobble;
+                    const wobble = CONFIG.soapSplash.wobble;
                     ux += (Math.random() - 0.5) * wobble;
                     uy += (Math.random() - 0.5) * wobble;
                     const mm = Math.hypot(ux, uy);
@@ -145,7 +140,7 @@
                     }
 
                     const margin = CONFIG.despawnMargin;
-                    if (germ.sprite.x > CONFIG.width + margin || germ.sprite.y > CONFIG.height + margin) {
+                    if (germ.sprite.x > CONFIG.soapSplash.width + margin || germ.sprite.y > CONFIG.soapSplash.height + margin) {
                         const wasActive = (scene.germs[i]?.id === scene.typing?.activeId);
                         systems.helpers.removeGermByIndex(scene, i);
                         if (wasActive) {
@@ -164,7 +159,7 @@
 
                     const germ = scene.germs[i];
                     const distance = Phaser.Math.Distance.Between(germ.sprite.x, germ.sprite.y, hit.x, hit.y);
-                    if (distance <= CONFIG.rSink) {
+                    if (distance <= CONFIG.soapSplash.rSink) {
                         const wasActive = (germ.id === scene.typing?.activeId);
 
                         systems.helpers.removeGermByIndex(scene, i);
@@ -180,7 +175,7 @@
                         }
 
                         if (scene.typing) {
-                            scene.typing.score = Math.max(0, scene.typing.score - CONFIG.breachPenalty);
+                            scene.typing.score = Math.max(0, scene.typing.score - CONFIG.soapSplash.breachPenalty);
                         }
 
                         if (scene.breaches >= 5) {
@@ -198,28 +193,27 @@
             init(scene) {
                 scene.gameOver = false;
                 scene.timerHud = scene.add.text(
-                    CONFIG.width - 140, 15, 'Time: ' + CONFIG.gameDurationTextHud,
-                    { fontFamily: CONFIG.fontFamily, fontSize: '16px', color: '#fff' }
+                    CONFIG.soapSplash.width - 140, 15, 'Time: ' + CONFIG.soapSplash.gameDurationTextHud,
+                    { fontFamily: CONFIG.soapSplash.fontFamily, fontSize: '16px', color: '#fff' }
                 ).setDepth(10);
 
                 scene.endEvent = scene.time.delayedCall(
-                    CONFIG.gameDurationMin * 60 * 1000,
+                    CONFIG.soapSplash.gameDurationMin * 60 * 1000,
                     () => systems.timer.endGame(scene)
                 );
             },
 
-
             updateHUD(scene, now) {
                 if (scene.gameStartAt == null) return;
                 const elapsed = now - scene.gameStartAt;
-                const remaining = Math.max(0, (CONFIG.gameDurationMin * 60 * 1000) - elapsed);
+                const remaining = Math.max(0, (CONFIG.soapSplash.gameDurationMin * 60 * 1000) - elapsed);
                 const mm = Math.floor(remaining / 60000);
                 const ss = Math.floor((remaining % 60000) / 1000);
                 const two = (n) => (n < 10 ? '0' + n : '' + n);
                 scene.timerHud.setText(`Time: ${two(mm)}:${two(ss)}`);
             },
 
-            endGame(scene, reason = CONFIG.reason) {
+            endGame(scene, reason = CONFIG.soapSplash.reason) {
                 if (scene.gameOver) return;
                 scene.gameOver = true;
 
@@ -234,9 +228,9 @@
                 scene.endEvent?.remove(false);
 
                 const overlay = scene.add.text(
-                    CONFIG.width / 2, CONFIG.height / 2,
+                    CONFIG.soapSplash.width / 2, CONFIG.soapSplash.height / 2,
                     `Game Over – ${reason}\nScore: ${score}\nBest Streak: ${bestStreak}\nBreaches: ${scene.breaches}/5\n\nTap to restart`,
-                    { fontFamily: CONFIG.fontFamily, fontSize: '28px', color: '#fff', align: 'center' }
+                    { fontFamily: CONFIG.soapSplash.fontFamily, fontSize: '28px', color: '#fff', align: 'center' }
                 ).setOrigin(0.5).setDepth(20);
 
                 scene.input.once('pointerdown', () => {
@@ -262,8 +256,8 @@
                   wordsCompleted: 0,
               };
 
-              scene.typeHud = scene.add.text(15, CONFIG.height - 40,
-                  `Score: 0   Streak: 0`, { fontFamily: CONFIG.fontFamily, fontSize: '16px', color: '#fff'
+              scene.typeHud = scene.add.text(15, CONFIG.soapSplash.height - 40,
+                  `Score: 0   Streak: 0`, { fontFamily: CONFIG.soapSplash.fontFamily, fontSize: '16px', color: '#fff'
               }).setDepth(10);
 
               scene.input.keyboard.on('keydown', (e) => this.onKey(e, scene));
@@ -281,7 +275,6 @@
                     g.labelRemain.setAlpha(1);
                 }
             },
-
 
             activate(scene, g) {
                 this.deactivateAll(scene);
@@ -327,10 +320,8 @@
                 if (best) this.activate(scene, best);
             },
 
-
-
             renderTarget(g) {
-                const baseY = g.sprite.y + CONFIG.verticalSpaceLabel;
+                const baseY = g.sprite.y + CONFIG.soapSplash.verticalSpaceLabel;
 
                 const typedStr  = g.word.slice(0, g.typedIdx);
                 const remainStr = g.word.slice(g.typedIdx);
@@ -347,10 +338,6 @@
 
                 g.curBox?.setPosition(leftX + typedW, baseY);
             },
-
-
-
-
 
             onKey(e, scene) {
                 if (scene.gameOver) return;
@@ -403,9 +390,6 @@
                 this.updateHud(scene);
             },
 
-
-
-
             onWordComplete(scene, g) {
                 const idx = scene.germs.indexOf(g);
                 if (idx >= 0) systems.helpers.removeGermByIndex(scene, idx);
@@ -432,13 +416,58 @@
                 scene.typeHud?.setText(`Score: ${score}   Streak: ${streak}`);
             },
 
-
-
-
-
-
-
         },
+        ui: {
+            button(scene, x, y, label, onClick) {
+                const B = CONFIG.ui.button;
+                const btn = scene.add.rectangle(x, y, B.width, B.height, B.fill, 1)
+                    .setOrigin(0.5).setStrokeStyle(B.strokeThickness, B.stroke)
+                    .setInteractive({ useHandCursor: true });
+                const txt = scene.add.text(x, y, label, {
+                    fontFamily: CONFIG.ui.fontFamily, fontSize: `${B.fontSize}px`, color: B.fontColor, fontStyle: 'bold'
+                }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+                const handler = () => onClick?.();
+                btn.on('pointerdown', handler); txt.on('pointerdown', handler);
+                return { btn, txt };
+            },
+
+            nameDialog(scene, onOk) {
+                const { width, height } = scene.scale;
+                const overlay = scene.add.rectangle(0, 0, width, height, 0x000000, 0.55)
+                    .setOrigin(0, 0).setDepth(10).setInteractive();
+                const panel = scene.add.rectangle(width/2, height/2, 600, 280, 0x101425, 1)
+                    .setOrigin(0.5).setDepth(11).setStrokeStyle(4, 0x00c2ff);
+                scene.add.text(width/2, height/2-90, 'Enter Your Name', {
+                    fontFamily: CONFIG.ui.fontFamily, fontSize: '36px', color: '#fff'
+                }).setOrigin(0.5).setDepth(12);
+
+                const html = `
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:18px;">
+                    <input id="nameInput" type="text" maxlength="20" placeholder="Your name…"
+                      style="padding:10px;font-size:20px;width:320px;border-radius:8px;border:1px solid #89bfff;outline:none;" />
+                    <div>
+                      <button id="okBtn" style="padding:10px 16px;font-size:18px;margin:0 6px;cursor:pointer;">OK</button>
+                      <button id="cancelBtn" style="padding:10px 16px;font-size:18px;margin:0 6px;cursor:pointer;">Cancel</button>
+                    </div>
+                  </div>`;
+                const dom = scene.add.dom(width/2, height/2+10).createFromHTML(html).setDepth(12);
+
+                const close = () => { dom.destroy(); panel.destroy(); overlay.destroy(); };
+                const submit = () => {
+                    const input = dom.getChildByID('nameInput'); const name = (input?.value || '').trim();
+                    if (!name) return;
+                    scene.registry.set('playerName', name);
+                    close(); onOk?.(name);
+                };
+                dom.addListener('click');
+                dom.on('click', (e) => { if (e.target?.id === 'okBtn') submit(); if (e.target?.id === 'cancelBtn') close(); });
+                setTimeout(() => dom.getChildByID('nameInput')?.focus(), 0);
+            },
+        },
+
+
+
+
     };
 
     window.systems = systems;

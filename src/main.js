@@ -8,12 +8,20 @@ import PlaygroundScene from "./scenes/PlaygroundScene.js";
 import SoapSplash from "./SoapSplash.js";
 import CleanCatchScene from "./scenes/CleanCatchScene.js";
 
-
 const config = {
     type: Phaser.AUTO,
     parent: "game",
-    width: window.CONFIG?.width ?? 1920,
-    height: window.CONFIG?.height ?? 1000,
+
+    // Logical size; Phaser scales it below
+    width: window.CONFIG.width,
+    height: window.CONFIG.height,
+
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        expandParent: false
+    },
+
     backgroundColor: "#1e1e1e",
     physics: { default: "arcade", arcade: { gravity: { y: 0 } } },
     scene: [PreloadScene, MenuScene, GameScene, PlaygroundScene, SoapSplash, CleanCatchScene],

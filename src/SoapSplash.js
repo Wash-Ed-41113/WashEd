@@ -23,12 +23,15 @@ export default class SoapSplash extends Phaser.Scene {
     }
 
     create() {
+
+
+
         // --- sink anchor ---
-        this.sinkPosition = { x: 0, y: CONFIG.height };
+        this.sinkPosition = { x: 0, y: CONFIG.soapSplash.height };
 
         // --- background & sink ---
         this.add
-            .sprite(CONFIG.width / 2, CONFIG.height / 2, 'Background')
+            .sprite(CONFIG.soapSplash.width / 2, CONFIG.soapSplash.height / 2, 'Background')
             .setDepth(0)
             .setScale(2);
 
@@ -45,21 +48,21 @@ export default class SoapSplash extends Phaser.Scene {
         });
 
         // --- spawn geometry from OLD scene (cone-band in the top-right corner) ---
-        if (CONFIG.useSpawner) {
+        if (CONFIG.soapSplash.useSpawner) {
             // Distance from sink anchor to top-right corner
             const cornerDist = Math.hypot(
-                CONFIG.width - this.sinkPosition.x,
+                CONFIG.soapSplash.width - this.sinkPosition.x,
                 0 - this.sinkPosition.y
             );
-            this.rOuter = Math.max(0, cornerDist - CONFIG.cornerMargin);
-            this.rInner = Math.max(0, this.rOuter - CONFIG.cornerBandWidth);
+            this.rOuter = Math.max(0, cornerDist - CONFIG.soapSplash.cornerMargin);
+            this.rInner = Math.max(0, this.rOuter - CONFIG.soapSplash.cornerBandWidth);
 
             // Angle window centred on vector from sink -> top-right
             const centerDeg = Phaser.Math.RadToDeg(
-                Math.atan2(CONFIG.height, CONFIG.width)
+                Math.atan2(CONFIG.soapSplash.height, CONFIG.soapSplash.width)
             );
-            this.angleMinDeg = Math.max(0, centerDeg - CONFIG.angleSpreadDeg);
-            this.angleMaxDeg = Math.min(90, centerDeg + CONFIG.angleSpreadDeg);
+            this.angleMinDeg = Math.max(0, centerDeg - CONFIG.soapSplash.angleSpreadDeg);
+            this.angleMaxDeg = Math.min(90, centerDeg + CONFIG.soapSplash.angleSpreadDeg);
         }
 
         // --- game state ---
@@ -72,7 +75,7 @@ export default class SoapSplash extends Phaser.Scene {
         // --- HUD: breaches ---
         this.hud = this.add.text(15, 15, 'Breaches: 0/5', {
             fontFamily: 'monospace',
-            fontSize: CONFIG.breachesFontSize + 'px',
+            fontSize: CONFIG.soapSplash.breachesFontSize + 'px',
             color: '#fff',
         });
 
@@ -88,7 +91,7 @@ export default class SoapSplash extends Phaser.Scene {
 
         // --- Back to Menu button (from NEW scene) ---
         const backBtn = this.add
-            .text(CONFIG.width - 20, 20, '↩ Menu', {
+            .text(CONFIG.soapSplash.width - 20, 20, '↩ Menu', {
                 fontFamily: 'Arial',
                 fontSize: '22px',
                 color: '#ff6b6b',
@@ -100,8 +103,10 @@ export default class SoapSplash extends Phaser.Scene {
             .setInteractive({ useHandCursor: true });
 
         backBtn.on('pointerup', () => {
-            this.scene.start('MenuScene');
+            const playerName = this.registry.get('playerName');
+            this.scene.start('GameScene', { playerName });
         });
+
     }
 
     update(time, delta) {
@@ -109,8 +114,8 @@ export default class SoapSplash extends Phaser.Scene {
         if (this.gameStartAt == null) this.gameStartAt = time;
 
         // Spawner: cooldown + population cap
-        if (!this.gameOver && time - this.lastSpawn > CONFIG.spawnIntervalMs) {
-            if (this.germs.length < CONFIG.maxGerms) {
+        if (!this.gameOver && time - this.lastSpawn > CONFIG.soapSplash.spawnIntervalMs) {
+            if (this.germs.length < CONFIG.soapSplash.maxGerms) {
                 systems.spawn.spawnGerm(this);
                 this.lastSpawn = time;
             }

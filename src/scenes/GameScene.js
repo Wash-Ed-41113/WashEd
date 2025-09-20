@@ -137,6 +137,7 @@ export default class GameScene extends Phaser.Scene {
 
         startTyping(messages[0]);
 
+
         // === 5) Difficulty panel ===
         this.showDifficultyPanel = ({ bubbleX, bubbleY, bubbleW, bubbleH }) => {
             const panelW = bubbleW, panelFinalH = 340, panelX = bubbleX;
@@ -154,26 +155,7 @@ export default class GameScene extends Phaser.Scene {
                 fontFamily: "Arial", fontSize: "44px", color: "#000000",
             }).setOrigin(0.5, 0).setAlpha(0.0);
 
-            let selectedDifficulty = null; // <- added
-
-            // CHANGED: accept selectedDifficulty and pass it to PlaygroundScene
-            const goToPlayground = (difficultyToStart) => {
-                if (this._navigating) return;
-                this._navigating = true;
-
-                this.tweens.add({
-                    targets: [content], alpha: 0, duration: 180,
-                    onComplete: () => {
-                        content.clearMask(true);
-                        panelRect.destroy(); content.destroy();
-                        this.cameras.main.fade(250, 0, 0, 0);
-                        this.cameras.main.once("camerafadeoutcomplete", () => {
-                            const diff = difficultyToStart || this.registry.get("difficulty") || "normal";
-                            this.scene.start("PlaygroundScene", { difficulty: diff }); // <-- pass data
-                        });
-                    },
-                });
-            };
+            let selectedDifficulty = null;
 
             const makeBtn = (label, y, key) => {
                 const btn = this.add.rectangle(0, y, 520, 64, 0x142038, 1)
@@ -217,19 +199,23 @@ export default class GameScene extends Phaser.Scene {
                 [b1, b2, b3].forEach(({ btn, txt }) => { btn.disableInteractive(); txt.disableInteractive(); });
             };
 
-            // CHANGED: keep in registry AND pass via scene.start
             const finalizeSelection = (difficultyKey, btn, txt) => {
                 if (this._navigating) return;
                 this.registry.set("difficulty", difficultyKey);
-                selectedDifficulty = difficultyKey; // <- added
+                selectedDifficulty = difficultyKey;
                 disableAll();
 
                 this.tweens.add({
                     targets: [btn, txt], alpha: 0.4, yoyo: true, duration: 120, repeat: 1,
                     onComplete: () => {
+                        // Collapse difficulty panel, then show mode panel
                         this.tweens.add({
                             targets: panelRect, height: 10, duration: 160, ease: "Cubic.In",
-                            onComplete: () => goToPlayground(selectedDifficulty), // <- pass diff
+                            onComplete: () => {
+                                content.clearMask(true);
+                                panelRect.destroy(); content.destroy();
+                                this.showModePanel(selectedDifficulty);   // <— NEW
+                            },
                         });
                     },
                 });
@@ -240,5 +226,95 @@ export default class GameScene extends Phaser.Scene {
             this.input.keyboard.once("keydown-TWO",   () => finalizeSelection("normal", b2.btn, b2.txt));
             this.input.keyboard.once("keydown-THREE", () => finalizeSelection("hard",   b3.btn, b3.txt));
         };
+
+        // === 6) Mode selection panel  === //todo This is temporary
+        // === 6) Mode selection panel (mask-free, centered, no clipping) ===
+        this.showModePanel = (difficulty) => {
+            const cx = this.scale.width / 2;
+            const cy = this.scale.height / 2;
+
+            const PANEL_W = 780;
+            const PANEL_H = 360;
+
+            // Panel bg: set full size, then scale Y from tiny to 1
+            const bg = this.add.rectangle(cx, cy, PANEL_W, PANEL_H, 0xffffff, 0.96)
+                .setOrigin(0.5)
+                .setStrokeStyle(3, 0x000000)
+                .setDepth(60)
+                .setScale(1, 0.01); // collapsed vertically
+
+            // Content container, centered on the panel
+            const content = this.add.container(cx, cy).setDepth(61).setAlpha(0);
+
+            // Title
+            const title = this.add.text(0, -PANEL_H / 2 + 28, "Choose a game", {
+                fontFamily: CONFIG?.ui?.fontFamily || "Arial",
+                fontSize: "44px",
+                color: "#000",
+                align: "center",
+            }).setOrigin(0.5, 0);
+            content.add(title);
+
+            // Button factory (centered x=0 inside content)
+            const makeBtn = (label, y, onClick) => {
+                const Bw = CONFIG?.ui?.button?.width  ?? 560;
+                const Bh = CONFIG?.ui?.button?.height ?? 68;
+
+                const rect = this.add.rectangle(0, y, Bw, Bh, 0x142038, 1)
+                    .setOrigin(0.5)
+                    .setStrokeStyle(2, 0xffffff)
+                    .setInteractive({ useHandCursor: true });
+
+                const txt = this.add.text(0, y, label, {
+                    fontFamily: CONFIG?.ui?.fontFamily || "Arial",
+                    fontSize: "26px",
+                    color: "#fff",
+                    align: "center",
+                    fixedWidth: Bw, // keeps text centered over the rect
+                }).setOrigin(0.5);
+
+                rect.on("pointerover", () => rect.setFillStyle(0x1d2b52));
+                rect.on("pointerout",  () => rect.setFillStyle(0x142038));
+                rect.on("pointerdown", onClick);
+                txt.on("pointerdown", onClick);
+
+                content.add([rect, txt]);
+                return { rect, txt };
+            };
+
+            const GAP = 86;
+            const bSoap  = makeBtn("Play Soap Splash",  -GAP, () => go("SoapSplash"));
+            const bCatch = makeBtn("Play Clean Catch",    0,   () => go("CleanCatch"));
+            const bPlay  = makeBtn("Explore Playground",  GAP, () => go("PlaygroundScene")); // optional
+
+            // Animate panel open (scaleY) then fade in content
+            this.tweens.add({
+                targets: bg,
+                scaleY: 1,
+                duration: 280,
+                ease: "Cubic.Out",
+                onComplete: () => {
+                    this.tweens.add({ targets: content, alpha: 1, duration: 160, ease: "Quadratic.Out" });
+                }
+            });
+
+            const go = (sceneKey) => {
+                const data = (sceneKey === "PlaygroundScene") ? { difficulty } : {};
+                this.cameras.main.fade(220, 0, 0, 0);
+                this.cameras.main.once("camerafadeoutcomplete", () => {
+                    bg.destroy(); content.destroy();
+                    this.scene.start(sceneKey, data);
+                });
+            };
+
+            // ESC → back to Menu
+            this.input.keyboard.once("keydown-ESC", () => {
+                bg.destroy(); content.destroy();
+                this.scene.start("MenuScene");
+            });
+        };
+
+
+
     }
 }
