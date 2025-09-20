@@ -1,5 +1,6 @@
 // src/scenes/GameScene.js
-import systems from "../systems.js";
+import systems from "../systems.js"; // ✅ needed for systems.ui.topbar
+
 export default class GameScene extends Phaser.Scene {
     constructor() {
         super("GameScene");
@@ -7,7 +8,9 @@ export default class GameScene extends Phaser.Scene {
         this._navigating = false; // prevent multiple scene transitions
     }
 
-    create() {
+    create(data) {
+        // ✅ take the name passed from MenuScene and persist it
+        if (data?.playerName) this.registry.set("playerName", data.playerName);
         const { width, height } = this.scale;
         const playerName = this.registry.get("playerName") || "Player";
 
@@ -23,7 +26,7 @@ export default class GameScene extends Phaser.Scene {
             duration: 900,
             yoyo: true,
             repeat: -1,
-            ease: "Sine.inOut",
+            ease: "Sine.easeInOut",
         });
 
         // === 2) Speech bubble ===
@@ -40,7 +43,7 @@ export default class GameScene extends Phaser.Scene {
 
         const greetText = this.add
             .text(bubbleX, bubbleY - 20, "", {
-                fontFamily: "Arial",
+                fontFamily: CONFIG.ui.fontFamily,
                 fontSize: "48px",
                 color: "#000000",
                 wordWrap: { width: bubbleW - 40 },
@@ -96,7 +99,7 @@ export default class GameScene extends Phaser.Scene {
             .setInteractive({ useHandCursor: true }).setDepth(6);
 
         const nextLabel = this.add
-            .text(nextBtn.x, nextBtn.y, "Next ▶", {
+            .text(nextBtn.x, nextBtn.y, "Next ", {
                 fontFamily: "Arial", fontSize: "22px", color: "#ffffff",
             })
             .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(7);
@@ -137,7 +140,6 @@ export default class GameScene extends Phaser.Scene {
         this.input.keyboard.on("keydown-ENTER", onNext);
 
         startTyping(messages[0]);
-
 
         // === 5) Difficulty panel ===
         this.showDifficultyPanel = ({ bubbleX, bubbleY, bubbleW, bubbleH }) => {
@@ -186,7 +188,10 @@ export default class GameScene extends Phaser.Scene {
             content.add([title]);
 
             this.tweens.add({
-                targets: panelRect, height: panelFinalH, duration: 380, ease: "Cubic.Out",
+                targets: panelRect,
+                height: panelFinalH,
+                duration: 380,
+                ease: "Cubic.Out",
                 onUpdate: (tw, target) => {
                     const a = Phaser.Math.Easing.Cubic.Out(
                         Phaser.Math.Clamp(target.height / panelFinalH, 0, 1)
@@ -194,6 +199,11 @@ export default class GameScene extends Phaser.Scene {
                     title.setAlpha(a);
                     [b1.btn, b1.txt, b2.btn, b2.txt, b3.btn, b3.txt].forEach(o => o.setAlpha(a));
                 },
+                onComplete: () => {
+                    // ✅ ensure fully visible even if onUpdate was skipped
+                    title.setAlpha(1);
+                    [b1.btn, b1.txt, b2.btn, b2.txt, b3.btn, b3.txt].forEach(o => o.setAlpha(1));
+                }
             });
 
             const disableAll = () => {
@@ -202,12 +212,13 @@ export default class GameScene extends Phaser.Scene {
 
             const finalizeSelection = (difficultyKey, btn, txt) => {
                 if (this._navigating) return;
-                this.registry.set("difficulty", difficultyKey);
+                this.registry.set("difficulty", difficultyKey); // ✅ persist difficulty
                 selectedDifficulty = difficultyKey;
                 disableAll();
 
                 this.tweens.add({
-                    targets: [btn, txt], alpha: 0.4, yoyo: true, duration: 120, repeat: 1,
+                    targets: [btn, txt],
+                    alpha: 0.4, yoyo: true, duration: 120, repeat: 1,
                     onComplete: () => {
                         // Collapse difficulty panel, then show mode panel
                         this.tweens.add({
@@ -215,7 +226,7 @@ export default class GameScene extends Phaser.Scene {
                             onComplete: () => {
                                 content.clearMask(true);
                                 panelRect.destroy(); content.destroy();
-                                this.showModePanel(selectedDifficulty);   // <— NEW
+                                this.showModePanel(selectedDifficulty);
                             },
                         });
                     },
@@ -228,8 +239,7 @@ export default class GameScene extends Phaser.Scene {
             this.input.keyboard.once("keydown-THREE", () => finalizeSelection("hard",   b3.btn, b3.txt));
         };
 
-        // === 6) Mode selection panel  === //todo This is temporary
-        // === 6) Mode selection panel (mask-free, centered, no clipping) ===
+        // === 6) Mode selection panel ===
         this.showModePanel = (difficulty) => {
             const cx = this.scale.width / 2;
             const cy = this.scale.height / 2;
@@ -237,26 +247,22 @@ export default class GameScene extends Phaser.Scene {
             const PANEL_W = 780;
             const PANEL_H = 360;
 
-            // Panel bg: set full size, then scale Y from tiny to 1
             const bg = this.add.rectangle(cx, cy, PANEL_W, PANEL_H, 0xffffff, 0.96)
                 .setOrigin(0.5)
                 .setStrokeStyle(3, 0x000000)
                 .setDepth(60)
-                .setScale(1, 0.01); // collapsed vertically
+                .setScale(1, 0.01);
 
-            // Content container, centered on the panel
             const content = this.add.container(cx, cy).setDepth(61).setAlpha(0);
 
-            // Title
             const title = this.add.text(0, -PANEL_H / 2 + 28, "Choose a game", {
-                fontFamily: CONFIG?.ui?.fontFamily || "Arial",
+                fontFamily: CONFIG.ui.fontFamily,
                 fontSize: "44px",
                 color: "#000",
                 align: "center",
             }).setOrigin(0.5, 0);
             content.add(title);
 
-            // Button factory (centered x=0 inside content)
             const makeBtn = (label, y, onClick) => {
                 const Bw = CONFIG?.ui?.button?.width  ?? 560;
                 const Bh = CONFIG?.ui?.button?.height ?? 68;
@@ -271,7 +277,7 @@ export default class GameScene extends Phaser.Scene {
                     fontSize: "26px",
                     color: "#fff",
                     align: "center",
-                    fixedWidth: Bw, // keeps text centered over the rect
+                    fixedWidth: Bw,
                 }).setOrigin(0.5);
 
                 rect.on("pointerover", () => rect.setFillStyle(0x1d2b52));
@@ -284,11 +290,10 @@ export default class GameScene extends Phaser.Scene {
             };
 
             const GAP = 86;
-            const bSoap  = makeBtn("Play Soap Splash",  -GAP, () => go("SoapSplash"));
-            const bCatch = makeBtn("Play Clean Catch",    0,   () => go("CleanCatch"));
-            const bPlay  = makeBtn("Explore Playground",  GAP, () => go("PlaygroundScene")); // optional
+            makeBtn("Play Soap Splash",  -GAP, () => go("SoapSplash"));
+            makeBtn("Play Clean Catch",    0,   () => go("CleanCatch"));
+            makeBtn("Explore Playground",  GAP, () => go("PlaygroundScene"));
 
-            // Animate panel open (scaleY) then fade in content
             this.tweens.add({
                 targets: bg,
                 scaleY: 1,
@@ -300,7 +305,11 @@ export default class GameScene extends Phaser.Scene {
             });
 
             const go = (sceneKey) => {
-                const data = (sceneKey === "PlaygroundScene") ? { difficulty } : {};
+                // ✅ pass both (some scenes read data; others read registry)
+                const data = {
+                    difficulty,
+                    playerName: this.registry.get("playerName")
+                };
                 this.cameras.main.fade(220, 0, 0, 0);
                 this.cameras.main.once("camerafadeoutcomplete", () => {
                     bg.destroy(); content.destroy();
@@ -308,14 +317,14 @@ export default class GameScene extends Phaser.Scene {
                 });
             };
 
-            // ESC → back to Menu
+            systems.ui.topbar(this, {
+                onHome: () => this.scene.start("GameScene", { playerName: this.registry.get("playerName") })
+            });
+
             this.input.keyboard.once("keydown-ESC", () => {
                 bg.destroy(); content.destroy();
                 this.scene.start("MenuScene");
             });
         };
-
-
-
     }
 }

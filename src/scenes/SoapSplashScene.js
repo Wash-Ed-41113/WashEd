@@ -1,9 +1,9 @@
+// src/scenes/SoapSplashScene.js
 import systems from "../systems.js";
 
 export default class SoapSplashScene extends Phaser.Scene {
     constructor() {
         super("SoapSplash");
-        // counters/state (kept here for clarity; also (re)initialised in create)
         this.germs = [];
         this.lastSpawn = 0;
         this.germSeq = 0;
@@ -11,121 +11,159 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.gameOver = false;
         this.gameStartAt = null;
 
-        // spawn geometry (computed in create when CONFIG/useSpawner available)
+        this._paused = false;
+        this._pauseUi = null;
+
         this.rOuter = 0;
         this.rInner = 0;
         this.angleMinDeg = 0;
         this.angleMaxDeg = 90;
+
+        this.bgSprite = null;
+        this._bgKeys = [];
+    }
+
+    togglePause() {
+        if (this._paused) {
+            this._paused = false;
+            this._pauseUi?.destroy();
+            this._pauseUi = null;
+        } else {
+            this._paused = true;
+            this._pauseUi = systems.ui.pauseOverlay(this, () => this.togglePause());
+        }
     }
 
     preload() {
-        this.load.image("Background", "assets/images/created/background.png");
-        this.load.image("Sink", "assets/images/created/Sink.png");
-        this.load.image("Germ", "assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__GASTRO.png");
+        // Load the background set based on # of breaches
+        const set = CONFIG.assets.soapSplash.backgrounds || [];
+        this._bgKeys = set.map((path, i) => {
+            const key = `SS_BG_${i}`;
+            this.load.image(key, path);
+            return key;
+        });
+
+        this.load.image("Germ", CONFIG.assets.soapSplash.germ);
     }
 
     create() {
-        // --- sink anchor ---
-        this.sinkPosition = { x: 0, y: CONFIG.soapSplash.height };
+        const SS = CONFIG.soapSplash;
 
-        // --- background & sink ---
-        this.add
-            .sprite(CONFIG.soapSplash.width / 2, CONFIG.soapSplash.height / 2, "Background")
-            .setDepth(0)
-            .setScale(2);
+// 1) Sink position from config
+        const sinkCenter = {
+            x: SS.width  * SS.sinkHitRel.x,
+            y: SS.height * SS.sinkHitRel.y,
+        };
+        this.sinkPosition = { ...sinkCenter };
+        this.getSinkHitPoint = () => sinkCenter;   // used by movement/rules
 
-        this.sinkSprite = this.add
-            .sprite(this.sinkPosition.x, this.sinkPosition.y, "Sink")
-            .setOrigin(0, 1)
-            .setScale(4)
-            .setDepth(4);
+// 2) Sink radius: prefer relative % if provided, else pixels, else a safe default
+        this.rSink = (SS.rSinkRel != null)
+            ? Math.round(SS.height * SS.rSinkRel)
+            : (SS.rSinkPx ?? 70);
 
-        // Centralized point to test for breaches (TODO: upgrade to circle hit test)
-        this.getSinkHitPoint = () => ({
-            x: this.sinkSprite.x + this.sinkSprite.displayWidth * 0.5,
-            y: this.sinkSprite.y - this.sinkSprite.displayHeight * 0.5,
-        });
-
-        // --- spawn geometry (cone-band in the top-right corner) ---
-        if (CONFIG.soapSplash.useSpawner) {
-            // Distance from sink anchor to top-right corner
-            const cornerDist = Math.hypot(
-                CONFIG.soapSplash.width - this.sinkPosition.x,
-                0 - this.sinkPosition.y
-            );
-            this.rOuter = Math.max(0, cornerDist - CONFIG.soapSplash.cornerMargin);
-            this.rInner = Math.max(0, this.rOuter - CONFIG.soapSplash.cornerBandWidth);
-
-            // Angle window centred on vector from sink -> top-right
-            const centerDeg = Phaser.Math.RadToDeg(
-                Math.atan2(CONFIG.soapSplash.height, CONFIG.soapSplash.width)
-            );
-            this.angleMinDeg = Math.max(0, centerDeg - CONFIG.soapSplash.angleSpreadDeg);
-            this.angleMaxDeg = Math.min(90, centerDeg + CONFIG.soapSplash.angleSpreadDeg);
+// 3) Optional debug circle (translucent green) — toggled by config
+        if (SS.debug?.showSinkCircle) {
+            this._sinkMarker = this.add.circle(
+                sinkCenter.x, sinkCenter.y,
+                this.rSink,
+                SS.debug?.sinkColor ?? 0x00ff00,
+                SS.debug?.sinkAlpha ?? 0.20
+            ).setDepth(2);
         }
 
-        // --- game state ---
+        this.sinkPosition = { ...sinkCenter };
+        this.getSinkHitPoint = () => sinkCenter;
+
+        // Background
+        const firstKey = this._bgKeys[0] || null;
+        this.bgSprite = firstKey
+            ? this.add.sprite(SS.width / 2, SS.height / 2, firstKey)
+                .setDepth(0).setDisplaySize(SS.width, SS.height)
+            : this.add.rectangle(0, 0, SS.width, SS.height, 0x1b2a3a, 1).setOrigin(0, 0);
+
+        // Spawn geometry (top-right cone relative to sink)
+        if (SS.useSpawner) {
+            const cornerDist = Math.hypot(SS.width - this.sinkPosition.x, 0 - this.sinkPosition.y);
+            this.rOuter = Math.max(0, cornerDist - SS.cornerMargin);
+            this.rInner = Math.max(0, this.rOuter - SS.cornerBandWidth);
+
+            const centerDeg = Phaser.Math.RadToDeg(Math.atan2(SS.height, SS.width));
+            this.angleMinDeg = Math.max(0, centerDeg - SS.angleSpreadDeg);
+            this.angleMaxDeg = Math.min(90, centerDeg + SS.angleSpreadDeg);
+
+            if (this.angleMinDeg > this.angleMaxDeg) {
+                const t = this.angleMinDeg;
+                this.angleMinDeg = this.angleMaxDeg;
+                this.angleMaxDeg = t;
+            }
+        }
+
+        // Game state
         this.germs = [];
         this.lastSpawn = 0;
         this.germSeq = 0;
         this.breaches = 0;
         this.gameOver = false;
 
-        // --- HUD: breaches ---
-        this.hud = this.add.text(15, 15, "Breaches: 0/5", {
+        // HUDs (with safe fallbacks to avoid NaN)
+        const maxBreaches = SS.maxBreaches ?? SS.breachesAllowed ?? 5;
+        const breachesFontPx = `${SS.breachesFontSize || 24}px`;
+        this.hud = this.add.text(15, 15, `Breaches: 0/${maxBreaches}`, {
             fontFamily: "monospace",
-            fontSize: CONFIG.soapSplash.breachesFontSize + "px",
+            fontSize: breachesFontPx,
             color: "#fff",
+        }).setDepth(10);
+
+        // Shared topbar (Home + Pause wired; Settings inert)
+        systems.ui.topbar(this, {
+            onHome: () => this.scene.start("GameScene", { playerName: this.registry.get("playerName") }),
+            onPause: () => this.togglePause(),
+            // onSettings: () => {} // intentionally inert
         });
 
-        // --- timer & typing systems ---
+        // Timer + typing systems (namespaced in systems.js)
         systems.soapsplash.timer.init(this);
         this.gameStartAt = this.time.now;
         systems.soapsplash.typing.init(this);
 
-        // If germs already exist (e.g., resume), pick a target
-        if (!this.typing?.activeId && this.germs.length > 0) {
-            systems.soapsplash.typing.pickRandom(this);
-        }
+        // ✅ Single, consistent background switcher (matches SS_BG_* keys)
+        this.setSoapSplashBackground = (breaches) => {
+            const i = Math.min(breaches, this._bgKeys.length - 1);
+            const k = this._bgKeys[i] || this._bgKeys[0];
+            if (k && this.bgSprite.setTexture) this.bgSprite.setTexture(k);
+        };
 
-        // --- Back to Menu button ---
-        const backBtn = this.add
-            .text(CONFIG.soapSplash.width - 20, 20, "↩ Menu", {
-                fontFamily: "Arial",
-                fontSize: "22px",
-                color: "#ff6b6b",
-                fontStyle: "bold",
-                backgroundColor: "#222",
-            })
-            .setOrigin(1, 0)
-            .setPadding(6)
-            .setInteractive({ useHandCursor: true });
-
-        backBtn.on("pointerup", () => {
+        // ESC → back
+        this.input.keyboard.once("keydown-ESC", () => {
             const playerName = this.registry.get("playerName");
             this.scene.start("GameScene", { playerName });
         });
     }
 
     update(time, delta) {
-        // Ensure start time set even if create() was skipped
+        const SS = CONFIG.soapSplash;
+        if (this._paused || this.gameOver) return;
         if (this.gameStartAt == null) this.gameStartAt = time;
 
-        // Spawner: cooldown + population cap
-        if (!this.gameOver && time - this.lastSpawn > CONFIG.soapSplash.spawnIntervalMs) {
-            if (this.germs.length < CONFIG.soapSplash.maxGerms) {
-                systems.soapsplash.spawn.spawnGerm(this);
-                this.lastSpawn = time;
-            }
+        const cap = SS.waveCap ?? SS.maxGerms ?? 5;
+        const base = SS.spawnIntervalMs ?? SS.spawnEveryMs ?? 1200;
+        const jitter = SS.spawnJitterMs ?? 0;
+
+        if (!this._nextSpawnAt) {
+            const j = Phaser.Math.Between(-jitter, jitter);
+            this._nextSpawnAt = time + base + j;
         }
 
-        // Movement & breach rules while game is active
-        if (!this.gameOver) {
-            systems.soapsplash.movement.moveGerms(this, delta);
-            systems.soapsplash.rules.checkBreaches(this);
+        if (time >= this._nextSpawnAt && this.germs.length < cap) {
+            systems.soapsplash.spawn.spawnGerm(this);
+            const j = Phaser.Math.Between(-jitter, jitter);
+            this._nextSpawnAt = time + base + j;
         }
 
-        // HUD: timer
+        systems.soapsplash.movement.moveGerms(this, delta);
+        systems.soapsplash.rules.checkBreaches(this);
         systems.soapsplash.timer.updateHUD(this, this.time.now);
     }
+
 }

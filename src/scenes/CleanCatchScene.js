@@ -24,7 +24,6 @@ export default class CleanCatchScene extends Phaser.Scene {
         this._dom.setOrigin(0.5);
 
         const canvas = this._dom.getChildByID("cleanCatchCanvas");
-        // Improve pointer behavior on Safari/iOS
         canvas.style.touchAction = "none";
 
         // Use the namespaced game logic

@@ -4,9 +4,56 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Breach, score and streaks _ 2">
-      <change afterPath="$PROJECT_DIR$/lib/.gitignore" afterDir="false" />
+    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Updated ReadMe">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/WashEd_kiko_sprite/WashEd_kiko_sprite_base.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/WashEd_kiko_sprite/WashEd_kiko_sprite_cheer.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/WashEd_kiko_sprite/WashEd_kiko_sprite_sad.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/WashEd_kiko_sprite/WashEd_kiko_sprite_stress.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/WashEd_kiko_sprite/WashEd_kiko_sprite_thumbs-up.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/WashEd_kiko_sprite/kiko_run.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/WashEd_kiko_sprite/washed-carabao_sprite_defeat.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/created/Sink.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/created/background.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/created/background.psd" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/SINK3.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2__ICON.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-AERO-ex__LEGION.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-AERO-ex__PHIE.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-AERO__TRANS.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT-ex__DENGU.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT-ex__LYMP-FILA.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT-ex__MALA.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT-ex__ONCHO.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT-ex__TYRPA.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT-ex__YELL-FVR.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT__TRANS.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BASE-ex__DRAC.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BASE-ex__SCHI.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BASE__TRANS.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__AMO-BAC-DYS.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__CHOL.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__ENTC-HEPA.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__GASTRO.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__LEPTO.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__POLIO.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__TYPH-PARA-FVR.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN__TRANS.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-WASH-ex__CONJUV.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-WASH-ex__INT-HEL-INFEC.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-WASH-ex__LEPRO.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-WASH-ex__SCAB.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-WASH-ex__TRACH.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-WASH__TRANS.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water_TRANS_BG.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/config.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/scenes/CleanCatchScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/CleanCatchScene.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/scenes/GameScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/GameScene.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/scenes/MenuScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/MenuScene.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/scenes/PlaygroundScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/PlaygroundScene.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/scenes/PreloadScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/PreloadScene.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/scenes/SoapSplashScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/SoapSplashScene.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/systems.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/systems.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -22,6 +69,19 @@
     </option>
   </component>
   <component name="Git.Settings">
+    <excluded-from-favorite>
+      <branch-storage>
+        <map>
+          <entry type="REMOTE">
+            <value>
+              <list>
+                <branch-info repo="$PROJECT_DIR$" source="origin/main" />
+              </list>
+            </value>
+          </entry>
+        </map>
+      </branch-storage>
+    </excluded-from-favorite>
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
         <entry key="$PROJECT_DIR$" value="SwasSoapSplasher" />
@@ -55,35 +115,37 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "DefaultHtmlFileTemplate": "HTML File",
-    "JavaScript Debug.Index.html.executor": "Run",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "Swas",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "reference.settings.ide.settings.web.browsers",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
+    &quot;JavaScript Debug.Index.html.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;#15 on main&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;reference.settings.ide.settings.web.browsers&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   },
-  "keyToStringList": {
-    "DatabaseDriversLRU": [
-      "sqlite"
+  &quot;keyToStringList&quot;: {
+    &quot;DatabaseDriversLRU&quot;: [
+      &quot;sqlite&quot;
     ]
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/assets/images/UI" />
+      <recent name="$PROJECT_DIR$/src/scenes" />
+      <recent name="$PROJECT_DIR$/src" />
       <recent name="$PROJECT_DIR$/assets/images/created" />
       <recent name="$PROJECT_DIR$" />
-      <recent name="$PROJECT_DIR$/src" />
     </key>
   </component>
   <component name="RunManager">
@@ -142,6 +204,10 @@
       <workItem from="1757564981294" duration="771000" />
       <workItem from="1757975733983" duration="631000" />
       <workItem from="1757989731302" duration="1813000" />
+      <workItem from="1757992704769" duration="133000" />
+      <workItem from="1757992889387" duration="8807000" />
+      <workItem from="1758330564090" duration="4838000" />
+      <workItem from="1758335556581" duration="24066000" />
     </task>
     <task id="LOCAL-00001" summary="initial setup w/boilerplate">
       <option name="closed" value="true" />
@@ -279,7 +345,71 @@
       <option name="project" value="LOCAL" />
       <updated>1757317810783</updated>
     </task>
-    <option name="localTasksCounter" value="18" />
+    <task id="LOCAL-00018" summary="soapsplash index">
+      <option name="closed" value="true" />
+      <created>1757993060776</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1757993060776</updated>
+    </task>
+    <task id="LOCAL-00019" summary="Integration">
+      <option name="closed" value="true" />
+      <created>1757994835770</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1757994835770</updated>
+    </task>
+    <task id="LOCAL-00020" summary="Integration + bug fix">
+      <option name="closed" value="true" />
+      <created>1757996485194</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1757996485194</updated>
+    </task>
+    <task id="LOCAL-00021" summary="Integration of clean catcher + bug fix">
+      <option name="closed" value="true" />
+      <created>1757998100123</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1757998100123</updated>
+    </task>
+    <task id="LOCAL-00022" summary="integration and bug fixes of code in main">
+      <option name="closed" value="true" />
+      <created>1758335725418</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1758335725418</updated>
+    </task>
+    <task id="LOCAL-00023" summary="Not opening in Sam's comp hopefully fixed">
+      <option name="closed" value="true" />
+      <created>1758337738066</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1758337738066</updated>
+    </task>
+    <task id="LOCAL-00024" summary="Refactored everything, fixed bugs, now main files are systems.js and Config.js with everything else as a helper or scene file.">
+      <option name="closed" value="true" />
+      <created>1758339616474</created>
+      <option name="number" value="00024" />
+      <option name="presentableId" value="LOCAL-00024" />
+      <option name="project" value="LOCAL" />
+      <updated>1758339616474</updated>
+    </task>
+    <task id="LOCAL-00025" summary="Updated ReadMe">
+      <option name="closed" value="true" />
+      <created>1758340105315</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1758340105315</updated>
+    </task>
+    <option name="localTasksCounter" value="26" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -318,6 +448,14 @@
     <MESSAGE value="Better cur" />
     <MESSAGE value="Breach, score and streaks" />
     <MESSAGE value="Breach, score and streaks _ 2" />
-    <option name="LAST_COMMIT_MESSAGE" value="Breach, score and streaks _ 2" />
+    <MESSAGE value="soapsplash index" />
+    <MESSAGE value="Integration" />
+    <MESSAGE value="Integration + bug fix" />
+    <MESSAGE value="Integration of clean catcher + bug fix" />
+    <MESSAGE value="integration and bug fixes of code in main" />
+    <MESSAGE value="Not opening in Sam's comp hopefully fixed" />
+    <MESSAGE value="Refactored everything, fixed bugs, now main files are systems.js and Config.js with everything else as a helper or scene file." />
+    <MESSAGE value="Updated ReadMe" />
+    <option name="LAST_COMMIT_MESSAGE" value="Updated ReadMe" />
   </component>
 </project>

@@ -1,16 +1,18 @@
 import systems from "../systems.js";
+const KI = CONFIG.assets.kiko;
+const BG = CONFIG.assets.backgrounds;
 
 const SAND_KEY   = "sand";
-const SAND_PATH  = "assets/images/backgrounds/sand.png";
+const SAND_PATH  = BG.sand;
 
 const SCHOOL_KEY = "school";
-const SCHOOL_PATH = "assets/images/backgrounds/school.png";
+const SCHOOL_PATH = BG.school;
 const SCHOOL_OFFSET_X = 160; // pull left from the right edge
 const SCHOOL_OFFSET_Y = 20;  // push down from the top edge
 
 const KIKO_BASE_KEY   = "kiko_base"; // assumed preloaded in PreloadScene
 const KIKO_CHEER_KEY  = "kiko_cheer";
-const KIKO_CHEER_PATH = "assets/images/WashEd_kiko_sprite/kiko_run.png";
+const KIKO_CHEER_PATH = KI.cheer; // Todo Update assets in config
 
 // Optional: simple layer ordering (higher depth = in front)
 const LAYERS = { BG: 0, SCHOOL: 2, KIKO: 10, UI: 20 };
@@ -46,7 +48,7 @@ export default class PlaygroundScene extends Phaser.Scene {
             .setDepth(LAYERS.SCHOOL);
 
         const fitSchool = (w, h) => {
-            const src = this.textures.get(SCHOOL_KEY)?.getSourceImage();
+            const src = this.textures.get(SCHOOL_KEY);
             if (!src) return;
             const maxW = w * 0.30;
             const maxH = h * 0.30;
@@ -97,15 +99,13 @@ export default class PlaygroundScene extends Phaser.Scene {
         const switchToBase  = () => applyTexture(KIKO_BASE_KEY);
 
         // 4) UI labels
+        const UI = CONFIG.ui; // <-- fixed
         const difficulty = data?.difficulty ?? "normal";
         const playerName = this.registry.get("playerName") || "Player";
         this.add.text(24, 20, `Difficulty: ${difficulty}`, {
-            fontFamily: "Arial", fontSize: "28px", color: "#111",
-        }).setShadow(1, 1, "#fff", 1).setDepth(LAYERS.UI);
+            fontFamily: UI.fontFamily, fontSize: "28px", color: "#111",
+        }).setShadow(1, 1, "#fff", 1).setDepth(20);
 
-        this.add.text(24, 54, `Player: ${playerName}`, {
-            fontFamily: "Arial", fontSize: "24px", color: "#222",
-        }).setDepth(LAYERS.UI);
 
         // 5) Click-to-move:
         //    - Decide direction by comparing click X with Kiko.x
