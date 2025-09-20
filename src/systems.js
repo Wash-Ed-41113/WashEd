@@ -532,53 +532,276 @@ const soapsplash = (() => {
 // ---------- CleanCatcher ----------
 const cleancatcher = {
     create(canvas) {
+        const CC = CONFIG.cleanCatch;
         const ctx = canvas.getContext("2d");
-        canvas.width = 1080; canvas.height = 920;
+        ctx.imageSmoothingEnabled = true;
+
+        // keep logical resolution constant; Phaser scene scales via CSS
+        canvas.width = CC.width;
+        canvas.height = CC.height;
 
         // assets
-        const background = new Image();
-        background.src = CONFIG.assets.backgrounds.cleanCatch; // <-- fixed key
-
-        const germImg = new Image();
-        germImg.src = CONFIG.assets.germs.cleanCatcherGerm;
+        const A = CONFIG.assets.cleanCatch || {};
+        const background = new Image(); background.src = A.background || "";
+        const germImg    = new Image(); germImg.src    = A.germ || "";
 
         const goodWords = helpers.words.cleanGood();
         const badWords  = helpers.words.cleanBad();
 
-        const player = { x: canvas.width/2 - 40, y: canvas.height - 60, width: 80, height: 30, dx: 0 };
+        // ---- sizing helpers (preserve image aspect ratio) ----
+        function aspect(img) {
+            const w = img.naturalWidth || 0, h = img.naturalHeight || 0;
+            return { w, h, r: (w && h) ? w / h : 1 };
+        }
+
+// opts = { scale?, width?, height?, maxPixels?, fallbackSize? }
+        function sizeFrom(img, opts = {}, defaultSquare = 120) {
+            const { w: iw, h: ih, r } = aspect(img);
+            const fallback = opts.fallbackSize ?? defaultSquare;
+
+            // 1) explicit width/height → preserve aspect if only one given
+            if (opts.width != null && opts.height != null) {
+                let W = opts.width, H = opts.height;
+                if (opts.maxPixels) {
+                    const k = Math.min(opts.maxPixels / W, opts.maxPixels / H, 1);
+                    W = Math.round(W * k); H = Math.round(H * k);
+                }
+                return { w: W, h: H };
+            }
+            if (opts.width != null) {
+                const W = opts.width, H = Math.round(W / (r || 1));
+                return { w: W, h: H };
+            }
+            if (opts.height != null) {
+                const H = opts.height, W = Math.round(H * (r || 1));
+                return { w: W, h: H };
+            }
+
+            // 2) scale — if image not loaded yet, use fallback square until it is
+            if (opts.scale != null) {
+                if (iw > 0 && ih > 0) {
+                    let W = Math.max(1, Math.round(iw * opts.scale));
+                    let H = Math.max(1, Math.round(ih * opts.scale));
+                    if (opts.maxPixels) {
+                        const k = Math.min(opts.maxPixels / W, opts.maxPixels / H, 1);
+                        W = Math.round(W * k); H = Math.round(H * k);
+                    }
+                    return { w: W, h: H };
+                }
+                return { w: fallback, h: fallback }; // image not ready yet
+            }
+
+            // 3) nothing specified → fallback square
+            return { w: fallback, h: fallback };
+        }
+
+
+        const P = CC.player || {};
+        const playerImg = new Image();
+        playerImg.src = (CONFIG.assets.cleanCatch || {}).player || "";
+
+// initial size (works even before the image is ready)
+        let pSize = sizeFrom(playerImg, P, 180);
+        const player = {
+            x: (canvas.width - pSize.w) / 2,
+            y: canvas.height - (P.bottom ?? 30) - pSize.h,
+            width:  pSize.w,
+            height: pSize.h,
+            dx: 0
+        };
+
+// when the image finishes loading, recompute exact size & keep feet on ground
+        playerImg.onload = () => {
+            pSize = sizeFrom(playerImg, P, 180);
+            const baseline = canvas.height - (P.bottom ?? 30);
+            player.width  = pSize.w;
+            player.height = pSize.h;
+            player.x = helpers.clamp(player.x, 0, canvas.width - player.width);
+            player.y = baseline - player.height;
+        };
+
+        // ---- items state ----
         let items = [];
         let score = 0, lives = 3, timeLeft = 30, gameOver = false;
 
         function spawnItem() {
             const isWater = Math.random() > 0.4;
-            const word = isWater ? helpers.words.pick(goodWords) : helpers.words.pick(badWords); // <-- fixed
+            const word = isWater ? helpers.words.pick(goodWords) : helpers.words.pick(badWords);
+
+            let w, h;
+            if (isWater) {
+                w = CC.water?.width ?? 60;
+                h = CC.water?.height ?? 28;
+            } else {
+                // preserve germ aspect using config CC.germ (scale or w/h)
+                const gSize = sizeFrom(germImg, CC.germ || {}, 56);
+
+                w = gSize.w; h = gSize.h;
+            }
+
             items.push({
-                x: Math.random() * (canvas.width - 60),
-                y: 0, width: 60, height: 30,
+                x: Math.random() * Math.max(1, (canvas.width - w)),
+                y: 0,
+                width: w,
+                height: h,
                 type: isWater ? "water" : "germ",
                 word,
                 speed: 2 + Math.random() * 2
             });
         }
 
-        // (rest unchanged) ...
-        // NOTE: keep your original draw/update loops; omitted here for brevity.
-        // ---- v keep from your version v ----
-        function drawPlayer(){ctx.fillStyle="blue";ctx.fillRect(player.x,player.y,player.width,player.height);}
-        function drawItems(){items.forEach(item=>{if(item.type==="water"){ctx.fillStyle="aqua";ctx.fillRect(item.x,item.y,item.width,item.height);}else if(item.type==="germ"&&germImg.complete&&germImg.naturalWidth!==0){ctx.drawImage(germImg,item.x,item.y,item.width,item.height);}else{ctx.fillStyle="red";ctx.fillRect(item.x,item.y,item.width,item.height);}ctx.fillStyle="black";ctx.font="12px Arial";ctx.fillText(item.word,item.x+5,item.y+item.height/1.5);});}
-        function drawUI(){ctx.fillStyle="black";ctx.font="16px Arial";ctx.fillText("Score: "+score,10,20);ctx.fillText("Lives: "+lives,10,40);ctx.fillText("Time: "+timeLeft,canvas.width-100,20);}
-        function updateItems(){items.forEach((item,idx)=>{item.y+=item.speed;if(helpers.aabbIntersect(item.x,item.y,item.width,item.height,player.x,player.y,player.width,player.height)){if(item.type==="water")score+=10;else{lives-=1;if(lives<=0)gameOver=true;}items.splice(idx,1);}if(item.y>canvas.height)items.splice(idx,1);});}
-        const onKeyDown=(e)=>{if(e.key==="ArrowLeft")player.dx=-5;if(e.key==="ArrowRight")player.dx=5;};
-        const onKeyUp=(e)=>{if(e.key==="ArrowLeft"||e.key==="ArrowRight")player.dx=0;};
-        const onPointerMove=(e)=>{const rect=canvas.getBoundingClientRect();const mouseX=e.clientX-rect.left;player.x=helpers.clamp(mouseX-player.width/2,0,canvas.width-player.width);};
-        document.addEventListener("keydown",onKeyDown);document.addEventListener("keyup",onKeyUp);canvas.addEventListener("pointermove",onPointerMove);
-        function movePlayer(){player.x=helpers.clamp(player.x+player.dx,0,canvas.width-player.width);}
-        let rafId=null;const moveInterval=setInterval(movePlayer,16);const spawnInterval=setInterval(spawnItem,1000);const timerInterval=setInterval(()=>{if(!gameOver){timeLeft--;if(timeLeft<=0)gameOver=true;}},1000);
-        function frame(){ctx.clearRect(0,0,canvas.width,canvas.height);if(background.complete&&background.naturalWidth!==0)ctx.drawImage(background,0,0,canvas.width,canvas.height);else{ctx.fillStyle="#add8e6";ctx.fillRect(0,0,canvas.width,canvas.height);}if(gameOver){ctx.fillStyle="black";ctx.font="30px Arial";ctx.fillText("Game Over!",canvas.width/2-80,canvas.height/2);ctx.fillText("Score: "+score,canvas.width/2-60,canvas.height/2+40);return;}drawPlayer();drawItems();drawUI();updateItems();rafId=requestAnimationFrame(frame);}frame();
-        function destroy(){if(rafId)cancelAnimationFrame(rafId);clearInterval(moveInterval);clearInterval(spawnInterval);clearInterval(timerInterval);document.removeEventListener("keydown",onKeyDown);document.removeEventListener("keyup",onKeyUp);canvas.removeEventListener("pointermove",onPointerMove);}
-        return { destroy };
+        // ---- draw ----
+        function drawPlayer() {
+            if (playerImg.complete && playerImg.naturalWidth) {
+                ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+            } else {
+                // visible fallback so you always see “something” immediately
+                ctx.fillStyle = "blue";
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+            }
+        }
+
+
+        function drawItems() {
+            for (const item of items) {
+                if (item.type === "water") {
+                    ctx.fillStyle = "aqua";
+                    ctx.fillRect(item.x, item.y, item.width, item.height);
+                } else {
+                    // GERMS: always draw with preserved aspect (width/height was set at spawn)
+                    if (germImg.complete && germImg.naturalWidth) {
+                        ctx.drawImage(germImg, item.x, item.y, item.width, item.height);
+                    } else {
+                        // fallback box until image ready
+                        ctx.fillStyle = "red";
+                        ctx.fillRect(item.x, item.y, item.width, item.height);
+                    }
+                }
+
+                // label
+                ctx.fillStyle = "black";
+                ctx.font = "12px Arial";
+                ctx.fillText(item.word, item.x + 5, item.y + item.height / 1.5);
+            }
+        }
+
+        function drawUI() {
+            ctx.fillStyle = "black";
+            ctx.font = "16px Arial";
+            ctx.fillText("Score: " + score, 10, 20);
+            ctx.fillText("Lives: " + lives, 10, 40);
+            ctx.fillText("Time: " + timeLeft, canvas.width - 100, 20);
+        }
+
+        // ---- update ----
+        function updateItems() {
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                item.y += item.speed;
+
+                if (helpers.aabbIntersect(item.x, item.y, item.width, item.height,
+                    player.x, player.y, player.width, player.height)) {
+                    if (item.type === "water") score += 10;
+                    else {
+                        lives -= 1;
+                        if (lives <= 0) gameOver = true;
+                    }
+                    items.splice(i, 1);
+                    continue;
+                }
+
+                if (item.y > canvas.height) items.splice(i, 1);
+            }
+        }
+
+        // ---- input ----
+        const onKeyDown = (e) => { if (e.key === "ArrowLeft") player.dx = -5; if (e.key === "ArrowRight") player.dx = 5; };
+        const onKeyUp   = (e) => { if (e.key === "ArrowLeft" || e.key === "ArrowRight") player.dx = 0; };
+        const onPointerMove = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            player.x = helpers.clamp(mouseX - player.width / 2, 0, canvas.width - player.width);
+        };
+        document.addEventListener("keydown", onKeyDown);
+        document.addEventListener("keyup", onKeyUp);
+        canvas.addEventListener("pointermove", onPointerMove);
+
+        function movePlayer() {
+            player.x = helpers.clamp(player.x + player.dx, 0, canvas.width - player.width);
+        }
+
+        // ---- loop + pause hooks ----
+        let paused = false;
+        let rafId = null, moveInterval = null, spawnInterval = null, timerInterval = null;
+
+        function frame() {
+            if (paused) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (background.complete && background.naturalWidth) {
+                ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = "#add8e6";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            if (gameOver) {
+                ctx.fillStyle = "black";
+                ctx.font = "30px Arial";
+                ctx.fillText("Game Over!", canvas.width / 2 - 80, canvas.height / 2);
+                ctx.fillText("Score: " + score, canvas.width / 2 - 60, canvas.height / 2 + 40);
+                return;
+            }
+
+            drawPlayer();
+            drawItems();
+            drawUI();
+            updateItems();
+
+            rafId = requestAnimationFrame(frame);
+        }
+
+        function startLoops() {
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(frame);
+            if (!moveInterval)  moveInterval  = setInterval(movePlayer, 16);
+            if (!spawnInterval) spawnInterval = setInterval(spawnItem, 1000);
+            if (!timerInterval) timerInterval = setInterval(() => {
+                if (!paused && !gameOver) {
+                    timeLeft--;
+                    if (timeLeft <= 0) gameOver = true;
+                }
+            }, 1000);
+        }
+
+        function stopLoops() {
+            if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+            if (moveInterval)  { clearInterval(moveInterval);  moveInterval = null; }
+            if (spawnInterval) { clearInterval(spawnInterval); spawnInterval = null; }
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        }
+
+        function setPaused(p) {
+            if (paused === p) return;
+            paused = p;
+            if (paused) stopLoops();
+            else startLoops();
+        }
+
+        // start
+        startLoops();
+
+        function destroy() {
+            stopLoops();
+            document.removeEventListener("keydown", onKeyDown);
+            document.removeEventListener("keyup", onKeyUp);
+            canvas.removeEventListener("pointermove", onPointerMove);
+        }
+
+        return { destroy, setPaused };
     }
 };
+
 
 // ---------- Menu helpers ----------
 const menu = {

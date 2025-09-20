@@ -4,55 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Updated ReadMe">
+    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Updated assets + fixed bugs --&gt; CC still not working">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/WashEd_kiko_sprite/WashEd_kiko_sprite_base.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/WashEd_kiko_sprite/WashEd_kiko_sprite_cheer.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/WashEd_kiko_sprite/WashEd_kiko_sprite_sad.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/WashEd_kiko_sprite/WashEd_kiko_sprite_stress.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/WashEd_kiko_sprite/WashEd_kiko_sprite_thumbs-up.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/WashEd_kiko_sprite/kiko_run.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/WashEd_kiko_sprite/washed-carabao_sprite_defeat.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/created/Sink.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/created/background.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/created/background.psd" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/SINK3.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2__ICON.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-AERO-ex__LEGION.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-AERO-ex__PHIE.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-AERO__TRANS.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT-ex__DENGU.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT-ex__LYMP-FILA.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT-ex__MALA.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT-ex__ONCHO.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT-ex__TYRPA.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT-ex__YELL-FVR.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-ATHRO-VECT__TRANS.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BASE-ex__DRAC.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BASE-ex__SCHI.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BASE__TRANS.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__AMO-BAC-DYS.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__CHOL.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__ENTC-HEPA.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__GASTRO.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__LEPTO.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__POLIO.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__TYPH-PARA-FVR.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-BORN__TRANS.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-WASH-ex__CONJUV.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-WASH-ex__INT-HEL-INFEC.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-WASH-ex__LEPRO.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-WASH-ex__SCAB.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-WASH-ex__TRACH.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water-WASH__TRANS.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/washed_mod_2/washed_mod_2_disease_water_TRANS_BG.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/config.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/scenes/CleanCatchScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/CleanCatchScene.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/scenes/GameScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/GameScene.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/scenes/MenuScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/MenuScene.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/scenes/PlaygroundScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/PlaygroundScene.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/scenes/PreloadScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/PreloadScene.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/scenes/SoapSplashScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/SoapSplashScene.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/systems.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/systems.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -207,7 +162,7 @@
       <workItem from="1757992704769" duration="133000" />
       <workItem from="1757992889387" duration="8807000" />
       <workItem from="1758330564090" duration="4838000" />
-      <workItem from="1758335556581" duration="24066000" />
+      <workItem from="1758335556581" duration="27140000" />
     </task>
     <task id="LOCAL-00001" summary="initial setup w/boilerplate">
       <option name="closed" value="true" />
@@ -409,7 +364,15 @@
       <option name="project" value="LOCAL" />
       <updated>1758340105315</updated>
     </task>
-    <option name="localTasksCounter" value="26" />
+    <task id="LOCAL-00026" summary="Updated assets + fixed bugs --&gt; CC still not working">
+      <option name="closed" value="true" />
+      <created>1758380430575</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1758380430575</updated>
+    </task>
+    <option name="localTasksCounter" value="27" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -456,6 +419,7 @@
     <MESSAGE value="Not opening in Sam's comp hopefully fixed" />
     <MESSAGE value="Refactored everything, fixed bugs, now main files are systems.js and Config.js with everything else as a helper or scene file." />
     <MESSAGE value="Updated ReadMe" />
-    <option name="LAST_COMMIT_MESSAGE" value="Updated ReadMe" />
+    <MESSAGE value="Updated assets + fixed bugs --&gt; CC still not working" />
+    <option name="LAST_COMMIT_MESSAGE" value="Updated assets + fixed bugs --&gt; CC still not working" />
   </component>
 </project>

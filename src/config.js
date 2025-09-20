@@ -69,7 +69,12 @@ window.CONFIG = {
                 "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_05_germ-catcher_HIT-four.png",
                 "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_06_germ-catcher_HIT-five.png"
             ]
-        }
+        },
+        cleanCatch: {
+            background: "assets/images/CleanCatcher/washed_kikos-day_LEVEL_01_scene_04_action_01_soap-splasher_start.png",
+            germ: "assets/images/Germs/washed_kikos-day_LEVEL_01_scene_05_germ-catcher_GERM_01.png",
+            player: 'assets/images/CleanCatcher/washed_kikos-day_LEVEL_01_scene_04_soap-splasher_Hands.png',
+        },
     },
 
     // === SOAP SPLASH ===
@@ -158,11 +163,11 @@ window.CONFIG = {
 
     // === CLEAN CATCH (canvas mini-game host dims) ===
     cleanCatch: {
-        width: 900,
-        height: 600,
-        words: {
-            good: ["H2O", "Clean", "Fresh", "Safe"],
-            bad: ["Germ", "Dirty", "Ill", "Sick"]
-        }
-    }
+        width: 1920, height: 1080,
+        player: { width: 220, bottom: 36, fallbackSize: 180 }, // or { scale: 0.12 }
+        germ:   { height: 64, maxPixels: 128 },
+        water:  { width: 64, height: 28 },
+        words: { good: ["H2O","Clean","Fresh","Safe"], bad: ["Germ","Dirty","Ill","Sick"] }
+    },
+
 };
