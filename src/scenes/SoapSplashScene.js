@@ -1,8 +1,8 @@
-import systems from "./systems.js";
+import systems from "../systems.js";
 
-export default class SoapSplash extends Phaser.Scene {
+export default class SoapSplashScene extends Phaser.Scene {
     constructor() {
-        super('SoapSplash');
+        super("SoapSplash");
         // counters/state (kept here for clarity; also (re)initialised in create)
         this.germs = [];
         this.lastSpawn = 0;
@@ -19,26 +19,23 @@ export default class SoapSplash extends Phaser.Scene {
     }
 
     preload() {
-        this.load.image('Background', 'assets/images/created/background.png');
-        this.load.image('Sink', 'assets/images/created/Sink.png');
-        this.load.image('Germ', 'assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__GASTRO.png');
+        this.load.image("Background", "assets/images/created/background.png");
+        this.load.image("Sink", "assets/images/created/Sink.png");
+        this.load.image("Germ", "assets/images/washed_mod_2/washed_mod_2_disease_water-BORN-ex__GASTRO.png");
     }
 
     create() {
-
-
-
         // --- sink anchor ---
         this.sinkPosition = { x: 0, y: CONFIG.soapSplash.height };
 
         // --- background & sink ---
         this.add
-            .sprite(CONFIG.soapSplash.width / 2, CONFIG.soapSplash.height / 2, 'Background')
+            .sprite(CONFIG.soapSplash.width / 2, CONFIG.soapSplash.height / 2, "Background")
             .setDepth(0)
             .setScale(2);
 
         this.sinkSprite = this.add
-            .sprite(this.sinkPosition.x, this.sinkPosition.y, 'Sink')
+            .sprite(this.sinkPosition.x, this.sinkPosition.y, "Sink")
             .setOrigin(0, 1)
             .setScale(4)
             .setDepth(4);
@@ -49,7 +46,7 @@ export default class SoapSplash extends Phaser.Scene {
             y: this.sinkSprite.y - this.sinkSprite.displayHeight * 0.5,
         });
 
-        // --- spawn geometry from OLD scene (cone-band in the top-right corner) ---
+        // --- spawn geometry (cone-band in the top-right corner) ---
         if (CONFIG.soapSplash.useSpawner) {
             // Distance from sink anchor to top-right corner
             const cornerDist = Math.hypot(
@@ -75,61 +72,60 @@ export default class SoapSplash extends Phaser.Scene {
         this.gameOver = false;
 
         // --- HUD: breaches ---
-        this.hud = this.add.text(15, 15, 'Breaches: 0/5', {
-            fontFamily: 'monospace',
-            fontSize: CONFIG.soapSplash.breachesFontSize + 'px',
-            color: '#fff',
+        this.hud = this.add.text(15, 15, "Breaches: 0/5", {
+            fontFamily: "monospace",
+            fontSize: CONFIG.soapSplash.breachesFontSize + "px",
+            color: "#fff",
         });
 
         // --- timer & typing systems ---
-        systems.timer.init(this);
+        systems.soapsplash.timer.init(this);
         this.gameStartAt = this.time.now;
-        systems.typing.init(this);
+        systems.soapsplash.typing.init(this);
 
         // If germs already exist (e.g., resume), pick a target
         if (!this.typing?.activeId && this.germs.length > 0) {
-            systems.typing.pickRandom(this);
+            systems.soapsplash.typing.pickRandom(this);
         }
 
-        // --- Back to Menu button (from NEW scene) ---
+        // --- Back to Menu button ---
         const backBtn = this.add
-            .text(CONFIG.soapSplash.width - 20, 20, '↩ Menu', {
-                fontFamily: 'Arial',
-                fontSize: '22px',
-                color: '#ff6b6b',
-                fontStyle: 'bold',
-                backgroundColor: '#222',
+            .text(CONFIG.soapSplash.width - 20, 20, "↩ Menu", {
+                fontFamily: "Arial",
+                fontSize: "22px",
+                color: "#ff6b6b",
+                fontStyle: "bold",
+                backgroundColor: "#222",
             })
             .setOrigin(1, 0)
             .setPadding(6)
             .setInteractive({ useHandCursor: true });
 
-        backBtn.on('pointerup', () => {
-            const playerName = this.registry.get('playerName');
-            this.scene.start('GameScene', { playerName });
+        backBtn.on("pointerup", () => {
+            const playerName = this.registry.get("playerName");
+            this.scene.start("GameScene", { playerName });
         });
-
     }
 
     update(time, delta) {
-        // OLD scene compatibility: ensure start time set even if create() was skipped (e.g., hot reloads)
+        // Ensure start time set even if create() was skipped
         if (this.gameStartAt == null) this.gameStartAt = time;
 
         // Spawner: cooldown + population cap
         if (!this.gameOver && time - this.lastSpawn > CONFIG.soapSplash.spawnIntervalMs) {
             if (this.germs.length < CONFIG.soapSplash.maxGerms) {
-                systems.spawn.spawnGerm(this);
+                systems.soapsplash.spawn.spawnGerm(this);
                 this.lastSpawn = time;
             }
         }
 
         // Movement & breach rules while game is active
         if (!this.gameOver) {
-            systems.movement.moveGerms(this, delta);
-            systems.rules.checkBreaches(this);
+            systems.soapsplash.movement.moveGerms(this, delta);
+            systems.soapsplash.rules.checkBreaches(this);
         }
 
         // HUD: timer
-        systems.timer.updateHUD(this, this.time.now);
+        systems.soapsplash.timer.updateHUD(this, this.time.now);
     }
 }

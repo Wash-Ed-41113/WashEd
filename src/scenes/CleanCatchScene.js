@@ -1,7 +1,4 @@
-// src/scenes/CleanCatchScene.js
-
 import systems from "../systems.js";
-import { createCleanCatch } from "../cleanCatchGame.js";
 
 export default class CleanCatchScene extends Phaser.Scene {
     constructor() {
@@ -14,14 +11,15 @@ export default class CleanCatchScene extends Phaser.Scene {
         const CC = CONFIG.cleanCatch;
         const { width, height } = CC;
 
+        // backdrop
         this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x0b1520, 1).setOrigin(0);
 
-
+        // Canvas host
         const html = `
-          <div style="display:flex;align-items:center;justify-content:center;width:${this.scale.width}px;height:${this.scale.height}px;">
-            <canvas id="cleanCatchCanvas" width="${width}" height="${height}"
-              style="max-width:100%;max-height:100%;outline:none;pointer-events:auto;"></canvas>
-          </div>`;
+      <div style="display:flex;align-items:center;justify-content:center;width:${this.scale.width}px;height:${this.scale.height}px;">
+        <canvas id="cleanCatchCanvas" width="${width}" height="${height}"
+          style="max-width:100%;max-height:100%;outline:none;pointer-events:auto;"></canvas>
+      </div>`;
         this._dom = this.add.dom(this.scale.width / 2, this.scale.height / 2).createFromHTML(html);
         this._dom.setOrigin(0.5);
 
@@ -29,7 +27,8 @@ export default class CleanCatchScene extends Phaser.Scene {
         // Improve pointer behavior on Safari/iOS
         canvas.style.touchAction = "none";
 
-        const { destroy } = createCleanCatch(canvas);
+        // Use the namespaced game logic
+        const { destroy } = systems.cleancatcher.create(canvas);
         this._teardown = destroy;
 
         // ESC → back to GameScene
@@ -61,4 +60,3 @@ export default class CleanCatchScene extends Phaser.Scene {
         this.events.once(Phaser.Scenes.Events.DESTROY,  () => this._teardown?.());
     }
 }
-

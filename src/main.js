@@ -6,7 +6,7 @@ import PreloadScene from "./scenes/PreloadScene.js";
 import MenuScene from "./scenes/MenuScene.js";
 import GameScene from "./scenes/GameScene.js";
 import PlaygroundScene from "./scenes/PlaygroundScene.js";
-import SoapSplash from "./SoapSplash.js";
+import SoapSplashScene from "./scenes/SoapSplashScene.js";
 import CleanCatchScene from "./scenes/CleanCatchScene.js";
 
 const config = {
@@ -25,7 +25,7 @@ const config = {
 
     backgroundColor: "#1e1e1e",
     physics: { default: "arcade", arcade: { gravity: { y: 0 } } },
-    scene: [PreloadScene, MenuScene, GameScene, PlaygroundScene, SoapSplash, CleanCatchScene],
+    scene: [PreloadScene, MenuScene, GameScene, PlaygroundScene, SoapSplashScene, CleanCatchScene],
     dom: { createContainer: true },
 };
 
