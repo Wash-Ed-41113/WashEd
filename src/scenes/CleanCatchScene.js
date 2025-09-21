@@ -26,7 +26,8 @@ export default class CleanCatchScene extends Phaser.Scene {
 
         // create a dom container at top left to hold a custom html canvas
         // setDepth(1) makes sure it appears above the background
-        const root = this.add.dom(0, 0).setOrigin(0, 0).setDepth(1);
+        const rootEl = document.createElement("div");
+        const root = this.add.dom(0, 0, rootEl).setOrigin(0, 0).setDepth(1);
 
         // create a plain html canvas element that the clean catch mini game will draw into
         const canvas = document.createElement("canvas");
