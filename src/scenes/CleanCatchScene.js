@@ -1,108 +1,99 @@
-// src/scenes/CleanCatchScene.js
+// import the shared systems module
+// this provides ui helpers and the cleancatcher mini game
 import systems from "../systems.js";
 
+// define a new Phaser scene class called CleanCatchScene
 export default class CleanCatchScene extends Phaser.Scene {
+    // constructor runs first when scene is created
     constructor() {
+        // call the parent constructor and register this scene with key "CleanCatch"
         super("CleanCatch");
-        this._teardown = null;
-        this._setPaused = null;
+
+        // _runtime will hold the running mini game object with destroy and setPaused functions
+        this._runtime = null;
+
+        // _paused keeps track of whether the game is paused
         this._paused = false;
+
+        // _pauseUi will hold the pause overlay ui when pause is active
         this._pauseUi = null;
-        this._dom = null;
     }
 
+    // create method sets up everything on screen
     create() {
-        const CC = CONFIG.cleanCatch;
-        const { width: LOG_W, height: LOG_H } = CC;
+        // get the width and height of the current game canvas
+        const { width, height } = this.scale;
 
-        // backdrop (full scene)
-        this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x0b1520, 1).setOrigin(0);
+        // create a dom container at top left to hold a custom html canvas
+        // setDepth(1) makes sure it appears above the background
+        const root = this.add.dom(0, 0).setOrigin(0, 0).setDepth(1);
 
-        // Canvas host
-        const html = `
-      <div id="ccWrap"
-           style="display:flex;align-items:center;justify-content:center;
-                  width:${this.scale.width}px;height:${this.scale.height}px;">
-        <canvas id="cleanCatchCanvas" width="${LOG_W}" height="${LOG_H}"
-                style="outline:none;pointer-events:auto;"></canvas>
-      </div>`;
-        this._dom = this.add.dom(this.scale.width / 2, this.scale.height / 2).createFromHTML(html);
-        this._dom.setOrigin(0.5);
+        // create a plain html canvas element that the clean catch mini game will draw into
+        const canvas = document.createElement("canvas");
+        canvas.style.display = "block";       // removes gaps
+        canvas.style.width = `${width}px`;    // set css width
+        canvas.style.height = `${height}px`;  // set css height
+        root.node.appendChild(canvas);        // attach canvas into the dom container
 
-        const canvas = this._dom.getChildByID("cleanCatchCanvas");
-        const wrap = this._dom.getChildByID("ccWrap");
-        canvas.style.touchAction = "none";
+        // start the clean catch mini game inside the canvas
+        // this returns an object with destroy and setPaused methods
+        this._runtime = systems.cleancatcher.create(canvas);
 
-        // Run the mini-game and keep handles
-        const controls = systems.cleancatcher.create(canvas);
-        this._teardown = controls.destroy;
-        this._setPaused = controls.setPaused || (() => {});
-
-        // --- Topbar (same as Soap Splash)
+        // build a top bar with home and pause buttons
         systems.ui.topbar(this, {
+            // home button callback
             onHome: () => {
+                // stop the mini game and clean up
+                this._runtime?.destroy?.();
+                // get player name stored in registry so it can be passed forward
                 const playerName = this.registry.get("playerName");
+                // switch back to GameScene
                 this.scene.start("GameScene", { playerName });
             },
+            // pause button callback
             onPause: () => this.togglePause(),
-            // onSettings: () => {} // inert for now
         });
 
-        // ESC → back
-        this.input.keyboard.once("keydown-ESC", () => {
-            const playerName = this.registry.get("playerName");
-            this.scene.start("GameScene", { playerName });
-        });
+        // set up keyboard shortcuts for pause
+        this.input.keyboard.on("keydown-ESC", () => this.togglePause());
+        this.input.keyboard.on("keydown-P",   () => this.togglePause());
 
-        // --- Fit the canvas to the screen WITHOUT stretching (letterbox/pillarbox)
-        const fitCanvas = () => {
-            const viewW = this.scale.width;
-            const viewH = this.scale.height;
-            const aspect = LOG_W / LOG_H;
-
-            // size wrapper to the scene canvas
-            wrap.style.width = `${viewW}px`;
-            wrap.style.height = `${viewH}px`;
-
-            // compute CSS display size for the game canvas
-            let dispW = viewW;
-            let dispH = Math.round(dispW / aspect);
-            if (dispH > viewH) {
-                dispH = viewH;
-                dispW = Math.round(dispH * aspect);
-            }
-            canvas.style.width = `${dispW}px`;
-            canvas.style.height = `${dispH}px`;
-            // NOTE: logical resolution stays LOG_W x LOG_H (no distortion).
+        // resize handler so canvas fits new screen size
+        const onResize = (gameSize) => {
+            const w = gameSize.width, h = gameSize.height;
+            canvas.width = w;
+            canvas.style.width = `${w}px`;
+            canvas.height = h;
+            canvas.style.height = `${h}px`;
         };
+        // listen for resize events
+        this.scale.on(Phaser.Scale.Events.RESIZE, onResize);
 
-        fitCanvas();
-        this.scale.on(Phaser.Scale.Events.RESIZE, fitCanvas);
-        window.addEventListener("resize", fitCanvas, { passive: true });
-
-        // Clean up listeners + the mini-game
+        // clean up everything when scene shuts down
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-            this._teardown?.();
-            this.scale.off(Phaser.Scale.Events.RESIZE, fitCanvas);
-            window.removeEventListener("resize", fitCanvas);
-        });
-        this.events.once(Phaser.Scenes.Events.DESTROY, () => {
-            this._teardown?.();
-            this.scale.off(Phaser.Scale.Events.RESIZE, fitCanvas);
-            window.removeEventListener("resize", fitCanvas);
+            this.scale.off(Phaser.Scale.Events.RESIZE, onResize);
+            this._runtime?.destroy?.();
+            root.destroy();
+            this._pauseUi?.destroy?.();
+            this._pauseUi = null;
         });
     }
 
+    // togglePause method switches between paused and running states
     togglePause() {
+        // flip the paused flag
+        this._paused = !this._paused;
+
+        // tell the mini game runtime to pause or resume
+        this._runtime?.setPaused?.(this._paused);
+
         if (this._paused) {
-            this._paused = false;
-            this._pauseUi?.destroy();
-            this._pauseUi = null;
-            this._setPaused(false);
-        } else {
-            this._paused = true;
+            // if now paused, show a pause overlay with a resume button
             this._pauseUi = systems.ui.pauseOverlay(this, () => this.togglePause());
-            this._setPaused(true);
+        } else {
+            // if resuming, destroy the pause overlay
+            this._pauseUi?.destroy?.();
+            this._pauseUi = null;
         }
     }
 }
