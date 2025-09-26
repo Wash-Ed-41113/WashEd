@@ -905,7 +905,7 @@ const cleancatcher = {
         // draw score lives and time
         function drawUI() {
             ctx.fillStyle = "black";
-            ctx.font = "16px Arial";
+            ctx.font = "18px Arial";
             ctx.fillText("Score: " + score, 10, 20);
             ctx.fillText("Lives: " + lives, 10, 40);
             ctx.fillText("Time: " + timeLeft, canvas.width - 100, 20);
