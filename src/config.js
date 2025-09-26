@@ -212,7 +212,8 @@ window.CONFIG = {
         player: { width: 220, bottom: 36, fallbackSize: 180 },
         germ:   { height: 64, maxPixels: 128 },
         water:  { width: 64, height: 28 },
-        words: { good: ["H2O","Clean","Fresh","Safe"], bad: ["Germ","Dirty","Ill","Sick"] }
+        words: { good: ["soap", "bath", "wash", "cup", "tap", "well", "pure", "safe", "care", "flow", "clean", "fresh", "water", "rinse", "towel", "health", "filter", "toilet", "shower", "dry"],
+                  bad: ["dirt", "germ", "sick", "mud", "virus", "waste", "leak", "rust", "mold", "scum", "slime", "crud", "filth", "ooze", "rot", "odor", "pest", "fly", "bug", "oil"] }
     },
 
 };
