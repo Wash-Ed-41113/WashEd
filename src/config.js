@@ -57,7 +57,7 @@ window.CONFIG = {
             sand: "assets/images/backgrounds/sand.png",     // placeholder
             school: "assets/images/backgrounds/school.png", // placeholder
         },
-        ui: {  // skinksnksdxcsdc
+        ui: {  // skinksnksdxcsdcds
             pauseBut: "assets/images/UI/washed_kikos-day_UI-Button_PAUSE.png",
             settingsBut: "assets/images/UI/washed_kikos-day_UI-Button_SETTINGS.png",
             homeBut: "assets/images/UI/washed_kikos-day_UI-Button_HOME.png",
