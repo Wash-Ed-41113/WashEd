@@ -4,8 +4,15 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Updated assets + fixed bugs --&gt; CC still not working">
+    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Swas merge trial">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/Kiko/washed_kikos-day_LEVEL_01_scene_01_action_01_launcher_start-static.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/images/Kiko/washed_kikos-day_LEVEL_01_scene_01_action_01_launcher_start-static.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_01_germ-catcher_HIT-zero.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_01_germ-catcher_HIT-zero.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_02_germ-catcher_HIT-one.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_02_germ-catcher_HIT-one.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_03_germ-catcher_HIT-two.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_03_germ-catcher_HIT-two.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_04_germ-catcher_HIT-three.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_04_germ-catcher_HIT-three.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_05_germ-catcher_HIT-four.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_05_germ-catcher_HIT-four.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_06_germ-catcher_HIT-five.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_06_germ-catcher_HIT-five.png" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -381,7 +388,39 @@
       <option name="project" value="LOCAL" />
       <updated>1758880491586</updated>
     </task>
-    <option name="localTasksCounter" value="28" />
+    <task id="LOCAL-00028" summary="Updated assets + fixed bugs --&gt; CC still not working">
+      <option name="closed" value="true" />
+      <created>1759035380005</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1759035380005</updated>
+    </task>
+    <task id="LOCAL-00029" summary="Updated assets + fixed bugs --&gt; CC still not working">
+      <option name="closed" value="true" />
+      <created>1759035429295</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1759035429295</updated>
+    </task>
+    <task id="LOCAL-00030" summary="Updated assets + fixed bugs --&gt; CC still not working">
+      <option name="closed" value="true" />
+      <created>1759035683063</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1759035683063</updated>
+    </task>
+    <task id="LOCAL-00031" summary="Swas merge trial">
+      <option name="closed" value="true" />
+      <created>1759035716106</created>
+      <option name="number" value="00031" />
+      <option name="presentableId" value="LOCAL-00031" />
+      <option name="project" value="LOCAL" />
+      <updated>1759035716106</updated>
+    </task>
+    <option name="localTasksCounter" value="32" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -429,6 +468,7 @@
     <MESSAGE value="Refactored everything, fixed bugs, now main files are systems.js and Config.js with everything else as a helper or scene file." />
     <MESSAGE value="Updated ReadMe" />
     <MESSAGE value="Updated assets + fixed bugs --&gt; CC still not working" />
-    <option name="LAST_COMMIT_MESSAGE" value="Updated assets + fixed bugs --&gt; CC still not working" />
+    <MESSAGE value="Swas merge trial" />
+    <option name="LAST_COMMIT_MESSAGE" value="Swas merge trial" />
   </component>
 </project>
