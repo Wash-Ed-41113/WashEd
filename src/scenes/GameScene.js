@@ -1,5 +1,5 @@
-// import shared systems module for ui helpers and other shared logic
 import systems from "../systems.js";
+import { DB } from "../db.js";
 
 // define the main hub scene for the game flow
 export default class GameScene extends Phaser.Scene {
@@ -14,14 +14,19 @@ export default class GameScene extends Phaser.Scene {
 
     // create builds the scene and starts the greeting flow
     create(data) {
-
         // store player name into registry if passed in
         if (data?.playerName) this.registry.set("playerName", data.playerName);
 
+        // read player name once (fallback to default)
+        const playerName = this.registry.get("playerName") || "Player";
+
         // get current canvas size
         const { width, height } = this.scale;
-        // read player name from registry or use default
-        const playerName = this.registry.get("playerName") || "Player";
+
+        // --- start an in-memory session once per app run ---
+        if (!window.__SESSION_ID__) {
+            window.__SESSION_ID__ = DB.beginSession(playerName);
+        }
 
         // add kiko image on the left side with feet anchored at bottom
         const kiko = this.add

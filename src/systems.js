@@ -1,6 +1,10 @@
 // this module collects all shared helpers ui widgets mini game engines and simple menus
 // scenes import this module as systems to access these features
 // everything below is inline documented so you can read top to bottom and understand the flow
+import { DB } from "./db.js";
+
+
+
 
 // short names for config sections used throughout
 const SS = CONFIG.soapSplash;   // soap splash game config values
@@ -49,10 +53,11 @@ const helpers = {
 
     // word helpers provide lists and a picker
     words: {
-        soapSplashWords() { return SS.words; },
-        cleanGood() { return CC.words.good; },
-        cleanBad()  { return CC.words.bad;  },
-        pick(list)  { return list[Math.floor(Math.random() * list.length)]; }
+        soapSplashWords() { return SS.words || []; },
+        cleanGood() { return (CC.words && CC.words.good) || []; },
+        cleanBad()  { return (CC.words && CC.words.bad)  || []; },
+        pick(list)  { return (list && list.length) ? list[Math.floor(Math.random() * list.length)] : ""; }
+
     },
 
     // format milliseconds as mm ss string for hud
@@ -62,6 +67,52 @@ const helpers = {
         const two = (n) => (n < 10 ? "0" + n : "" + n);
         return `${two(mm)}:${two(ss)}`;
     },
+    // show a simple floating "+N" streak popup
+    streakPopup(scene, value, x, y) {
+        const t = scene.add.text(x, y, `+${value}`, {
+            fontFamily: SS.fontFamily,
+            fontSize: "22px",
+            color: "#ffffff",
+            fontStyle: "bold",
+            backgroundColor: "#2aa84a",
+            padding: { left: 10, right: 10, top: 6, bottom: 6 },
+            align: "center"
+        }).setOrigin(0.5).setDepth(200);
+
+        t.setScale(0.9);
+        scene.tweens.add({
+            targets: t,
+            y: y - 35,
+            alpha: { from: 1, to: 0 },
+            scale: { from: 0.95, to: 1.07 },
+            duration: 750,
+            ease: "Cubic.Out",
+            onComplete: () => t.destroy()
+        });
+    },
+
+
+};
+
+const telemetry = {
+    onWordComplete(scene, g, clean) {
+        if (!scene.roundId) return;
+        DB.logTyping(scene.roundId, "word_complete", {
+            clean: clean ? 1 : 0,
+            streak: scene.streakSys?.streak ?? 0,
+            base_score: scene.streakSys?.baseScore ?? 0,
+            total_score: scene.streakSys?.totalScore ?? 0,
+            word: g?.word ?? null
+        });
+    },
+    onMistake(scene) {
+        if (!scene.roundId) return;
+        DB.logTyping(scene.roundId, "mistake", {
+            streak: scene.streakSys?.streak ?? 0,
+            base_score: scene.streakSys?.baseScore ?? 0,
+            total_score: scene.streakSys?.totalScore ?? 0
+        });
+    }
 };
 
 // -----------------------------
@@ -203,37 +254,159 @@ const ui = {
         return { home, pause, settings };
     },
 
-    // pause overlay with resume button returns an object with destroy to clean up
-    pauseOverlay(scene, onResume) {
+    // pause overlay with menu, resume, audio toggle, and live stats
+    pauseOverlay(scene, { onResume, onHome } = {}) {
         const { width, height } = scene.scale;
         const P = CONFIG.ui.pauseOverlay;
 
         const overlay = scene.add.rectangle(0, 0, width, height, P.bgColor, P.bgAlpha)
             .setOrigin(0, 0).setDepth(999);
 
-        const panel = scene.add.rectangle(width / 2, height / 2, 700, 320, P.panelColor, 1)
+        const panelW = 780, panelH = 420;
+        const panel = scene.add.rectangle(width / 2, height / 2, panelW, panelH, P.panelColor, 1)
             .setOrigin(0.5).setDepth(1000).setStrokeStyle(4, P.panelStroke);
 
-        scene.add.text(width / 2, height / 2 - 90, "Paused", {
+        // Title
+        const title = scene.add.text(width / 2, height / 2 - 150, "Paused", {
             fontFamily: CONFIG.ui.fontFamily,
             fontSize: `${P.titleSize}px`,
             color: "#ffffff"
         }).setOrigin(0.5).setDepth(1001);
 
-        const { btn, txt } = ui.button(scene, width / 2, height / 2 + 40, "Resume", onResume);
-        btn.setDepth(1001);
-        txt.setDepth(1001);
+        // Live stats: score + streak (reads from streakSys if present)
+        const base  = scene.streakSys?.baseScore ?? 0;
+        const mult  = scene.streakSys?.multiplier?.() ?? 0;
+        const total = scene.streakSys?.totalScore ?? scene.typing?.score ?? 0;
+        const s     = scene.streakSys?.streak ?? scene.typing?.streak ?? 0;
+        const best  = scene.streakSys?.bestStreak ?? scene.typing?.bestStreak ?? 0;
+
+        const stats = scene.add.text(width / 2, height / 2 - 70,
+            `Score: ${total}  (base ${base} × x${mult.toFixed(1)})\n` +
+            `Streak: ${s}   Best: ${best}`,
+            { fontFamily: CONFIG.ui.fontFamily, fontSize: "24px", color: "#ffffff", align: "center" }
+        ).setOrigin(0.5).setDepth(1001);
+
+        // Buttons (reuse your ui.button helper)
+        const y0 = height / 2 + 10;
+        const mkBtn = (label, y, cb) => {
+            const { btn, txt } = ui.button(scene, width / 2, y, label, cb);
+            btn.setDepth(1001); txt.setDepth(1001);
+            return { btn, txt };
+        };
+
+        const resumeBtn = mkBtn("Resume", y0, () => onResume?.());
+        const homeBtn   = mkBtn("Main Menu", y0 + 90, () => onHome?.());
+
+        // Mute/Unmute toggle
+        const isMuted = !!scene.sound?.mute;
+        let audioLabel = scene.add.text(width / 2, y0 + 155, isMuted ? "Unmute" : "Mute", {
+            fontFamily: CONFIG.ui.fontFamily, fontSize: "22px", color: "#ffffff",
+            backgroundColor: "#2d344f", padding: { left: 14, right: 14, top: 8, bottom: 8 }
+        }).setOrigin(0.5).setDepth(1001).setInteractive({ useHandCursor: true });
+
+        const toggleAudio = () => {
+            if (scene.sound) {
+                scene.sound.mute = !scene.sound.mute;
+                // persist mute across scenes
+                scene.registry.set("mute", scene.sound.mute);
+                audioLabel.setText(scene.sound.mute ? "Unmute" : "Mute");
+            }
+        };
+
+        audioLabel.on("pointerup", toggleAudio);
 
         return {
             destroy() {
-                overlay.destroy();
-                panel.destroy();
-                btn.destroy();
-                txt.destroy();
+                overlay.destroy(); panel.destroy(); title.destroy(); stats.destroy();
+                resumeBtn.btn.destroy(); resumeBtn.txt.destroy();
+                homeBtn.btn.destroy(); homeBtn.txt.destroy();
+                audioLabel.destroy();
             }
         };
     },
+
+    togglePause() {
+        // flip paused state
+        if (this._paused) {
+            this._paused = false;
+
+            // unpause SoapSplash timers/motion if you gate them elsewhere
+            this._pauseUi?.destroy();
+            this._pauseUi = null;
+        } else {
+            this._paused = true;
+
+            // build the rich pause overlay from systems.js
+            this._pauseUi = systems.ui.pauseOverlay(this, {
+                onResume: () => this.togglePause(),
+                onHome: () => {
+                    // wrap up the round politely, then bounce to your hub/menu scene
+                    this.finalizeRound?.("Paused → Main Menu");
+                    const playerName = this.registry.get("playerName");
+                    this.scene.start("GameScene", { playerName });
+                }
+            });
+        }
+    }
+
+
 };
+
+
+// -----------------------------
+// streak / score engine
+// rules:
+// - keep a "clean run" count of consecutive clean completions (no mistakes in that word)
+// - a streak starts ONLY after two clean words in a row:
+// - totalScore = baseScore * (streak * 0.5)
+// - any mistake before a word completes resets cleanRun and streak to 0
+// -----------------------------
+const streakScore = (() => {
+    function create() {
+        return {
+            baseScore: 0,
+            totalScore: 0,
+            cleanRun: 0,
+            streak: 0,
+            bestStreak: 0,
+
+            // Add or subtract base points, then recompute total
+            addBase(points) {
+                this.baseScore = Math.max(0, this.baseScore + (points || 0));
+                this._recompute();
+            },
+
+            // Call when a word finishes; pass clean=true if no mistakes for that word
+            onWord(clean) {
+                if (clean) {
+                    this.cleanRun += 1;
+                    // streak begins at the second clean word and then increments
+                    this.streak = Math.max(0, this.cleanRun - 1);
+                    this.bestStreak = Math.max(this.bestStreak, this.streak);
+                } else {
+                    this.cleanRun = 0;
+                    this.streak = 0;
+                }
+                this._recompute();
+            },
+
+            // Call on any keystroke error
+            onMistake() {
+                this.cleanRun = 0;
+                this.streak = 0;
+                this._recompute();
+            },
+
+            multiplier() { return this.streak * 0.5; },
+
+            _recompute() {
+                // spec: total = (streak * 0.5) * baseScore
+                this.totalScore = Math.floor(this.baseScore * this.multiplier());
+            }
+        };
+    }
+    return { create };
+})();
 
 // -----------------------------
 // soap splash engine
@@ -448,15 +621,26 @@ const soapsplash = (() => {
                         if (scene.germs.length) typing.pickNearest(scene);
                     }
 
-                    if (scene.typing) {
-                        scene.typing.score = Math.max(0, scene.typing.score - penalty);
+                    if (scene.streakSys) {
+                        // Deduct from BASE so total recomputes with the (streak * 0.5) multiplier
+                        scene.streakSys.addBase(-penalty);
+
+                        // Sync legacy fields used by overlay & any other UI
+                        scene.typing.score = scene.streakSys.totalScore;
+                        scene.typing.streak = scene.streakSys.streak;
+                        scene.typing.bestStreak = Math.max(scene.typing.bestStreak, scene.streakSys.bestStreak);
+
+                        // Refresh HUD so the penalty is visible immediately
+                        soapsplash.typing.updateHud(scene);
                     }
 
-                    if (scene.breaches >= maxBreaches) timer.endGame(scene);
+                    if (scene.breaches >= maxBreaches) timer.endGame(scene, "Too many breaches");
                 }
             }
         }
     };
+
+
 
     // ---------------- timer ----------------
     const timer = {
@@ -471,7 +655,7 @@ const soapsplash = (() => {
 
             scene.endEvent = scene.time.delayedCall(
                 SS.gameDurationMin * 60 * 1000,
-                () => timer.endGame(scene)
+                () => timer.endGame(scene, "Time up")
             );
         },
         // update remaining time label every frame from start time
@@ -481,7 +665,7 @@ const soapsplash = (() => {
             scene.timerHud.setText(`Time: ${helpers.mmss(remaining)}`);
         },
         // end round clean up germs show summary and allow tap to restart
-        endGame(scene, reason = SS.reason) {
+        endGame(scene, reason = SS.reason || "Game over") {
             if (scene.gameOver) return;
             scene.gameOver = true;
 
@@ -490,6 +674,11 @@ const soapsplash = (() => {
             const { score = 0, bestStreak = 0 } = (scene.typing || {});
             scene.timerHud?.setText("Time: 00:00");
             scene.endEvent?.remove(false);
+
+            // write summary to the DB via scene helper (SoapSplashScene provides finalizeRound)
+            if (typeof scene.finalizeRound === "function") {
+                scene.finalizeRound(reason);
+            }
 
             const overlay = scene.add.text(
                 SS.width / 2, SS.height / 2,
@@ -501,24 +690,73 @@ const soapsplash = (() => {
         },
     };
 
+    function showStreakPopup(scene, value, x, y) {
+        const msg = `+${value}`;
+        const t = scene.add.text(x, y, msg, {
+            fontFamily: SS.fontFamily,
+            fontSize: "22px",
+            color: "#ffffff",
+            fontStyle: "bold",
+            backgroundColor: "#2aa84a",
+            padding: { left: 10, right: 10, top: 6, bottom: 6 },
+            align: "center"
+        }).setOrigin(0.5).setDepth(200);
+
+        // small scale pop + float up + fade
+        t.setScale(0.8);
+        scene.tweens.add({
+            targets: t,
+            y: y - 35,
+            alpha: { from: 1, to: 0 },
+            scale: { from: 0.95, to: 1.05 },
+            duration: 750,
+            ease: "Cubic.Out",
+            onComplete: () => t.destroy()
+        });
+    }
+
     // ---------------- typing ----------------
     const typing = {
         // initialize typing state create measurement helper and keyboard handler
         init(scene) {
             scene.typing = {
                 activeId: null, keystrokes: 0, mistakes: 0, startedAt: null, locked: false,
+                // score shown on the “summary” must still live here for compatibility
                 score: 0, streak: 0, bestStreak: 0, wordClean: true, wordsCompleted: 0,
+                streakPops: 0, // include here on first (and only) assignment
             };
-            scene.typeHud = scene.add.text(15, SS.height - 40,
-                `Score: 0   Streak: 0`, { fontFamily: SS.fontFamily, fontSize: "16px", color: "#fff" }
+
+            // attach reusable streak/score engine
+            scene.streakSys = streakScore.create();
+
+            // HUD shows base, multiplier, and total
+            // add a larger, prominent HUD panel (white with black border)
+            scene.hudPanel = scene.add.rectangle(
+                10, SS.height - 56,          // x, y (anchored bottom-left)
+                SS.width - 20, 48,           // width, height
+                0xffffff, 0.90               // fill color & alpha
+            )
+                .setOrigin(0, 0)
+                .setStrokeStyle(2, 0x000000)   // black outline
+                .setDepth(9);
+
+            scene.typeHud = scene.add.text(
+                20, SS.height - 46,
+                `Score: 0  (base 0 × x0.0)   Streak: 0`,
+                {
+                    fontFamily: SS.fontFamily,
+                    fontSize: "20px",
+                    fontStyle: "700",          // Phaser accepts numeric weight or "bold"
+                    color: "#000000"           // <-- black
+                }
             ).setDepth(10);
 
-            // hidden text object for measuring character widths reliably in current font size
+
+            // hidden text for measuring caret etc (unchanged)
             scene.typing._measure = scene.add.text(-9999, -9999, "", {
                 fontFamily: SS.fontFamily, fontSize: SS.labelTextSize, color: "#000000"
             }).setVisible(false);
 
-            // function that returns approximate width of a character for caret sizing and layout
             scene.typing.measureChar = (ch) => {
                 const sizeNum = typeof SS.labelTextSize === "string"
                     ? parseInt(SS.labelTextSize, 10)
@@ -529,9 +767,10 @@ const soapsplash = (() => {
                 return (b && b.local && b.local.width) ? b.local.width : (0.6 * sizeNum);
             };
 
-            // keyboard input handler routes to onKey
             scene.input.keyboard.on("keydown", (e) => typing.onKey(e, scene));
         },
+
+
 
         // clear highlights and caret for all germs
         deactivateAll(scene) {
@@ -639,8 +878,10 @@ const soapsplash = (() => {
             const sc = scene || g.labelTyped?.scene || g.labelRemain?.scene;
 
             const baseY = g.sprite.y + SS.verticalSpaceLabel;
-            const typedStr  = g.word.slice(0, g.typedIdx);
-            const remainStr = g.word.slice(g.typedIdx);
+            const theWord   = g.word || "";
+            const typedStr  = theWord.slice(0, g.typedIdx);
+            const remainStr = theWord.slice(g.typedIdx);
+
             g.labelTyped.setText(typedStr);
             g.labelRemain.setText(remainStr);
 
@@ -714,8 +955,15 @@ const soapsplash = (() => {
                 scene.typing.mistakes++;
                 scene.typing.wordClean = false;
 
+                // NEW: mistakes wipe the clean run & streak immediately
+                scene.streakSys.onMistake();
+
+                // DB hook: log a mistake event
+                telemetry.onMistake(scene);
+
+
                 const C = CONFIG.soapSplash.colors || {};
-                g.labelRemain.setColor(C.errorRemain ?? "#ff4d4d");      // keep red after error
+                g.labelRemain.setColor(C.errorRemain ?? "#ff4d4d");
                 g.labelTyped.setColor(C.errorTyped ?? g.labelTyped.style.color);
 
                 // small shake feedback on error
@@ -728,6 +976,7 @@ const soapsplash = (() => {
                 });
             }
 
+
             typing.updateHud(scene);
         },
 
@@ -737,27 +986,59 @@ const soapsplash = (() => {
             if (idx >= 0) removeGermByIndex(scene, idx);
             scene.typing.activeId = null;
 
+            // capture current streak before we change it
+            const oldStreak = scene.streakSys?.streak ?? 0;
+
             scene.typing.wordsCompleted++;
-            if (scene.typing.wordClean) {
-                scene.typing.streak++; scene.typing.bestStreak = Math.max(scene.typing.bestStreak, scene.typing.streak);
-                scene.typing.score += 100;
-            } else {
-                scene.typing.streak = 0; scene.typing.score += 50;
+
+            const clean = !!scene.typing.wordClean;
+
+            // award base points first
+            scene.streakSys.addBase(100);
+
+            // apply streak rule
+            scene.streakSys.onWord(clean);
+
+            // keep legacy fields in sync
+            scene.typing.streak = scene.streakSys.streak;
+            scene.typing.bestStreak = Math.max(scene.typing.bestStreak, scene.streakSys.bestStreak);
+            scene.typing.score = scene.streakSys.totalScore;
+
+            // optional telemetry
+            telemetry.onWordComplete(scene, g, clean);
+
+            if (scene.typing.streak > oldStreak && scene.typing.streak >= 1) {
+                const px = g.sprite?.x ?? (SS.width / 2);
+                const py = (g.sprite?.y ?? (SS.height / 2)) - 10;
+                helpers.streakPopup(scene, scene.typing.streak, px, py);
+                scene.typing.streakPops += 1;
             }
+
+            // reset per-word cleanliness for the next word
             scene.typing.wordClean = true;
 
             const C = CONFIG.soapSplash.colors || {};
             g.labelTyped.setColor(C.typed ?? "#000000");
             g.labelRemain.setColor(C.remain ?? "#000000");
 
-            typing.updateHud(scene); typing.pickNearest(scene);
+            typing.updateHud(scene);
+            typing.pickNearest(scene);
         },
+
+
 
         // refresh the score and streak hud text
         updateHud(scene) {
-            const { score = 0, streak = 0 } = scene.typing || {};
-            scene.typeHud?.setText(`Score: ${score}   Streak: ${streak}`);
+            const base = scene.streakSys?.baseScore ?? 0;
+            const mult = scene.streakSys?.multiplier?.() ?? 0;
+            const total = scene.streakSys?.totalScore ?? 0;
+            const s = scene.streakSys?.streak ?? 0;
+
+            scene.typeHud?.setText(
+                `Score: ${total}  (base ${base} × x${mult.toFixed(1)})   Streak: ${s}`
+            );
         },
+
     };
 
     // expose all namespaces to scenes through systems so they can call systems.soapsplash.whatever
