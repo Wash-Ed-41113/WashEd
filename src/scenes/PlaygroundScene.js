@@ -1,189 +1,196 @@
-// this file defines the playground scene with sand background a school image and a kiko character
-// it uses CONFIG assets for images and places simple ui text
-// it supports idle animation movement to pointer and resize handling
+// PlaygroundScene.js — castle on left, Kiko on right, no speech bubble.
+// After final castle stage, Kiko switches to side-jump sprite, flips toward door,
+// bounces while moving, SHRINKS into the door, then transitions to SchoolBathroomScene.
 
-// cache asset paths from CONFIG for short names
 const KI = CONFIG.assets.kiko;
 const BG = CONFIG.assets.backgrounds;
 
-// define keys and paths for the sand background
-const SAND_KEY   = "sand";
-const SAND_PATH  = BG.sand;
+const SAND_KEY  = "school_yard";
+const SAND_PATH = "assets/images/background/school-yard.png";
 
-// define keys and paths and layout offsets for the school image
-const SCHOOL_KEY = "school";
-const SCHOOL_PATH = BG.school;
-const SCHOOL_OFFSET_X = 160;
-const SCHOOL_OFFSET_Y = 20;
-
-// define texture keys for kiko base and kiko cheer and the cheer path
+// Kiko textures
 const KIKO_BASE_KEY   = "kiko_base";
 const KIKO_CHEER_KEY  = "kiko_cheer";
 const KIKO_CHEER_PATH = KI.cheer;
 
-// set draw order layers lower numbers draw behind higher numbers draw in front
-const LAYERS = { BG: 0, SCHOOL: 2, KIKO: 10, UI: 20 };
+// Enter-school sprite (side-jump)
+const KIKO_ENTER_KEY  = "kiko_side_jump";
+const KIKO_ENTER_PATH = "assets/images/Kiko/WashEd_kiko_sprite_side-jump.png";
 
-// declare the scene class
+// Draw layers
+const LAYERS = { BG: 0, OBJECTS: 9, KIKO: 10, UI: 20 };
+
+// Castle frames
+const CASTLE_FRAMES = [
+    { key: "sandcastle01", path: "assets/images/sandground/sandcastle01.png" },
+    { key: "sandcastle02", path: "assets/images/sandground/sandcastle02.png" },
+    { key: "sandcastle03", path: "assets/images/sandground/sandcastle03.png" },
+    { key: "sandcastle04", path: "assets/images/sandground/sandcastle04.png" },
+];
+
+const CASTLE_SIZE = 0.6;
+// Door horizontal position as a fraction of screen width (≈ center-right)
+const DOOR_X_FRAC = 0.65;
+const DOOR_Y_OFFSET = 0;
+
 export default class PlaygroundScene extends Phaser.Scene {
-    // constructor sets the scene key and placeholders for tweens
     constructor() {
         super("PlaygroundScene");
         this._idleTween = null;
-        this._moveTween = null;
+        this._castleStage = -1;
+        this._castleImage = null;
+        this.sandArea = null;
     }
 
-    // preload ensures textures exist before use
     preload() {
-        // load sand if not already cached
         if (!this.textures.exists(SAND_KEY))   this.load.image(SAND_KEY, SAND_PATH);
-        // load school if not already cached
-        if (!this.textures.exists(SCHOOL_KEY)) this.load.image(SCHOOL_KEY, SCHOOL_PATH);
-        // load kiko cheer sprite if not already cached base may be packed elsewhere
         if (!this.textures.exists(KIKO_CHEER_KEY)) this.load.image(KIKO_CHEER_KEY, KIKO_CHEER_PATH);
+        if (!this.textures.exists(KIKO_ENTER_KEY)) this.load.image(KIKO_ENTER_KEY, KIKO_ENTER_PATH);
+
+        for (const f of CASTLE_FRAMES) {
+            if (!this.textures.exists(f.key)) this.load.image(f.key, f.path);
+        }
     }
 
-    // create builds the scene visuals and input logic
-    create(data) {
-        // get the current view size
+    create() {
         const { width, height } = this.scale;
 
-        // draw the sand background centered and scaled to cover the view
+        // Sand area
+        this.sandArea = new Phaser.Geom.Rectangle(width * 0.15, height * 0.65, width * 0.70, height * 0.25);
+
+        // Background
         const bg = this.add.image(width / 2, height / 2, SAND_KEY)
-            .setOrigin(0.5, 0.5)
+            .setOrigin(0.5)
             .setDepth(LAYERS.BG);
-        // scale the background to cover both width and height while keeping aspect ratio
         bg.setScale(Math.max(width / bg.width, height / bg.height));
 
-        // add the school image near top right with a margin then scale it to fit a fraction of the view
-        const margin = 24;
-        const school = this.add.image(width - margin, margin, SCHOOL_KEY)
-            .setOrigin(1, 0)
-            .setDepth(LAYERS.SCHOOL);
+        // Baseline
+        const centerY = this.sandArea.bottom - 10;
+        const centerX = this.sandArea.centerX;
 
-        // helper to scale and position the school when the window size changes
-        const fitSchool = (w, h) => {
-            const src = this.textures.get(SCHOOL_KEY);
-            if (!src) return;
-            const maxW = w * 0.30;
-            const maxH = h * 0.30;
-            const scale = Math.min(maxW / src.width, maxH / src.height);
-            school.setScale(scale);
-            // position with small offsets so it sits slightly inward
-            school.setPosition(w - margin - SCHOOL_OFFSET_X, margin + SCHOOL_OFFSET_Y);
-        };
-        // apply the initial sizing
-        fitSchool(width, height);
+        // Castle (left)
+        const castleX = centerX - 220;
+        const castleY = centerY;
 
-        // create kiko as an image if base texture exists otherwise draw a circle as a fallback
+        // Kiko (right)
         let kiko;
         if (this.textures.exists(KIKO_BASE_KEY)) {
-            // add kiko image anchored at feet with a fixed display size so it looks consistent
-            kiko = this.add.image(width * 0.32, height * 0.8, KIKO_BASE_KEY)
+            kiko = this.add.image(centerX + 220, centerY, KIKO_BASE_KEY)
                 .setDisplaySize(600, 600)
                 .setOrigin(0.5, 1)
-                .setDepth(LAYERS.KIKO)
-                .setFlipX(false);
+                .setDepth(LAYERS.KIKO);
         } else {
-            // fallback graphic so the scene still works without the sprite
-            const r = 60;
-            const g = this.add.graphics({ x: width * 0.32, y: height * 0.8 });
-            g.fillStyle(0x2a4cff, 1).fillCircle(0, 0, r);
+            const g = this.add.graphics({ x: centerX + 220, y: centerY });
+            g.fillStyle(0x2a4cff, 1).fillCircle(0, 0, 60);
             g.setDepth(LAYERS.KIKO);
             kiko = g;
         }
 
-        // start a gentle idle tween that moves kiko up and down in place
-        const startIdleTween = () => {
-            this._idleTween?.stop();
-            this._idleTween = this.tweens.add({
-                targets: kiko,
-                y: (kiko.y ?? height * 0.8) - 10,
-                duration: 1500,
-                yoyo: true,
-                repeat: -1,
-                ease: "Sine.easeInOut",
+        // Idle bounce
+        this._idleTween = this.tweens.add({
+            targets: kiko,
+            y: kiko.y - 10,
+            duration: 1500,
+            yoyo: true,
+            repeat: -1,
+            ease: "Sine.easeInOut",
+        });
+
+        const showNextCastleStage = () => {
+            this._castleStage = Math.min(this._castleStage + 1, CASTLE_FRAMES.length - 1);
+            const { key } = CASTLE_FRAMES[this._castleStage];
+
+            if (!this._castleImage) {
+                this._castleImage = this.add.image(castleX, castleY, key)
+                    .setOrigin(0.5, 1)
+                    .setDepth(LAYERS.OBJECTS)
+                    .setScale(CASTLE_SIZE);
+            } else {
+                this._castleImage.setTexture(key).setPosition(castleX, castleY);
+            }
+
+            // Pop animation
+            this._castleImage.setScale(CASTLE_SIZE - 0.10);
+            this.tweens.add({
+                targets: this._castleImage,
+                scale: CASTLE_SIZE,
+                duration: 180,
+                ease: "Back.Out"
             });
+
+            // Final stage → Kiko enters door
+            if (this._castleStage === CASTLE_FRAMES.length - 1) {
+                this.time.delayedCall(1200, () => {
+                    this._idleTween?.stop();
+
+                    // Switch to side-jump & face left (toward door)
+                    if (kiko.setTexture && this.textures.exists(KIKO_ENTER_KEY)) {
+                        kiko.setTexture(KIKO_ENTER_KEY).setDisplaySize(600, 600);
+                        kiko.setFlipX(true);
+                        kiko.setAngle(8);
+                    }
+
+                    // Walking bounce
+                    const walkBob = this.tweens.add({
+                        targets: kiko,
+                        y: '+=10',
+                        yoyo: true,
+                        duration: 180,
+                        repeat: -1,
+                        ease: "Sine.easeInOut",
+                    });
+
+                    // Compute door target (center-right, on the sand baseline)
+                    const doorX = this.scale.width * DOOR_X_FRAC;
+                    const doorY = this.sandArea.bottom - 150;
+
+                    const startScale = kiko.scale;
+                    const endScale   = startScale * 0.55;
+
+                    // Move + shrink into the door
+                    this.tweens.add({
+                        targets: kiko,
+                        x: doorX,
+                        y: doorY,
+                        scale: endScale,
+                        duration: 2800,
+                        ease: "Sine.easeInOut",
+                        onComplete: () => {
+                            walkBob.stop();
+                            this.scene.start("SchoolBathroomScene");
+                        },
+                    });
+                });
+            }
         };
-        startIdleTween();
 
-        // helper to change the kiko texture safely and preserve facing direction
-        const applyTexture = (key) => {
-            if (!kiko.setTexture || !this.textures.exists(key)) return;
-            const keepFlip = !!kiko.flipX;
-            kiko.setTexture(key).setDisplaySize(600, 600);
-            kiko.setFlipX?.(keepFlip);
-        };
-        // quick helpers to switch between cheer and base textures
-        const switchToCheer = () => applyTexture(KIKO_CHEER_KEY);
-        const switchToBase  = () => applyTexture(KIKO_BASE_KEY);
-
-        // read ui config and player data for labels
-        const UI = CONFIG.ui; // <-- fixed
-        const difficulty = data?.difficulty ?? "normal";
-        const playerName = this.registry.get("playerName") || "Player";
-        // draw a small label to show selected difficulty
-        this.add.text(24, 20, `Difficulty: ${difficulty}`, {
-            fontFamily: UI.fontFamily, fontSize: "28px", color: "#111",
-        }).setShadow(1, 1, "#fff", 1).setDepth(20);
-
-        // pointer click moves kiko to the clicked position
+        // Click to build castle
         this.input.on("pointerdown", (pointer) => {
-            // clamp target to the visible area
-            const targetX = Phaser.Math.Clamp(pointer.worldX, 0, this.scale.width);
-            const targetY = Phaser.Math.Clamp(pointer.worldY, 0, this.scale.height);
+            const { worldX: x, worldY: y } = pointer;
+            if (!Phaser.Geom.Rectangle.Contains(this.sandArea, x, y)) return;
 
-            // flip kiko to face the direction of travel when supported by image sprite
-            if (kiko.setFlipX && typeof kiko.x === "number") {
-                kiko.setFlipX(targetX > kiko.x);
-            }
-
-            // stop any running move tween to avoid overlap
-            if (this._moveTween) {
-                this._moveTween.stop();
-                this._moveTween = null;
-            }
-
-            // show cheer while moving and stop the idle bounce
-            switchToCheer();
-            this._idleTween?.stop();
-            this._idleTween = null;
-
-            // create a move tween to the target position with a soft ease
-            this._moveTween = this.tweens.add({
-                targets: kiko,
-                x: targetX,
-                y: targetY,
-                duration: 600,
-                ease: "Sine.easeInOut",
-                onComplete: () => {
-                    // restore base pose then restart idle bounce
-                    switchToBase();
-                    this._moveTween = null;
-                    startIdleTween();
+            if (this._castleStage < CASTLE_FRAMES.length - 1) {
+                if (this.textures.exists(KIKO_CHEER_KEY) && kiko.setTexture) {
+                    kiko.setTexture(KIKO_CHEER_KEY).setDisplaySize(600, 600);
+                    this.time.delayedCall(250, () => kiko.setTexture(KIKO_BASE_KEY).setDisplaySize(600, 600));
                 }
-            });
+                showNextCastleStage();
+            }
         });
 
-        // escape key returns to the game hub scene
-        this.input.keyboard?.on("keydown-ESC", () => {
-            this.scene.start("GameScene");
-        });
-
-        // keep layout correct when the game view is resized
-        this.scale.on("resize", ({ width: w, height: h }) => {
-            // center and rescale the background
+        // Resize
+        const reflow = (w, h) => {
             bg.setPosition(w / 2, h / 2);
             bg.setScale(Math.max(w / bg.width, h / bg.height));
+            this.sandArea.setTo(w * 0.15, h * 0.65, w * 0.70, h * 0.25);
 
-            // resize and reposition the school image
-            fitSchool(w, h);
+            const cx = this.sandArea.centerX;
+            const cy = this.sandArea.bottom - 10;
 
-            // reposition kiko baseline and restart idle so motion uses the new y
-            if (kiko && kiko.setPosition) {
-                kiko.setPosition(w * 0.32, h * 0.8);
-                startIdleTween();
-            }
-        });
+            if (kiko?.setPosition) kiko.setPosition(cx + 220, cy);
+            if (this._castleImage) this._castleImage.setPosition(cx - 220, cy);
+        };
+        this.scale.on("resize", ({ width: w, height: h }) => reflow(w, h));
+        reflow(width, height);
     }
 }
