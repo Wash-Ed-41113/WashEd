@@ -95,6 +95,7 @@ window.CONFIG = {
         sinkHitRel: { x: 0.11, y: 0.82 }, // relative sink position
         rSinkPx: 150,                     // sink radius in pixels
 
+
         innerRadiusRel: 0.15,
         outerRadiusRel: 0.48,
         spawnAngleDeg: { min: 25, max: 155 }, // germ spawn angle range
@@ -104,8 +105,8 @@ window.CONFIG = {
         spawnJitterMs: 350, // random spawn variation
         waveCap: 5,         // max germs per wave
 
-        minSpawnSeparationPx: 190,
-        minSinkDistancePx: 260,
+        minSpawnSeparationPx: 120,
+        minSinkDistancePx: 180,
 
         germBaseSpeed: 50,
         germSpeedRand: 20,
@@ -137,7 +138,7 @@ window.CONFIG = {
         useSpawner: true,
         cornerMargin: 120,
         cornerBandWidth: 240,
-        angleSpreadDeg: 35,
+        angleSpreadDeg: 42,
 
         // debug options to show circles for sink and germs
         debug: {
@@ -198,12 +199,7 @@ window.CONFIG = {
         },
 
         // word bank for typing
-        words: [
-            "wash", "soap", "clean", "rinse", "scrub",
-            "foam", "shine", "fresh", "sparkle", "bubbles",
-            "health", "habits", "safe", "germs", "water",
-            "sink", "fingers", "thumb", "palm", "nails"
-        ]
+        words: []
     },
 
     // rules and parameters for the clean catch mini game
@@ -212,8 +208,9 @@ window.CONFIG = {
         player: { width: 220, bottom: 36, fallbackSize: 180 },
         germ:   { height: 64, maxPixels: 128 },
         water:  { width: 64, height: 28 },
-        words: { good: ["soap", "bath", "wash", "cup", "tap", "well", "pure", "safe", "care", "flow", "clean", "fresh", "water", "rinse", "towel", "health", "filter", "toilet", "shower", "dry"],
-                  bad: ["dirt", "germ", "sick", "mud", "virus", "waste", "leak", "rust", "mold", "scum", "slime", "crud", "filth", "ooze", "rot", "odor", "pest", "fly", "bug", "oil"] }
+        words: { good: [],
+                  bad: []
+        }
     },
 
 };

@@ -29,9 +29,29 @@ export default class PreloadScene extends Phaser.Scene {
 
         // optionally load kiko cheer pose if available
         if (KI.cheer) this.load.image("kiko_cheer", KI.cheer);
+
+        // additionally load in json as single source of truth for litrature.
+        this.load.json("WordBank", "WordBank.json");
+
     }
 
-    // after preload is done create runs once
-    // here we instantly switch to the menu scene to begin the flow
-    create() { this.scene.start("MenuScene"); }
+    create() {
+        const wordsData = this.cache.json.get("WordBank") || {};
+        const all = Array.isArray(wordsData.WordBank) ? wordsData.WordBank : [];
+        CONFIG.words = all;
+
+
+        const good = all.filter(w => w.type === "Good").map(w => w.word);
+        const bad  = all.filter(w => w.type === "Bad").map(w => w.word);
+
+        CONFIG.soapSplash.words = good;
+        CONFIG.cleanCatch.words = { good, bad };
+
+        this.scene.start("MenuScene");
+    }
+
+
+
+
+
 }

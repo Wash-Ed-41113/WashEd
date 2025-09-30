@@ -1,0 +1,375 @@
+{
+  "WordBank": [
+    {
+      "id": 1,
+      "word": "bath",
+      "definition": "The act of washing the body",
+      "type": "Good",
+      "difficulty": 1
+    },
+    {
+      "id": 2,
+      "word": "bottle",
+      "definition": "Container for liquids",
+      "type": "Good",
+      "difficulty": 2
+    },
+    {
+      "id": 3,
+      "word": "bug",
+      "definition": "Insect or small arthropod",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 4,
+      "word": "care",
+      "definition": "Attention to keep something healthy or safe",
+      "type": "Good",
+      "difficulty": 1
+    },
+    {
+      "id": 5,
+      "word": "clean",
+      "definition": "Free from dirt or pollution",
+      "type": "Good",
+      "difficulty": 2
+    },
+    {
+      "id": 6,
+      "word": "crud",
+      "definition": "Grime or filth",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 7,
+      "word": "cup",
+      "definition": "Small container for drinking",
+      "type": "Good",
+      "difficulty": 1
+    },
+    {
+      "id": 8,
+      "word": "dirt",
+      "definition": "Loose soil or unclean matter",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 9,
+      "word": "disinfect",
+      "definition": "To clean in order to destroy germs",
+      "type": "Good",
+      "difficulty": 3
+    },
+    {
+      "id": 10,
+      "word": "drain",
+      "definition": "Pipe that carries off liquid waste",
+      "type": "Good",
+      "difficulty": 2
+    },
+    {
+      "id": 11,
+      "word": "drainage",
+      "definition": "System for carrying away water",
+      "type": "Good",
+      "difficulty": 3
+    },
+    {
+      "id": 12,
+      "word": "dry",
+      "definition": "Free from moisture",
+      "type": "Good",
+      "difficulty": 1
+    },
+    {
+      "id": 13,
+      "word": "faucet",
+      "definition": "Device that controls water flow",
+      "type": "Good",
+      "difficulty": 2
+    },
+    {
+      "id": 14,
+      "word": "filter",
+      "definition": "Device that removes impurities",
+      "type": "Good",
+      "difficulty": 2
+    },
+    {
+      "id": 15,
+      "word": "filth",
+      "definition": "Extremely dirty matter",
+      "type": "Bad",
+      "difficulty": 2
+    },
+    {
+      "id": 16,
+      "word": "flow",
+      "definition": "The movement of water in a stream or pipe",
+      "type": "Good",
+      "difficulty": 1
+    },
+    {
+      "id": 17,
+      "word": "fly",
+      "definition": "A small flying insect",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 18,
+      "word": "fresh",
+      "definition": "Recently obtained; not spoiled",
+      "type": "Good",
+      "difficulty": 2
+    },
+    {
+      "id": 19,
+      "word": "germ",
+      "definition": "A microorganism that can cause disease",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 20,
+      "word": "groundwater",
+      "definition": "Water held underground",
+      "type": "Good",
+      "difficulty": 3
+    },
+    {
+      "id": 21,
+      "word": "handwashing",
+      "definition": "The act of washing hands for hygiene",
+      "type": "Good",
+      "difficulty": 3
+    },
+    {
+      "id": 22,
+      "word": "health",
+      "definition": "A state of physical well-being",
+      "type": "Good",
+      "difficulty": 2
+    },
+    {
+      "id": 23,
+      "word": "healthy",
+      "definition": "Being in good health",
+      "type": "Good",
+      "difficulty": 3
+    },
+    {
+      "id": 24,
+      "word": "hygiene",
+      "definition": "Conditions that promote health",
+      "type": "Good",
+      "difficulty": 3
+    },
+    {
+      "id": 25,
+      "word": "leak",
+      "definition": "Accidental escape of liquid or gas",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 26,
+      "word": "mold",
+      "definition": "Fungus that grows in damp places",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 27,
+      "word": "mud",
+      "definition": "Wet, soft earth",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 28,
+      "word": "odor",
+      "definition": "Smell, often unpleasant",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 29,
+      "word": "oil",
+      "definition": "Oily liquid from plants, animals, or minerals",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 30,
+      "word": "ooze",
+      "definition": "Slow seep of liquid",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 31,
+      "word": "pest",
+      "definition": "Harmful or annoying creature",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 32,
+      "word": "pure",
+      "definition": "Free from contaminants",
+      "type": "Good",
+      "difficulty": 1
+    },
+    {
+      "id": 33,
+      "word": "rinse",
+      "definition": "Wash lightly with water",
+      "type": "Good",
+      "difficulty": 2
+    },
+    {
+      "id": 34,
+      "word": "rot",
+      "definition": "Decay or decompose",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 35,
+      "word": "rust",
+      "definition": "Corrosion on metal",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 36,
+      "word": "safe",
+      "definition": "Free from harm or danger",
+      "type": "Good",
+      "difficulty": 1
+    },
+    {
+      "id": 37,
+      "word": "sanitary",
+      "definition": "Clean and hygienic",
+      "type": "Good",
+      "difficulty": 3
+    },
+    {
+      "id": 38,
+      "word": "scrub",
+      "definition": "To clean by rubbing hard",
+      "type": "Good",
+      "difficulty": 2
+    },
+    {
+      "id": 39,
+      "word": "scrubbing",
+      "definition": "Cleaning by rubbing hard",
+      "type": "Good",
+      "difficulty": 3
+    },
+    {
+      "id": 40,
+      "word": "scum",
+      "definition": "Dirt or froth on the surface of a liquid",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 41,
+      "word": "shower",
+      "definition": "Device that sprays water for bathing",
+      "type": "Good",
+      "difficulty": 2
+    },
+    {
+      "id": 42,
+      "word": "sick",
+      "definition": "Affected by illness",
+      "type": "Bad",
+      "difficulty": 1
+    },
+    {
+      "id": 43,
+      "word": "slime",
+      "definition": "Thick, slippery substance",
+      "type": "Bad",
+      "difficulty": 2
+    },
+    {
+      "id": 44,
+      "word": "soap",
+      "definition": "Substance used for washing and cleaning",
+      "type": "Good",
+      "difficulty": 1
+    },
+    {
+      "id": 45,
+      "word": "tap",
+      "definition": "Device that controls the flow of water",
+      "type": "Good",
+      "difficulty": 1
+    },
+    {
+      "id": 46,
+      "word": "toilet",
+      "definition": "Fixture used for sanitation",
+      "type": "Bad",
+      "difficulty": 2
+    },
+    {
+      "id": 47,
+      "word": "towel",
+      "definition": "Cloth used for drying",
+      "type": "Good",
+      "difficulty": 2
+    },
+    {
+      "id": 48,
+      "word": "virus",
+      "definition": "Tiny infectious agent",
+      "type": "Bad",
+      "difficulty": 2
+    },
+    {
+      "id": 49,
+      "word": "wash",
+      "definition": "To clean with water and soap",
+      "type": "Good",
+      "difficulty": 1
+    },
+    {
+      "id": 50,
+      "word": "washing",
+      "definition": "The act of cleaning with water",
+      "type": "Good",
+      "difficulty": 3
+    },
+    {
+      "id": 51,
+      "word": "waste",
+      "definition": "Unwanted or unusable materials",
+      "type": "Bad",
+      "difficulty": 2
+    },
+    {
+      "id": 52,
+      "word": "water",
+      "definition": "Essential liquid for life",
+      "type": "Good",
+      "difficulty": 2
+    },
+    {
+      "id": 53,
+      "word": "well",
+      "definition": "A deep hole that supplies water",
+      "type": "Good",
+      "difficulty": 1
+    }
+  ]
+}

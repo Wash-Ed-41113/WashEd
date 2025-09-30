@@ -10,7 +10,13 @@ import GameScene from "./scenes/GameScene.js";
 import PlaygroundScene from "./scenes/PlaygroundScene.js";
 import SoapSplashScene from "./scenes/SoapSplashScene.js";
 import CleanCatchScene from "./scenes/CleanCatchScene.js";
+
+import { DB } from "./db.js";
+DB.init();
+
+
 import SchoolBathroomScene from "./scenes/SchoolBathroomScene.js";
+
 
 // phaser game configuration object
 // this controls renderer type canvas parent size scale physics scenes and dom support

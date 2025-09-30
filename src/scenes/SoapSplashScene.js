@@ -5,6 +5,8 @@
 // src/scenes/SoapSplashScene.js
 // import shared systems for ui helpers typing logic spawn and movement logic
 import systems from "../systems.js";
+// add simple in memory db
+import { DB } from "../db.js";
 
 // declare the scene class for soap splash
 export default class SoapSplashScene extends Phaser.Scene {
@@ -37,6 +39,9 @@ export default class SoapSplashScene extends Phaser.Scene {
         // background sprite and keys used for breach stages
         this.bgSprite = null;
         this._bgKeys = [];
+
+        // db round id
+        this.roundId = null;
     }
 
     // toggle the pause state and show or hide pause overlay
@@ -47,14 +52,22 @@ export default class SoapSplashScene extends Phaser.Scene {
             this._pauseUi = null;
         } else {
             this._paused = true;
-            this._pauseUi = systems.ui.pauseOverlay(this, () => this.togglePause());
+            this._pauseUi = systems.ui.pauseOverlay(this, {
+                onResume: () => this.togglePause(),
+                onHome: () => {
+                    this.finalizeRound?.("Paused → Main Menu");
+                    const playerName = this.registry.get("playerName");
+                    this.scene.start("GameScene", { playerName });
+                }
+            });
         }
     }
+
 
     // preload background images for breach stages and the germ sprite
     preload() {
         // get the list of background paths from CONFIG soap splash
-        const set = CONFIG.assets.soapSplash.backgrounds || [];
+        const set = CONFIG.assets.soapSplash.backgrounds;
         // register each image with a generated key and keep the keys array for later swapping
         this._bgKeys = set.map((path, i) => {
             const key = `SS_BG_${i}`;
@@ -71,9 +84,14 @@ export default class SoapSplashScene extends Phaser.Scene {
         // short name for soap splash config
         const SS = CONFIG.soapSplash;
 
+        // restore persisted mute setting
+        const savedMute = this.registry.get("mute") === true;
+        if (this.sound) this.sound.mute = savedMute;
+
+
         // compute sink hit point in pixels from relative config values
         const sinkCenter = {
-            x: SS.width  * SS.sinkHitRel.x,
+            x: SS.width * SS.sinkHitRel.x,
             y: SS.height * SS.sinkHitRel.y,
         };
         // store sink position helpers so other systems can read it
@@ -81,18 +99,20 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.getSinkHitPoint = () => sinkCenter;
 
         // compute sink radius in pixels either from relative or absolute config
-        this.rSink = (SS.rSinkRel != null)
-            ? Math.round(SS.height * SS.rSinkRel)
-            : (SS.rSinkPx ?? 70);
+        this.rSink =
+            SS.rSinkRel != null ? Math.round(SS.height * SS.rSinkRel) : SS.rSinkPx ?? 70;
 
         // optional visible sink circle for debugging
         if (SS.debug?.showSinkCircle) {
-            this._sinkMarker = this.add.circle(
-                sinkCenter.x, sinkCenter.y,
-                this.rSink,
-                SS.debug?.sinkColor ?? 0x00ff00,
-                SS.debug?.sinkAlpha ?? 0.20
-            ).setDepth(2);
+            this._sinkMarker = this.add
+                .circle(
+                    sinkCenter.x,
+                    sinkCenter.y,
+                    this.rSink,
+                    SS.debug?.sinkColor ?? 0x00ff00,
+                    SS.debug?.sinkAlpha ?? 0.2
+                )
+                .setDepth(2);
         }
 
         // keep sink accessors consistent
@@ -102,14 +122,21 @@ export default class SoapSplashScene extends Phaser.Scene {
         // add the initial background image or a solid fallback rectangle
         const firstKey = this._bgKeys[0] || null;
         this.bgSprite = firstKey
-            ? this.add.sprite(SS.width / 2, SS.height / 2, firstKey)
-                .setDepth(0).setDisplaySize(SS.width, SS.height)
-            : this.add.rectangle(0, 0, SS.width, SS.height, 0x1b2a3a, 1).setOrigin(0, 0);
+            ? this.add
+                .sprite(SS.width / 2, SS.height / 2, firstKey)
+                .setDepth(0)
+                .setDisplaySize(SS.width, SS.height)
+            : this.add
+                .rectangle(0, 0, SS.width, SS.height, 0x1b2a3a, 1)
+                .setOrigin(0, 0);
 
         // set up spawn ring in the top right corner if the spawner mode is enabled
         if (SS.useSpawner) {
             // distance from sink to the top right corner minus a margin forms the outer radius
-            const cornerDist = Math.hypot(SS.width - this.sinkPosition.x, 0 - this.sinkPosition.y);
+            const cornerDist = Math.hypot(
+                SS.width - this.sinkPosition.x,
+                0 - this.sinkPosition.y
+            );
             this.rOuter = Math.max(0, cornerDist - SS.cornerMargin);
             this.rInner = Math.max(0, this.rOuter - SS.cornerBandWidth);
 
@@ -133,20 +160,26 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.breaches = 0;
         this.gameOver = false;
 
-        // draw a simple breaches hud in the top left
-        const maxBreaches = SS.maxBreaches ?? SS.breachesAllowed ?? 5;
-        const breachesFontPx = `${SS.breachesFontSize || 24}px`;
-        this.hud = this.add.text(15, 15, `Breaches: 0/${maxBreaches}`, {
-            fontFamily: "monospace",
-            fontSize: breachesFontPx,
-            color: "#fff",
-        }).setDepth(10);
+        // --- begin DB round here using difficulty from registry ---
+        const difficulty = this.registry.get("difficulty") || "normal";
+        this.roundId = DB.beginRound(
+            window.__SESSION_ID__,
+            "SoapSplash",
+            String(difficulty)
+        );
+
 
         // add a top bar with home and pause
-        systems.ui.topbar(this, {
-            onHome: () => this.scene.start("GameScene", { playerName: this.registry.get("playerName") }),
+        this.topbar = systems.ui.topbar(this, {
+            onHome: () => {
+                this.finalizeRound?.("Home button");
+                const playerName = this.registry.get("playerName");
+                this.scene.start("GameScene", { playerName });
+            },
             onPause: () => this.togglePause(),
+            onSettings: () => { /* optional */ }
         });
+
 
         // start the shared round timer and typing systems
         systems.soapsplash.timer.init(this);
@@ -162,12 +195,44 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         // allow quick exit to the game hub with escape
         this.input.keyboard.once("keydown-ESC", () => {
+            // optional: treat as early exit finalize without score changes
+            this.finalizeRound("Escaped to hub");
             const playerName = this.registry.get("playerName");
             this.scene.start("GameScene", { playerName });
         });
 
         // set up the blurred background reveal effect under germs
         this.initSpotBlur();
+
+        // finalize round automatically if the scene shuts down without explicit finalize
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            if (!this.gameOver) this.finalizeRound("Scene shutdown");
+        });
+    }
+
+    // helper to finalize the round to the db
+    finalizeRound(reason = "Time up", overrides = {}) {
+        if (this.gameOver) return;
+        this.gameOver = true;
+        if (!this.roundId) return;
+
+        DB.finalizeRound(this.roundId, {
+            score:
+                overrides.score ??
+                this.streakSys?.totalScore ??
+                this.typing?.score ??
+                0,
+            bestStreak:
+                overrides.bestStreak ??
+                this.streakSys?.bestStreak ??
+                this.typing?.bestStreak ??
+                0,
+            breaches: overrides.breaches ?? this.breaches ?? 0,
+            baseScore: overrides.baseScore ?? this.streakSys?.baseScore ?? 0,
+            multiplier:
+                overrides.multiplier ?? (this.streakSys?.multiplier?.() || 0),
+            reason,
+        });
     }
 
     // update runs every frame handles spawn movement rules and timer display
@@ -177,6 +242,8 @@ export default class SoapSplashScene extends Phaser.Scene {
         if (this._paused || this.gameOver) return;
         // if first frame capture the start time
         if (this.gameStartAt == null) this.gameStartAt = time;
+
+
 
         // spawn pacing parameters from config
         const cap = SS.waveCap ?? SS.maxGerms ?? 5;
@@ -204,15 +271,20 @@ export default class SoapSplashScene extends Phaser.Scene {
         systems.soapsplash.rules.checkBreaches(this);
         // update round timer hud
         systems.soapsplash.timer.updateHUD(this, this.time.now);
+
+        if (this.gameOver) return;
+        if (this._paused) return;
     }
 
     // setup a blurred duplicate background that is revealed in soft spots under germs
     initSpotBlur() {
-        const SS = CONFIG.soapSplash, S = SS.spotBlur || {};
+        const SS = CONFIG.soapSplash,
+            S = SS.spotBlur || {};
         if (!S.enabled || !this.bgSprite?.texture?.key) return;
 
         // make a blur layer using the same texture as the background
-        this.bgBlur = this.add.image(SS.width/2, SS.height/2, this.bgSprite.texture.key, this.bgSprite.frame.name)
+        this.bgBlur = this.add
+            .image(SS.width / 2, SS.height / 2, this.bgSprite.texture.key, this.bgSprite.frame.name)
             .setDisplaySize(SS.width, SS.height)
             .setDepth(1);
 
@@ -222,7 +294,13 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
 
         // create a render texture and a graphics object to draw soft circles as a bitmap mask
-        this._spotRT  = this.make.renderTexture({ x:0, y:0, width: SS.width, height: SS.height, add:false });
+        this._spotRT = this.make.renderTexture({
+            x: 0,
+            y: 0,
+            width: SS.width,
+            height: SS.height,
+            add: false,
+        });
         this._spotGfx = this.add.graphics().setScrollFactor(0).setVisible(false);
         const bm = new Phaser.Display.Masks.BitmapMask(this, this._spotRT);
         this.bgBlur.setMask(bm);
@@ -235,20 +313,23 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.scale.on(Phaser.Scale.Events.RESIZE, onResize);
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             this.scale.off(Phaser.Scale.Events.RESIZE, onResize);
-            this._spotGfx?.destroy(); this._spotGfx=null;
-            this._spotRT?.destroy();  this._spotRT=null;
+            this._spotGfx?.destroy();
+            this._spotGfx = null;
+            this._spotRT?.destroy();
+            this._spotRT = null;
         });
-    };
+    }
 
     // draw the soft circular mask where germs are so the blur layer shows through there
     redrawSpotBlurMask() {
-        const SS = CONFIG.soapSplash, S = SS.spotBlur || {};
+        const SS = CONFIG.soapSplash,
+            S = SS.spotBlur || {};
         if (!S.enabled || !this._spotRT || !this._spotGfx) return;
 
         // parameters for circle feathering and padding
         const radiusPad = S.radiusPad ?? 22;
-        const feather   = S.feather   ?? 28;
-        const steps     = Math.max(3, S.steps ?? 7);
+        const feather = S.feather ?? 28;
+        const steps = Math.max(3, S.steps ?? 7);
 
         // clear previous mask drawing
         this._spotRT.clear();
@@ -271,5 +352,5 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         // copy the graphics onto the render texture so the bitmap mask updates
         this._spotRT.draw(this._spotGfx);
-    };
+    }
 }
