@@ -781,42 +781,48 @@ const cleancatcher = {
 
         // images and word lists
         const A = CONFIG.assets.cleanCatch || {};
-        const background = new Image(); background.src = A.background || "";
-        const germImg    = new Image(); germImg.src    = A.germ || "";
+        const background = new Image();
+        background.src = A.background || "";
+        const germImg = new Image();
+        germImg.src = A.germ || "";
 
         const goodWords = helpers.words.cleanGood();
-        const badWords  = helpers.words.cleanBad();
+        const badWords = helpers.words.cleanBad();
 
         // helpers for sizing images with aspect ratio and constraints
         function aspect(img) {
             const w = img.naturalWidth || 0, h = img.naturalHeight || 0;
-            return { w, h, r: (w && h) ? w / h : 1 };
+            return {w, h, r: (w && h) ? w / h : 1};
         }
+
         function sizeFrom(img, opts = {}, defaultSquare = 120) {
-            const { w: iw, h: ih, r } = aspect(img);
+            const {w: iw, h: ih, r} = aspect(img);
             const fallback = opts.fallbackSize ?? defaultSquare;
+
 
             if (opts.width != null && opts.height != null) {
                 let W = opts.width, H = opts.height;
                 if (opts.maxPixels) {
                     const k = Math.min(opts.maxPixels / W, opts.maxPixels / H, 1);
-                    W = Math.round(W * k); H = Math.round(H * k);
+                    W = Math.round(W * k);
+                    H = Math.round(H * k);
                 }
-                return { w: W, h: H };
+                return {w: W, h: H};
             }
-            if (opts.width != null)  return { w: opts.width,  h: Math.round(opts.width  / (r || 1)) };
-            if (opts.height != null) return { w: Math.round(opts.height * (r || 1)), h: opts.height };
+            if (opts.width != null) return {w: opts.width, h: Math.round(opts.width / (r || 1))};
+            if (opts.height != null) return {w: Math.round(opts.height * (r || 1)), h: opts.height};
 
             if (opts.scale != null && iw > 0 && ih > 0) {
                 let W = Math.max(1, Math.round(iw * opts.scale));
                 let H = Math.max(1, Math.round(ih * opts.scale));
                 if (opts.maxPixels) {
                     const k = Math.min(opts.maxPixels / W, opts.maxPixels / H, 1);
-                    W = Math.round(W * k); H = Math.round(H * k);
+                    W = Math.round(W * k);
+                    H = Math.round(H * k);
                 }
-                return { w: W, h: H };
+                return {w: W, h: H};
             }
-            return { w: fallback, h: fallback };
+            return {w: fallback, h: fallback};
         }
 
         // build player state and apply image sizing
@@ -828,7 +834,7 @@ const cleancatcher = {
         const player = {
             x: (canvas.width - pSize.w) / 2,
             y: canvas.height - (P.bottom ?? 30) - pSize.h,
-            width:  pSize.w,
+            width: pSize.w,
             height: pSize.h,
             dx: 0
         };
@@ -837,7 +843,7 @@ const cleancatcher = {
         playerImg.onload = () => {
             pSize = sizeFrom(playerImg, P, 180);
             const baseline = canvas.height - (P.bottom ?? 30);
-            player.width  = pSize.w;
+            player.width = pSize.w;
             player.height = pSize.h;
             player.x = helpers.clamp(player.x, 0, canvas.width - player.width);
             player.y = baseline - player.height;
@@ -858,7 +864,8 @@ const cleancatcher = {
                 h = CC.water?.height ?? 28;
             } else {
                 const gSize = sizeFrom(germImg, CC.germ || {}, 56);
-                w = gSize.w; h = gSize.h;
+                w = gSize.w;
+                h = gSize.h;
             }
 
             items.push({
@@ -886,18 +893,28 @@ const cleancatcher = {
         function drawItems() {
             for (const item of items) {
                 if (item.type === "water") {
-                    // draw droplet shape
+                    // draw droplet shape (teardrop)
                     ctx.beginPath();
-                    ctx.moveTo(item.x + item.width / 2, item.y); // top
-                    ctx.bezierCurveTo(item.x + item.width, item.y + item.height / 3,
-                        item.x + item.width * 0.75, item.y + item.height,
-                        item.x + item.width / 2, item.y + item.height);
-                    ctx.bezierCurveTo(item.x + item.width * 0.25, item.y + item.height,
-                        item.x, item.y + item.height / 3,
-                        item.x + item.width / 2, item.y);
+                    ctx.moveTo(item.x + item.width / 2, item.y); // sharp top point
+
+                    // right curve down
+                    ctx.bezierCurveTo(
+                        item.x + item.width * 1.0, item.y + item.height * 1,  // outward control
+                        item.x + item.width * 0.8, item.y + item.height,        // bulging bottom right
+                        item.x + item.width / 2, item.y + item.height           // bottom center
+                    );
+
+                    // left curve up
+                    ctx.bezierCurveTo(
+                        item.x + item.width * 0.2, item.y + item.height,        // bulging bottom left
+                        item.x, item.y + item.height * 1,                     // outward control
+                        item.x + item.width / 2, item.y                         // back to top point
+                    );
+
                     ctx.closePath();
                     ctx.fillStyle = "aqua";
                     ctx.fill();
+
                 } else {
                     if (germImg.complete && germImg.naturalWidth) {
                         ctx.drawImage(germImg, item.x, item.y, item.width, item.height);
@@ -907,7 +924,7 @@ const cleancatcher = {
                     }
                 }
                 ctx.fillStyle = "black";
-                ctx.font = "16px Arial";
+                ctx.font = "20px Arial";
                 ctx.fillText(item.word, item.x + 5, item.y + item.height / 1.5);
             }
         }
@@ -916,36 +933,36 @@ const cleancatcher = {
         function formatTime(seconds) {
             const m = Math.floor(seconds / 60).toString().padStart(2, "0");
             const s = (seconds % 60).toString().padStart(2, "0");
-            return `${m}:${s}`;
-        }
+            return `${m}:${s}`;}
 
-        // draw score lives and time
+        // draw score, lives and time
         function drawUI() {
             ctx.fillStyle = "black";
             ctx.font = "18px Arial";
             ctx.fillText("Score: " + score, 10, 20);
 
             // draw hearts
-            const heartSize = 20;
+            const heartSize = 50;
             for (let i = 0; i < lives; i++) {
                 ctx.beginPath();
                 const x = 10 + i * (heartSize + 5);
                 const y = 40;
                 ctx.moveTo(x + heartSize / 2, y + heartSize / 5);
                 ctx.bezierCurveTo(x + heartSize / 2, y, x, y, x, y + heartSize / 3);
-                ctx.bezierCurveTo(x, y + heartSize * 2/3, x + heartSize / 2, y + heartSize, x + heartSize / 2, y + heartSize);
-                ctx.bezierCurveTo(x + heartSize / 2, y + heartSize, x + heartSize, y + heartSize * 2/3, x + heartSize, y + heartSize / 3);
+                ctx.bezierCurveTo(x, y + heartSize * 2 / 3, x + heartSize / 2, y + heartSize, x + heartSize / 2, y + heartSize);
+                ctx.bezierCurveTo(x + heartSize / 2, y + heartSize, x + heartSize, y + heartSize * 2 / 3, x + heartSize, y + heartSize / 3);
                 ctx.bezierCurveTo(x + heartSize, y, x + heartSize / 2, y, x + heartSize / 2, y + heartSize / 5);
                 ctx.fillStyle = "red";
                 ctx.fill();
+            }
 
-            ctx.fillText("Time: " + timeLeft, canvas.width - 100, 20);
-            ctx.font = "28px Arial"; // bigger
+            // time display
+            ctx.fillStyle = "black";
+            ctx.font = "40px Arial";
             ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
-
         }
 
-        // move items down check collisions with player update stats and remove offscreen
+        // move items down, check collisions, update stats, remove offscreen
         function updateItems() {
             for (let i = items.length - 1; i >= 0; i--) {
                 const item = items[i];
@@ -971,7 +988,7 @@ const cleancatcher = {
 
         // input events arrow keys and mouse move
         const onKeyDown = (e) => {
-            if (e.key === "ArrowLeft")  player.dx = -5;
+            if (e.key === "ArrowLeft") player.dx = -5;
             if (e.key === "ArrowRight") player.dx = 5;
         };
         const onKeyUp = (e) => {
@@ -1029,7 +1046,7 @@ const cleancatcher = {
             if (rafId) cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(frame);
 
-            if (!moveInterval)  moveInterval  = setInterval(movePlayer, 16);
+            if (!moveInterval) moveInterval = setInterval(movePlayer, 16);
             if (!spawnInterval) spawnInterval = setInterval(spawnItem, 1000);
             if (!timerInterval) timerInterval = setInterval(() => {
                 if (!paused && !gameOver) {
@@ -1041,10 +1058,22 @@ const cleancatcher = {
 
         // stop every loop and clear ids
         function stopLoops() {
-            if (rafId)          { cancelAnimationFrame(rafId);  rafId = null; }
-            if (moveInterval)   { clearInterval(moveInterval);  moveInterval = null; }
-            if (spawnInterval)  { clearInterval(spawnInterval); spawnInterval = null; }
-            if (timerInterval)  { clearInterval(timerInterval); timerInterval = null; }
+            if (rafId) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+            if (moveInterval) {
+                clearInterval(moveInterval);
+                moveInterval = null;
+            }
+            if (spawnInterval) {
+                clearInterval(spawnInterval);
+                spawnInterval = null;
+            }
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
         }
 
         // allow external control of pause state from the phaser scene
@@ -1067,7 +1096,7 @@ const cleancatcher = {
         startLoops();
 
         // expose control surface to the owning scene
-        return { destroy, setPaused };
+        return {destroy, setPaused};
     }
 };
 
@@ -1076,7 +1105,7 @@ const cleancatcher = {
 // -----------------------------
 const menu = {
     build(scene, spec) {
-        const { width, height } = scene.scale;
+        const {width, height} = scene.scale;
         const gap = 96;
         const startY = height * 0.45;
         return spec.map((s, i) => {
@@ -1091,8 +1120,10 @@ const menu = {
 // scenes import this default to access helpers ui and game engines
 // legacy aliases are included for convenience
 // -----------------------------
-const systems = { helpers, ui, soapsplash, cleancatcher, menu,
+const systems = {
+    helpers, ui, soapsplash, cleancatcher, menu,
     spawn: soapsplash.spawn, movement: soapsplash.movement,
-    rules: soapsplash.rules, timer: soapsplash.timer, typing: soapsplash.typing,
+    rules: soapsplash.rules, timer: soapsplash.timer, typing: soapsplash.typing
 };
+
 export default systems;
