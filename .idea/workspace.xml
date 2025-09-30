@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="updated mechanics and config!">
+    <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="updated UI in config (hearts, timer, waterdrop)">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/systems.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/systems.js" afterDir="false" />
     </list>
@@ -164,7 +164,7 @@
       <workItem from="1758330564090" duration="4838000" />
       <workItem from="1758335556581" duration="27140000" />
       <workItem from="1758872422898" duration="331000" />
-      <workItem from="1759192335684" duration="3471000" />
+      <workItem from="1759192335684" duration="10369000" />
     </task>
     <task id="LOCAL-00001" summary="initial setup w/boilerplate">
       <option name="closed" value="true" />
@@ -398,7 +398,15 @@
       <option name="project" value="LOCAL" />
       <updated>1759193354009</updated>
     </task>
-    <option name="localTasksCounter" value="30" />
+    <task id="LOCAL-00030" summary="updated UI in config (hearts, timer, waterdrop)">
+      <option name="closed" value="true" />
+      <created>1759196407997</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1759196407997</updated>
+    </task>
+    <option name="localTasksCounter" value="31" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -422,7 +430,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="initial setup w/boilerplate" />
     <MESSAGE value="initial setup si w/boilerplate" />
     <MESSAGE value="assets and Lib added" />
     <MESSAGE value="basic scene and matrix prototype." />
@@ -447,6 +454,7 @@
     <MESSAGE value="Updated ReadMe" />
     <MESSAGE value="Updated assets + fixed bugs --&gt; CC still not working" />
     <MESSAGE value="updated mechanics and config!" />
-    <option name="LAST_COMMIT_MESSAGE" value="updated mechanics and config!" />
+    <MESSAGE value="updated UI in config (hearts, timer, waterdrop)" />
+    <option name="LAST_COMMIT_MESSAGE" value="updated UI in config (hearts, timer, waterdrop)" />
   </component>
 </project>

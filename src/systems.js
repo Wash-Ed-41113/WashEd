@@ -899,7 +899,7 @@ const cleancatcher = {
 
                     // right curve down
                     ctx.bezierCurveTo(
-                        item.x + item.width * 1.0, item.y + item.height * 1,  // outward control
+                        item.x + item.width * 1.0, item.y + item.height * 2,  // outward control
                         item.x + item.width * 0.8, item.y + item.height,        // bulging bottom right
                         item.x + item.width / 2, item.y + item.height           // bottom center
                     );
@@ -907,7 +907,7 @@ const cleancatcher = {
                     // left curve up
                     ctx.bezierCurveTo(
                         item.x + item.width * 0.2, item.y + item.height,        // bulging bottom left
-                        item.x, item.y + item.height * 1,                     // outward control
+                        item.x, item.y + item.height * 2,                     // outward control
                         item.x + item.width / 2, item.y                         // back to top point
                     );
 
