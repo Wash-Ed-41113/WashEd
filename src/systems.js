@@ -886,8 +886,18 @@ const cleancatcher = {
         function drawItems() {
             for (const item of items) {
                 if (item.type === "water") {
+                    // draw droplet shape
+                    ctx.beginPath();
+                    ctx.moveTo(item.x + item.width / 2, item.y); // top
+                    ctx.bezierCurveTo(item.x + item.width, item.y + item.height / 3,
+                        item.x + item.width * 0.75, item.y + item.height,
+                        item.x + item.width / 2, item.y + item.height);
+                    ctx.bezierCurveTo(item.x + item.width * 0.25, item.y + item.height,
+                        item.x, item.y + item.height / 3,
+                        item.x + item.width / 2, item.y);
+                    ctx.closePath();
                     ctx.fillStyle = "aqua";
-                    ctx.fillRect(item.x, item.y, item.width, item.height);
+                    ctx.fill();
                 } else {
                     if (germImg.complete && germImg.naturalWidth) {
                         ctx.drawImage(germImg, item.x, item.y, item.width, item.height);
@@ -897,9 +907,16 @@ const cleancatcher = {
                     }
                 }
                 ctx.fillStyle = "black";
-                ctx.font = "12px Arial";
+                ctx.font = "16px Arial";
                 ctx.fillText(item.word, item.x + 5, item.y + item.height / 1.5);
             }
+        }
+
+        //better time display
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, "0");
+            const s = (seconds % 60).toString().padStart(2, "0");
+            return `${m}:${s}`;
         }
 
         // draw score lives and time
@@ -907,8 +924,25 @@ const cleancatcher = {
             ctx.fillStyle = "black";
             ctx.font = "18px Arial";
             ctx.fillText("Score: " + score, 10, 20);
-            ctx.fillText("Lives: " + lives, 10, 40);
+
+            // draw hearts
+            const heartSize = 20;
+            for (let i = 0; i < lives; i++) {
+                ctx.beginPath();
+                const x = 10 + i * (heartSize + 5);
+                const y = 40;
+                ctx.moveTo(x + heartSize / 2, y + heartSize / 5);
+                ctx.bezierCurveTo(x + heartSize / 2, y, x, y, x, y + heartSize / 3);
+                ctx.bezierCurveTo(x, y + heartSize * 2/3, x + heartSize / 2, y + heartSize, x + heartSize / 2, y + heartSize);
+                ctx.bezierCurveTo(x + heartSize / 2, y + heartSize, x + heartSize, y + heartSize * 2/3, x + heartSize, y + heartSize / 3);
+                ctx.bezierCurveTo(x + heartSize, y, x + heartSize / 2, y, x + heartSize / 2, y + heartSize / 5);
+                ctx.fillStyle = "red";
+                ctx.fill();
+
             ctx.fillText("Time: " + timeLeft, canvas.width - 100, 20);
+            ctx.font = "28px Arial"; // bigger
+            ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
+
         }
 
         // move items down check collisions with player update stats and remove offscreen
