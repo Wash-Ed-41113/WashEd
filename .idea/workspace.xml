@@ -5,10 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="4a2dfc51-5122-496b-bb92-2ab480332f9a" name="Changes" comment="Swas merge trial">
-      <change afterPath="$PROJECT_DIR$/src/scenes/SchoolBathroomScene.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/scenes/EndingScene.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/scenes/PlaygroundScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/PlaygroundScene.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/scenes/MenuScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/MenuScene.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/scenes/SchoolBathroomScene.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/scenes/SchoolBathroomScene.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -50,12 +51,12 @@
     &quot;assignee&quot;: &quot;Swas26&quot;
   }
 }</component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "https://github.com/Wash-Ed-41113/WashEd.git",
-    "accountId": "d8526172-31e7-493f-80cc-9b98ddccf850"
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/Wash-Ed-41113/WashEd.git&quot;,
+    &quot;accountId&quot;: &quot;d8526172-31e7-493f-80cc-9b98ddccf850&quot;
   }
-}]]></component>
+}</component>
   <component name="ProblemsViewState">
     <option name="selectedTabId" value="CurrentFile" />
   </component>
@@ -76,12 +77,14 @@
     "DefaultHtmlFileTemplate": "HTML File",
     "JavaScript Debug.Index.html.executor": "Run",
     "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Node.js.MenuScene.js.executor": "Run",
     "Node.js.PlaygroundScene.js.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
     "git-widget-placeholder": "miya",
     "junie.onboarding.icon.badge.shown": "true",
+    "last_opened_file_path": "/Users/miyamacpro/Desktop/WashEd",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -169,7 +172,9 @@
       <workItem from="1758330564090" duration="4838000" />
       <workItem from="1758335556581" duration="27140000" />
       <workItem from="1758872422898" duration="331000" />
-      <workItem from="1759133452782" duration="10222000" />
+      <workItem from="1759133452782" duration="30918000" />
+      <workItem from="1759774680203" duration="32000" />
+      <workItem from="1759774713083" duration="5092000" />
     </task>
     <task id="LOCAL-00001" summary="initial setup w/boilerplate">
       <option name="closed" value="true" />
