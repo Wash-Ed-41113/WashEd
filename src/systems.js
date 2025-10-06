@@ -1,9 +1,6 @@
 // this module collects all shared helpers ui widgets mini game engines and simple menus
 // scenes import this module as systems to access these features
 // everything below is inline documented so you can read top to bottom and understand the flow
-import { DB } from "./db.js";
-
-
 
 
 // short names for config sections used throughout
@@ -1070,6 +1067,28 @@ const cleancatcher = {
         const soapImg = new Image();
         soapImg.src = A.soap || "";
 
+        const goodMessages = [
+            "Nice work!",
+            "Good catch!",
+            "We love clean water!",
+            "We love soap!",
+            "Keep going!",
+            "Great job!"
+        ];
+
+        const badMessages = [
+            "That’s a germ!",
+            "Oops, not that one!",
+            "Be careful! We don't want your hands to get more dirty!",
+            "Yikes, dirty water!",
+            "Watch out for those germs!"
+        ];
+
+// current message to display and timer
+        let currentMessage = "";       // the text to show
+        let messageTimer = 0;          // countdown for how long to display
+        const messageDuration = 60;    // frames (about 1 sec at 60fps)
+
 
         const goodWords = helpers.words.cleanGood();
         const badWords = helpers.words.cleanBad();
@@ -1144,11 +1163,25 @@ const cleancatcher = {
             const word = isGood ? helpers.words.pick(goodWords) : helpers.words.pick(badWords);
 
             let w, h, img;
+
             if (isGood) {
+                // randomly pick water or soap
                 img = Math.random() > 0.5 ? waterImg : soapImg;
-                w = img.width || CC.water?.width ?? 60;
-                h = img.height || CC.water?.height ?? 28;
+
+                if (img === soapImg) {
+                    // soap very small
+                    const gSize = sizeFrom(img, { width: 50, height: 50 });
+                    w = gSize.w;
+                    h = gSize.h;
+                } else {
+                    // water smaller than germs
+                    const gSize = sizeFrom(img, { width: 50, height: 50 });
+                    w = gSize.w;
+                    h = gSize.h;
+                }
+
             } else {
+                // germs normal size
                 img = germImg;
                 const gSize = sizeFrom(germImg, CC.germ || {}, 56);
                 w = gSize.w;
@@ -1176,6 +1209,7 @@ const cleancatcher = {
                 ctx.fillRect(player.x, player.y, player.width, player.height);
             }
         }
+
 
         // draw all items with labels
         function drawItems() {
@@ -1223,7 +1257,6 @@ const cleancatcher = {
             }
         }
 
-
         //better time display
         function formatTime(seconds) {
             const m = Math.floor(seconds / 60).toString().padStart(2, "0");
@@ -1236,7 +1269,15 @@ const cleancatcher = {
             ctx.font = "18px Arial";
             ctx.fillText("Score: " + score, 10, 20);
 
-            // draw hearts (unchanged)
+            if (messageTimer > 0 && currentMessage) {
+                ctx.fillStyle = "black";
+                ctx.font = "30px Montserrat";
+                ctx.textAlign = "center";
+                ctx.fillText(currentMessage, canvas.width / 2, canvas.height / 2 - 100);
+                messageTimer--;
+            }
+
+            // draw hearts
             const heartSize = 50;
             for (let i = 0; i < lives; i++) {
                 ctx.beginPath();
@@ -1280,23 +1321,35 @@ const cleancatcher = {
                 const item = items[i];
                 item.y += item.speed;
 
+                // check collision with player
                 if (helpers.aabbIntersect(
                     item.x, item.y, item.width, item.height,
                     player.x, player.y, player.width, player.height
                 )) {
-                    if (item.type === "water") {
+                    if (item.type === "good") {
                         score += 10;
+                        // pick a random positive message
+                        currentMessage = helpers.words.pick(goodMessages);
                     } else {
                         lives -= 1;
+                        // pick a random negative message
+                        currentMessage = helpers.words.pick(badMessages);
                         if (lives <= 0) gameOver = true;
                     }
+
+                    // reset message timer
+                    messageTimer = messageDuration;
+
+                    // remove the item from the array
                     items.splice(i, 1);
                     continue;
                 }
 
+                // remove items that fall off the screen
                 if (item.y > canvas.height) items.splice(i, 1);
             }
         }
+
 
         // input events arrow keys and mouse move
         const onKeyDown = (e) => {
