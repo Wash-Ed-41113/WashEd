@@ -1065,6 +1065,11 @@ const cleancatcher = {
         background.src = A.background || "";
         const germImg = new Image();
         germImg.src = A.germ || "";
+        const waterImg = new Image();
+        waterImg.src = A.waterDroplet || "";
+        const soapImg = new Image();
+        soapImg.src = A.soap || "";
+
 
         const goodWords = helpers.words.cleanGood();
         const badWords = helpers.words.cleanBad();
@@ -1110,7 +1115,7 @@ const cleancatcher = {
         const playerImg = new Image();
         playerImg.src = (A.player || "");
 
-        let pSize = sizeFrom(playerImg, P, 270);
+        let pSize = sizeFrom(playerImg, P, 290);
         const player = {
             x: (canvas.width - pSize.w) / 2,
             y: canvas.height - (P.bottom ?? 30) - pSize.h,
@@ -1135,26 +1140,29 @@ const cleancatcher = {
 
         // spawn either water or germ with a label and speed
         function spawnItem() {
-            const isWater = Math.random() > 0.4;
-            const word = isWater ? helpers.words.pick(goodWords) : helpers.words.pick(badWords);
+            const isGood = Math.random() > 0.4; // good or bad
+            const word = isGood ? helpers.words.pick(goodWords) : helpers.words.pick(badWords);
 
-            let w, h;
-            if (isWater) {
-                w = CC.water?.width ?? 60;
-                h = CC.water?.height ?? 28;
+            let w, h, img;
+            if (isGood) {
+                img = Math.random() > 0.5 ? waterImg : soapImg;
+                w = img.width || CC.water?.width ?? 60;
+                h = img.height || CC.water?.height ?? 28;
             } else {
+                img = germImg;
                 const gSize = sizeFrom(germImg, CC.germ || {}, 56);
                 w = gSize.w;
                 h = gSize.h;
             }
 
             items.push({
-                x: Math.random() * Math.max(1, (canvas.width - w)),
+                x: Math.random() * Math.max(1, canvas.width - w),
                 y: 0,
                 width: w,
                 height: h,
-                type: isWater ? "water" : "germ",
+                type: isGood ? "good" : "bad",
                 word,
+                img,
                 speed: 2 + Math.random() * 2
             });
         }
@@ -1172,40 +1180,49 @@ const cleancatcher = {
         // draw all items with labels
         function drawItems() {
             for (const item of items) {
-                if (item.type === "water") {
-                    // draw droplet shape (teardrop)
-                    ctx.beginPath();
-                    ctx.moveTo(item.x + item.width / 2, item.y); // sharp top point
-                    // right curve down
-                    ctx.bezierCurveTo(
-                        item.x + item.width * 1.0, item.y + item.height * 0.8,  // outward control
-                        item.x + item.width * 0.8, item.y + item.height,        //bottom right
-                        item.x + item.width / 2, item.y + item.height           // bottom center
-                    );
-                    // left curve up
-                    ctx.bezierCurveTo(
-                        item.x + item.width * 0.2, item.y + item.height,        // bottom left
-                        item.x, item.y + item.height * 0.8,                     // outward control
-                        item.x + item.width / 2, item.y                         // back to top point
-                    );
-
-                    ctx.closePath();
-                    ctx.fillStyle = "aqua";
-                    ctx.fill();
-
+                // Draw the assigned image for this item
+                let img;
+                if (item.type === "good") {
+                    // randomly pick water or soap for good items
+                    img = item.img || (Math.random() > 0.5 ? waterImg : soapImg);
                 } else {
-                    if (germImg.complete && germImg.naturalWidth) {
-                        ctx.drawImage(germImg, item.x, item.y, item.width, item.height);
+                    img = germImg;
+                }
+
+                if (img && img.complete && img.naturalWidth) {
+                    ctx.drawImage(img, item.x, item.y, item.width, item.height);
+                } else {
+                    // fallback shapes
+                    if (item.type === "good") {
+                        ctx.fillStyle = "aqua";
+                        ctx.beginPath();
+                        ctx.moveTo(item.x + item.width / 2, item.y);
+                        ctx.bezierCurveTo(
+                            item.x + item.width * 1.0, item.y + item.height * 0.8,
+                            item.x + item.width * 0.8, item.y + item.height,
+                            item.x + item.width / 2, item.y + item.height
+                        );
+                        ctx.bezierCurveTo(
+                            item.x + item.width * 0.2, item.y + item.height,
+                            item.x, item.y + item.height * 0.8,
+                            item.x + item.width / 2, item.y
+                        );
+                        ctx.closePath();
+                        ctx.fill();
                     } else {
                         ctx.fillStyle = "red";
                         ctx.fillRect(item.x, item.y, item.width, item.height);
                     }
                 }
+
+                // Draw word below the image
                 ctx.fillStyle = "black";
-                ctx.font = "20px Arial";
-                ctx.fillText(item.word, item.x + 5, item.y + item.height / 1.5);
+                ctx.font = "24px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
             }
         }
+
 
         //better time display
         function formatTime(seconds) {
@@ -1322,7 +1339,7 @@ const cleancatcher = {
 
             if (gameOver) {
                 ctx.fillStyle = "black";
-                ctx.font = "30px Arial";
+                ctx.font = "40px Arial";
                 ctx.fillText("Game Over!", canvas.width / 2 - 80, canvas.height / 2);
                 ctx.fillText("Score: " + score, canvas.width / 2 - 60, canvas.height / 2 + 40);
                 return;
