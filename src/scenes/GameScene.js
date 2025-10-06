@@ -72,7 +72,7 @@ export default class GameScene extends Phaser.Scene {
         const messages = [
             `Hi, ${playerName}!`,
             `Welcome to Kiko's Day!`,
-            `Can you help my day today?`,
+            `Can you help me today?`,
             "Select your difficulty!",
         ];
 

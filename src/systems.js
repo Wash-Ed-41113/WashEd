@@ -1047,7 +1047,6 @@ const soapsplash = (() => {
 
 // -----------------------------
 // clean catch engine
-// simple html canvas arcade mini game running inside a phaser scene
 // returns an object with destroy and setPaused so the scene can control it
 // -----------------------------
 const cleancatcher = {
@@ -1111,7 +1110,7 @@ const cleancatcher = {
         const playerImg = new Image();
         playerImg.src = (A.player || "");
 
-        let pSize = sizeFrom(playerImg, P, 180);
+        let pSize = sizeFrom(playerImg, P, 270);
         const player = {
             x: (canvas.width - pSize.w) / 2,
             y: canvas.height - (P.bottom ?? 30) - pSize.h,
@@ -1177,18 +1176,16 @@ const cleancatcher = {
                     // draw droplet shape (teardrop)
                     ctx.beginPath();
                     ctx.moveTo(item.x + item.width / 2, item.y); // sharp top point
-
                     // right curve down
                     ctx.bezierCurveTo(
-                        item.x + item.width * 1.0, item.y + item.height * 2,  // outward control
-                        item.x + item.width * 0.8, item.y + item.height,        // bulging bottom right
+                        item.x + item.width * 1.0, item.y + item.height * 0.8,  // outward control
+                        item.x + item.width * 0.8, item.y + item.height,        //bottom right
                         item.x + item.width / 2, item.y + item.height           // bottom center
                     );
-
                     // left curve up
                     ctx.bezierCurveTo(
-                        item.x + item.width * 0.2, item.y + item.height,        // bulging bottom left
-                        item.x, item.y + item.height * 2,                     // outward control
+                        item.x + item.width * 0.2, item.y + item.height,        // bottom left
+                        item.x, item.y + item.height * 0.8,                     // outward control
                         item.x + item.width / 2, item.y                         // back to top point
                     );
 
@@ -1222,7 +1219,7 @@ const cleancatcher = {
             ctx.font = "18px Arial";
             ctx.fillText("Score: " + score, 10, 20);
 
-            // draw hearts
+            // draw hearts (unchanged)
             const heartSize = 50;
             for (let i = 0; i < lives; i++) {
                 ctx.beginPath();
@@ -1237,11 +1234,28 @@ const cleancatcher = {
                 ctx.fill();
             }
 
+            // centered timer with white background
+            const timerText = formatTime(timeLeft);
+            ctx.font = "40px Arial";
+            const textWidth = ctx.measureText(timerText).width;
+            const padding = 10;
+            const boxX = (canvas.width - textWidth) / 2 - padding;
+            const boxY = 10;
+            const boxWidth = textWidth + padding * 2;
+            const boxHeight = 50;
+
+            ctx.fillStyle = "white";
+            ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+            ctx.fillStyle = "black";
+            ctx.fillText(timerText, canvas.width / 2 - textWidth / 2, 45);
+            }
+
             // time display
             ctx.fillStyle = "black";
             ctx.font = "40px Arial";
             ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
-        }
+
 
         // move items down, check collisions, update stats, remove offscreen
         function updateItems() {
