@@ -1,7 +1,7 @@
 // this module collects all shared helpers ui widgets mini game engines and simple menus
 // scenes import this module as systems to access these features
 // everything below is inline documented so you can read top to bottom and understand the flow
-
+import { DB } from "./db.js";
 
 // short names for config sections used throughout
 const SS = CONFIG.soapSplash;   // soap splash game config values
