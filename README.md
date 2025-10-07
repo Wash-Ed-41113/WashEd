@@ -7,8 +7,8 @@ The project is structured around a single shared logic hub: [`src/systems.js`](s
 
 ## Games included
 
-- **Soap Splash** – type words to defeat germs before they reach the sink.
-- **Clean Catch** – catch clean water, avoid germs, simple canvas-based game.
+- **Germ Scrubber** – type words to defeat germs before they reach the sink.
+- **Soap Splasher** – catch clean water, avoid germs, simple canvas-based game.
 - **Playground** – animated sandbox scene with Kiko. Later updates to bathrom main menu
 
 ---
