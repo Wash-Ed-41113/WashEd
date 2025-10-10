@@ -1251,7 +1251,7 @@ const cleancatcher = {
 
                 // Draw word below the image
                 ctx.fillStyle = "black";
-                ctx.font = "24px Arial";
+                ctx.font = "24px Chewy";
                 ctx.textAlign = "center";
                 ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
             }
@@ -1266,7 +1266,7 @@ const cleancatcher = {
         // draw score, lives and time
         function drawUI() {
             ctx.fillStyle = "black";
-            ctx.font = "18px Arial";
+            ctx.font = "18px Chewy";
             ctx.fillText("Score: " + score, 10, 20);
 
             if (messageTimer > 0 && currentMessage) {
@@ -1294,7 +1294,7 @@ const cleancatcher = {
 
             // centered timer with white background
             const timerText = formatTime(timeLeft);
-            ctx.font = "40px Arial";
+            ctx.font = "40px Chewy";
             const textWidth = ctx.measureText(timerText).width;
             const padding = 10;
             const boxX = (canvas.width - textWidth) / 2 - padding;
@@ -1311,7 +1311,7 @@ const cleancatcher = {
 
             // time display
             ctx.fillStyle = "black";
-            ctx.font = "40px Arial";
+            ctx.font = "40px Chewy";
             ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
 
 
@@ -1392,7 +1392,7 @@ const cleancatcher = {
 
             if (gameOver) {
                 ctx.fillStyle = "black";
-                ctx.font = "40px Arial";
+                ctx.font = "40px Chewy";
                 ctx.fillText("Game Over!", canvas.width / 2 - 80, canvas.height / 2);
                 ctx.fillText("Score: " + score, canvas.width / 2 - 60, canvas.height / 2 + 40);
                 return;
