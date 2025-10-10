@@ -112,6 +112,14 @@ export default class GameScene extends Phaser.Scene {
                     }
                 },
             });
+
+            // inside create(), after you create nextBtn/nextLabel and define startTyping(...)
+
+
+// bind keys with .on once here
+            this.input.keyboard.on("keydown-SPACE", onNext);
+            this.input.keyboard.on("keydown-ENTER", onNext);
+
             updateNextLabel();
         };
 
@@ -130,37 +138,63 @@ export default class GameScene extends Phaser.Scene {
 
         // click or keypress logic for next behavior
         const onNext = () => {
-            // if typing then skip to end of current message
+            if (this._navigating) return;
+
+            // --- still typing? finish instantly ---
             if (this._typing.isRunning) {
-                if (this._typing.timer) {
-                    this._typing.timer.remove(false);
-                    this._typing.timer = null;
-                }
+                if (this._typing.timer) { this._typing.timer.remove(false); this._typing.timer = null; }
                 this._typing.isRunning = false;
                 greetText.setText(this._typing.currentFull);
-                updateNextLabel();
                 return;
             }
 
-            // advance to next message or finish the sequence
+            // --- next message ---
             if (this._typing.msgIndex < messages.length - 1) {
                 this._typing.msgIndex += 1;
                 startTyping(messages[this._typing.msgIndex]);
-            } else {
-                // fade out bubble and show difficulty selection panel
-                nextBtn.disableInteractive();
-                nextLabel.disableInteractive();
-
-                this.tweens.add({
-                    targets: [bubble, greetText, nextBtn, nextLabel],
-                    alpha: 0, duration: 280, ease: "Cubic.Out",
-                    onComplete: () => {
-                        bubble.destroy(); greetText.destroy(); nextBtn.destroy(); nextLabel.destroy();
-                        this.showDifficultyPanel({ bubbleX, bubbleY, bubbleW, bubbleH });
-                    },
-                });
+                return;
             }
+
+            // --- transition to difficulty panel ---
+            this._navigating = true;
+
+            // unbind keyboard keys to avoid repeat
+            this.input.keyboard.off("keydown-SPACE", onNext);
+            this.input.keyboard.off("keydown-ENTER", onNext);
+
+            // remove pointer listeners safely
+            nextBtn?.removeAllListeners?.();
+            nextLabel?.removeAllListeners?.();
+
+            // fade out the speech UI
+            this.tweens.add({
+                targets: [bubble, greetText, nextBtn, nextLabel],
+                alpha: 0,
+                duration: 280,
+                ease: "Cubic.Out",
+                onComplete: () => {
+                    // destroy old UI
+                    bubble?.destroy?.();
+                    greetText?.destroy?.();
+                    nextBtn?.destroy?.();
+                    nextLabel?.destroy?.();
+
+                    //  re-enable input BEFORE building next panel
+                    this.input.enabled = true;
+                    this._navigating = false;
+
+
+                    // show difficulty panel
+                    this.showDifficultyPanel({ bubbleX, bubbleY, bubbleW, bubbleH });
+                }
+            });
         };
+
+
+// bind once
+        this.input.keyboard.on("keydown-SPACE", onNext);
+        this.input.keyboard.on("keydown-ENTER", onNext);
+
 
         // wire up interactions for next
         nextBtn.on("pointerdown", onNext);
@@ -254,7 +288,11 @@ export default class GameScene extends Phaser.Scene {
             // finalize selection then transition to mode panel
             const finalizeSelection = (difficultyKey, btn, txt) => {
                 if (this._navigating) return;
-                this.registry.set("difficulty", difficultyKey);
+
+                // map UI choice -> numeric level for the registry (1 easy, 2 normal, 3 hard)
+                const lvlMap = { easy: 1, normal: 2, hard: 3 };
+                this.registry.set("difficulty", lvlMap[difficultyKey] ?? 2);
+
                 selectedDifficulty = difficultyKey;
                 disableAll();
 

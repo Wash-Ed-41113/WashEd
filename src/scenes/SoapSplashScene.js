@@ -65,24 +65,102 @@ export default class SoapSplashScene extends Phaser.Scene {
 
 
     // preload background images for breach stages and the germ sprite
+    // preload background images for breach stages and the germ sprite
     preload() {
-        // get the list of background paths from CONFIG soap splash
         const set = CONFIG.assets.soapSplash.backgrounds;
-        // register each image with a generated key and keep the keys array for later swapping
         this._bgKeys = set.map((path, i) => {
             const key = `SS_BG_${i}`;
             this.load.image(key, path);
             return key;
         });
 
-        // load the germ sprite used for all germs
+        // video sources can be a string or an array from config
+        const vids = CONFIG.assets?.soapSplash?.backgroundVid;
+        if (vids) {
+            const sources = Array.isArray(vids) ? vids : [vids];
+            // load video with alpha webm first then mp4 fallback
+            // wait for loadeddata no audio to avoid autoplay block
+            this.load.video("SS_BG_VIDEO", sources, "loadeddata", false, true);
+        }
+
+        // optional png frames fallback config
+        // expects { dir: "assets/hands_frames", count: 90, zeroPad: 3 }
+        const frames = CONFIG.assets?.soapSplash?.handsFrames;
+        if (frames?.dir && frames?.count) {
+            const z = frames.zeroPad ?? 3;
+            for (let i = 1; i <= frames.count; i++) {
+                const n = String(i).padStart(z, "0");
+                this.load.image(`HANDS_${n}`, `${frames.dir}/hands_${n}.png`);
+            }
+        }
+
         this.load.image("Germ", CONFIG.assets.soapSplash.germ);
     }
+
 
     // create sets up geometry ui timer typing and visual effects
     create() {
         // short name for soap splash config
         const SS = CONFIG.soapSplash;
+
+
+        // // TEMP: quick keys to test difficulty without the menu wiring
+        // this.input.keyboard.on("keydown-ONE", () => { this.registry.set("difficulty", 1); this.scene.restart(); });
+        // this.input.keyboard.on("keydown-TWO", () => { this.registry.set("difficulty", 2); this.scene.restart(); });
+        // this.input.keyboard.on("keydown-THREE", () => { this.registry.set("difficulty", 3); this.scene.restart(); });
+
+
+        // ---- DIFFICULTY (numeric: 1,2,3) ----
+        const level = Phaser.Math.Clamp(Number(this.registry.get("difficulty") || 2), 1, 3);
+
+        // accept both numeric and legacy string difficulty in WordBank
+        const matchDiff = (d, lvl) => {
+            if (d == null) return (lvl === 2);                 // only show untagged words on Normal
+            if (typeof d === "number") return d === lvl;       // numeric 1/2/3
+            if (typeof d === "string") {                        // legacy: "easy|normal|hard"
+                const m = { easy: 1, normal: 2, hard: 3 }[d.toLowerCase()];
+                return (m || 2) === lvl;
+            }
+            return false;
+        };
+
+        // prefer the full JSON we cached in PreloadScene
+        const WB = (CONFIG.words || []);
+
+        // SoapSplash only uses "Good" words to type
+        const wordsByLevel = WB
+            .filter(w => w.type === "Good" && matchDiff(w.difficulty, level))
+            .map(w => w.word);
+
+        // if nothing matched for this level, fall back to all "Good"
+        SS.words = wordsByLevel.length ? wordsByLevel : (WB.filter(w => w.type === "Good").map(w => w.word));
+
+        // gameplay scaling by numeric level
+        switch (level) {
+            case 1: // easy
+                SS.spawnEveryMs   = 1600;   // slower spawns
+                SS.spawnIntervalMs = SS.spawnEveryMs; // keep both names happy
+                SS.spawnJitterMs  = 120;
+                SS.germBaseSpeed  = 70;     // slower movement
+                SS.maxGerms       = 5;
+                break;
+            case 3: // hard
+                SS.spawnEveryMs   = 900;
+                SS.spawnIntervalMs = SS.spawnEveryMs;
+                SS.spawnJitterMs  = 160;
+                SS.germBaseSpeed  = 120;
+                SS.maxGerms       = 10;
+                break;
+            default: // 2 normal
+                SS.spawnEveryMs   = 1200;
+                SS.spawnIntervalMs = SS.spawnEveryMs;
+                SS.spawnJitterMs  = 140;
+                SS.germBaseSpeed  = 100;
+                SS.maxGerms       = 8;
+                break;
+        }
+
+
 
         // restore persisted mute setting
         const savedMute = this.registry.get("mute") === true;
@@ -121,14 +199,42 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         // add the initial background image or a solid fallback rectangle
         const firstKey = this._bgKeys[0] || null;
+        // bgSprite is your static fallback image
         this.bgSprite = firstKey
-            ? this.add
-                .sprite(SS.width / 2, SS.height / 2, firstKey)
-                .setDepth(0)
+            ? this.add.sprite(SS.width / 2, SS.height / 2, firstKey)
+                .setDepth(0) // fallback stays below video
                 .setDisplaySize(SS.width, SS.height)
-            : this.add
-                .rectangle(0, 0, SS.width, SS.height, 0x1b2a3a, 1)
-                .setOrigin(0, 0);
+            : this.add.rectangle(0, 0, SS.width, SS.height, 0x1b2a3a, 1).setOrigin(0, 0).setDepth(0);
+
+
+        // === VIDEO LAYER (transparent hands_alpha.webm, small inset) ===
+        {
+            const SS = CONFIG.soapSplash;
+            const W = SS.width, H = SS.height;
+
+            // add the transparent webm directly
+            this.bgVideo = this.add.video(W * 0.53, H * 0.15, "SS_BG_VIDEO")
+                .setOrigin(0.5)
+                .setDepth(3)
+                .setLoop(true)
+                .setMute(true)
+                .setScale(0.30)
+                .play(true);
+
+            // force it to stay small and never resize
+            const targetW = W * 0.18; // 18% of scene width
+            this.bgVideo.on("loadeddata", () => {
+                const vw = this.bgVideo.video?.videoWidth || 640;
+                const scale = targetW / vw;
+                this.bgVideo.setScale(scale);
+            });
+
+            // make sure no auto-fit logic resizes it again
+            this.bgVideo.removeAllListeners("resize");
+            this.scale?.off("resize");
+        }
+
+
 
         // set up spawn ring in the top right corner if the spawner mode is enabled
         if (SS.useSpawner) {
