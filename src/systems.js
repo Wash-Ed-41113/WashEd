@@ -3,9 +3,6 @@
 // everything below is inline documented so you can read top to bottom and understand the flow
 import { DB } from "./db.js";
 
-
-
-
 // short names for config sections used throughout
 const SS = CONFIG.soapSplash;   // soap splash game config values
 const CC = CONFIG.cleanCatch;   // clean catch game config values
@@ -1047,7 +1044,6 @@ const soapsplash = (() => {
 
 // -----------------------------
 // clean catch engine
-// simple html canvas arcade mini game running inside a phaser scene
 // returns an object with destroy and setPaused so the scene can control it
 // -----------------------------
 const cleancatcher = {
@@ -1062,42 +1058,75 @@ const cleancatcher = {
 
         // images and word lists
         const A = CONFIG.assets.cleanCatch || {};
-        const background = new Image(); background.src = A.background || "";
-        const germImg    = new Image(); germImg.src    = A.germ || "";
+        const background = new Image();
+        background.src = A.background || "";
+        const germImg = new Image();
+        germImg.src = A.germ || "";
+        const waterImg = new Image();
+        waterImg.src = A.waterDroplet || "";
+        const soapImg = new Image();
+        soapImg.src = A.soap || "";
+
+        const goodMessages = [
+            "Nice work!",
+            "Good catch!",
+            "We love clean water!",
+            "We love soap!",
+            "Keep going!",
+            "Great job!"
+        ];
+
+        const badMessages = [
+            "That’s a germ!",
+            "Oops, not that one!",
+            "Be careful! We don't want your hands to get more dirty!",
+            "Yikes, dirty water!",
+            "Watch out for those germs!"
+        ];
+
+// current message to display and timer
+        let currentMessage = "";       // the text to show
+        let messageTimer = 0;          // countdown for how long to display
+        const messageDuration = 60;    // frames (about 1 sec at 60fps)
+
 
         const goodWords = helpers.words.cleanGood();
-        const badWords  = helpers.words.cleanBad();
+        const badWords = helpers.words.cleanBad();
 
         // helpers for sizing images with aspect ratio and constraints
         function aspect(img) {
             const w = img.naturalWidth || 0, h = img.naturalHeight || 0;
-            return { w, h, r: (w && h) ? w / h : 1 };
+            return {w, h, r: (w && h) ? w / h : 1};
         }
+
         function sizeFrom(img, opts = {}, defaultSquare = 120) {
-            const { w: iw, h: ih, r } = aspect(img);
+            const {w: iw, h: ih, r} = aspect(img);
             const fallback = opts.fallbackSize ?? defaultSquare;
+
 
             if (opts.width != null && opts.height != null) {
                 let W = opts.width, H = opts.height;
                 if (opts.maxPixels) {
                     const k = Math.min(opts.maxPixels / W, opts.maxPixels / H, 1);
-                    W = Math.round(W * k); H = Math.round(H * k);
+                    W = Math.round(W * k);
+                    H = Math.round(H * k);
                 }
-                return { w: W, h: H };
+                return {w: W, h: H};
             }
-            if (opts.width != null)  return { w: opts.width,  h: Math.round(opts.width  / (r || 1)) };
-            if (opts.height != null) return { w: Math.round(opts.height * (r || 1)), h: opts.height };
+            if (opts.width != null) return {w: opts.width, h: Math.round(opts.width / (r || 1))};
+            if (opts.height != null) return {w: Math.round(opts.height * (r || 1)), h: opts.height};
 
             if (opts.scale != null && iw > 0 && ih > 0) {
                 let W = Math.max(1, Math.round(iw * opts.scale));
                 let H = Math.max(1, Math.round(ih * opts.scale));
                 if (opts.maxPixels) {
                     const k = Math.min(opts.maxPixels / W, opts.maxPixels / H, 1);
-                    W = Math.round(W * k); H = Math.round(H * k);
+                    W = Math.round(W * k);
+                    H = Math.round(H * k);
                 }
-                return { w: W, h: H };
+                return {w: W, h: H};
             }
-            return { w: fallback, h: fallback };
+            return {w: fallback, h: fallback};
         }
 
         // build player state and apply image sizing
@@ -1105,11 +1134,11 @@ const cleancatcher = {
         const playerImg = new Image();
         playerImg.src = (A.player || "");
 
-        let pSize = sizeFrom(playerImg, P, 180);
+        let pSize = sizeFrom(playerImg, P, 290);
         const player = {
             x: (canvas.width - pSize.w) / 2,
             y: canvas.height - (P.bottom ?? 30) - pSize.h,
-            width:  pSize.w,
+            width: pSize.w,
             height: pSize.h,
             dx: 0
         };
@@ -1118,7 +1147,7 @@ const cleancatcher = {
         playerImg.onload = () => {
             pSize = sizeFrom(playerImg, P, 180);
             const baseline = canvas.height - (P.bottom ?? 30);
-            player.width  = pSize.w;
+            player.width = pSize.w;
             player.height = pSize.h;
             player.x = helpers.clamp(player.x, 0, canvas.width - player.width);
             player.y = baseline - player.height;
@@ -1130,25 +1159,43 @@ const cleancatcher = {
 
         // spawn either water or germ with a label and speed
         function spawnItem() {
-            const isWater = Math.random() > 0.4;
-            const word = isWater ? helpers.words.pick(goodWords) : helpers.words.pick(badWords);
+            const isGood = Math.random() > 0.4; // good or bad
+            const word = isGood ? helpers.words.pick(goodWords) : helpers.words.pick(badWords);
 
-            let w, h;
-            if (isWater) {
-                w = CC.water?.width ?? 60;
-                h = CC.water?.height ?? 28;
+            let w, h, img;
+
+            if (isGood) {
+                // randomly pick water or soap
+                img = Math.random() > 0.5 ? waterImg : soapImg;
+
+                if (img === soapImg) {
+                    // soap very small
+                    const gSize = sizeFrom(img, { width: 50, height: 50 });
+                    w = gSize.w;
+                    h = gSize.h;
+                } else {
+                    // water smaller than germs
+                    const gSize = sizeFrom(img, { width: 50, height: 50 });
+                    w = gSize.w;
+                    h = gSize.h;
+                }
+
             } else {
+                // germs normal size
+                img = germImg;
                 const gSize = sizeFrom(germImg, CC.germ || {}, 56);
-                w = gSize.w; h = gSize.h;
+                w = gSize.w;
+                h = gSize.h;
             }
 
             items.push({
-                x: Math.random() * Math.max(1, (canvas.width - w)),
+                x: Math.random() * Math.max(1, canvas.width - w),
                 y: 0,
                 width: w,
                 height: h,
-                type: isWater ? "water" : "germ",
+                type: isGood ? "good" : "bad",
                 word,
+                img,
                 speed: 2 + Math.random() * 2
             });
         }
@@ -1163,62 +1210,150 @@ const cleancatcher = {
             }
         }
 
+
         // draw all items with labels
         function drawItems() {
             for (const item of items) {
-                if (item.type === "water") {
-                    ctx.fillStyle = "aqua";
-                    ctx.fillRect(item.x, item.y, item.width, item.height);
+                // Draw the assigned image for this item
+                let img;
+                if (item.type === "good") {
+                    // randomly pick water or soap for good items
+                    img = item.img || (Math.random() > 0.5 ? waterImg : soapImg);
                 } else {
-                    if (germImg.complete && germImg.naturalWidth) {
-                        ctx.drawImage(germImg, item.x, item.y, item.width, item.height);
+                    img = germImg;
+                }
+
+                if (img && img.complete && img.naturalWidth) {
+                    ctx.drawImage(img, item.x, item.y, item.width, item.height);
+                } else {
+                    // fallback shapes
+                    if (item.type === "good") {
+                        ctx.fillStyle = "aqua";
+                        ctx.beginPath();
+                        ctx.moveTo(item.x + item.width / 2, item.y);
+                        ctx.bezierCurveTo(
+                            item.x + item.width * 1.0, item.y + item.height * 0.8,
+                            item.x + item.width * 0.8, item.y + item.height,
+                            item.x + item.width / 2, item.y + item.height
+                        );
+                        ctx.bezierCurveTo(
+                            item.x + item.width * 0.2, item.y + item.height,
+                            item.x, item.y + item.height * 0.8,
+                            item.x + item.width / 2, item.y
+                        );
+                        ctx.closePath();
+                        ctx.fill();
                     } else {
                         ctx.fillStyle = "red";
                         ctx.fillRect(item.x, item.y, item.width, item.height);
                     }
                 }
+
+                // Draw word below the image
                 ctx.fillStyle = "black";
-                ctx.font = "12px Arial";
-                ctx.fillText(item.word, item.x + 5, item.y + item.height / 1.5);
+                ctx.font = "24px Chewy";
+                ctx.textAlign = "center";
+                ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
             }
         }
 
-        // draw score lives and time
+        //better time display
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, "0");
+            const s = (seconds % 60).toString().padStart(2, "0");
+            return `${m}:${s}`;}
+
+        // draw score, lives and time
         function drawUI() {
             ctx.fillStyle = "black";
-            ctx.font = "18px Arial";
+            ctx.font = "18px Chewy";
             ctx.fillText("Score: " + score, 10, 20);
-            ctx.fillText("Lives: " + lives, 10, 40);
-            ctx.fillText("Time: " + timeLeft, canvas.width - 100, 20);
-        }
 
-        // move items down check collisions with player update stats and remove offscreen
+            if (messageTimer > 0 && currentMessage) {
+                ctx.fillStyle = "black";
+                ctx.font = "30px Montserrat";
+                ctx.textAlign = "center";
+                ctx.fillText(currentMessage, canvas.width / 2, canvas.height / 2 - 100);
+                messageTimer--;
+            }
+
+            // draw hearts
+            const heartSize = 50;
+            for (let i = 0; i < lives; i++) {
+                ctx.beginPath();
+                const x = 10 + i * (heartSize + 5);
+                const y = 40;
+                ctx.moveTo(x + heartSize / 2, y + heartSize / 5);
+                ctx.bezierCurveTo(x + heartSize / 2, y, x, y, x, y + heartSize / 3);
+                ctx.bezierCurveTo(x, y + heartSize * 2 / 3, x + heartSize / 2, y + heartSize, x + heartSize / 2, y + heartSize);
+                ctx.bezierCurveTo(x + heartSize / 2, y + heartSize, x + heartSize, y + heartSize * 2 / 3, x + heartSize, y + heartSize / 3);
+                ctx.bezierCurveTo(x + heartSize, y, x + heartSize / 2, y, x + heartSize / 2, y + heartSize / 5);
+                ctx.fillStyle = "red";
+                ctx.fill();
+            }
+
+            // centered timer with white background
+            const timerText = formatTime(timeLeft);
+            ctx.font = "40px Chewy";
+            const textWidth = ctx.measureText(timerText).width;
+            const padding = 10;
+            const boxX = (canvas.width - textWidth) / 2 - padding;
+            const boxY = 10;
+            const boxWidth = textWidth + padding * 2;
+            const boxHeight = 50;
+
+            ctx.fillStyle = "white";
+            ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+            ctx.fillStyle = "black";
+            ctx.fillText(timerText, canvas.width / 2 - textWidth / 2, 45);
+            }
+
+            // time display
+            ctx.fillStyle = "black";
+            ctx.font = "40px Chewy";
+            ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
+
+
+        // move items down, check collisions, update stats, remove offscreen
         function updateItems() {
             for (let i = items.length - 1; i >= 0; i--) {
                 const item = items[i];
                 item.y += item.speed;
 
+                // check collision with player
                 if (helpers.aabbIntersect(
                     item.x, item.y, item.width, item.height,
                     player.x, player.y, player.width, player.height
                 )) {
-                    if (item.type === "water") {
+                    if (item.type === "good") {
                         score += 10;
+                        // pick a random positive message
+                        currentMessage = helpers.words.pick(goodMessages);
                     } else {
                         lives -= 1;
+                        // pick a random negative message
+                        currentMessage = helpers.words.pick(badMessages);
                         if (lives <= 0) gameOver = true;
                     }
+
+                    // reset message timer
+                    messageTimer = messageDuration;
+
+                    // remove the item from the array
                     items.splice(i, 1);
                     continue;
                 }
 
+                // remove items that fall off the screen
                 if (item.y > canvas.height) items.splice(i, 1);
             }
         }
 
+
         // input events arrow keys and mouse move
         const onKeyDown = (e) => {
-            if (e.key === "ArrowLeft")  player.dx = -5;
+            if (e.key === "ArrowLeft") player.dx = -5;
             if (e.key === "ArrowRight") player.dx = 5;
         };
         const onKeyUp = (e) => {
@@ -1257,7 +1392,7 @@ const cleancatcher = {
 
             if (gameOver) {
                 ctx.fillStyle = "black";
-                ctx.font = "30px Arial";
+                ctx.font = "40px Chewy";
                 ctx.fillText("Game Over!", canvas.width / 2 - 80, canvas.height / 2);
                 ctx.fillText("Score: " + score, canvas.width / 2 - 60, canvas.height / 2 + 40);
                 return;
@@ -1276,7 +1411,7 @@ const cleancatcher = {
             if (rafId) cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(frame);
 
-            if (!moveInterval)  moveInterval  = setInterval(movePlayer, 16);
+            if (!moveInterval) moveInterval = setInterval(movePlayer, 16);
             if (!spawnInterval) spawnInterval = setInterval(spawnItem, 1000);
             if (!timerInterval) timerInterval = setInterval(() => {
                 if (!paused && !gameOver) {
@@ -1288,10 +1423,22 @@ const cleancatcher = {
 
         // stop every loop and clear ids
         function stopLoops() {
-            if (rafId)          { cancelAnimationFrame(rafId);  rafId = null; }
-            if (moveInterval)   { clearInterval(moveInterval);  moveInterval = null; }
-            if (spawnInterval)  { clearInterval(spawnInterval); spawnInterval = null; }
-            if (timerInterval)  { clearInterval(timerInterval); timerInterval = null; }
+            if (rafId) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+            if (moveInterval) {
+                clearInterval(moveInterval);
+                moveInterval = null;
+            }
+            if (spawnInterval) {
+                clearInterval(spawnInterval);
+                spawnInterval = null;
+            }
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
         }
 
         // allow external control of pause state from the phaser scene
@@ -1314,7 +1461,7 @@ const cleancatcher = {
         startLoops();
 
         // expose control surface to the owning scene
-        return { destroy, setPaused };
+        return {destroy, setPaused};
     }
 };
 
@@ -1323,7 +1470,7 @@ const cleancatcher = {
 // -----------------------------
 const menu = {
     build(scene, spec) {
-        const { width, height } = scene.scale;
+        const {width, height} = scene.scale;
         const gap = 96;
         const startY = height * 0.45;
         return spec.map((s, i) => {
@@ -1338,8 +1485,10 @@ const menu = {
 // scenes import this default to access helpers ui and game engines
 // legacy aliases are included for convenience
 // -----------------------------
-const systems = { helpers, ui, soapsplash, cleancatcher, menu,
+const systems = {
+    helpers, ui, soapsplash, cleancatcher, menu,
     spawn: soapsplash.spawn, movement: soapsplash.movement,
-    rules: soapsplash.rules, timer: soapsplash.timer, typing: soapsplash.typing,
+    rules: soapsplash.rules, timer: soapsplash.timer, typing: soapsplash.typing
 };
+
 export default systems;
