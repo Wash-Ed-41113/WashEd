@@ -44,6 +44,11 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         // db round id
         this.roundId = null;
+
+        this._waveActive = false;
+        this._pendingSpawns = 0;
+        this._nextSpawnAt = 0;
+
     }
 
     // toggle the pause state and show or hide pause overlay
@@ -331,13 +336,13 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         // ── Wave spawner state ─────────────────────────────────────────────
         const S = CONFIG.soapSplash;
-        this._waveActive = false;
-        this._pendingSpawns = 0;
-        this._waveSize = Math.max(1, S.waveSize ?? 5);
-        this._betweenWaveDelayMs = Math.max(0, S.betweenWaveDelayMs ?? 900);
-
-        this._nextSpawnAt = 0;      // timestamp (ms) of the next allowed spawn
-        this._lastSpawnAt = 0;      // bookkeeping
+        const cap     = (S.maxGerms ?? S.waveCap ?? 5);
+        const waveSize= Math.max(1, S.waveSize ?? 5);
+        const resumeAt= Math.max(0, S.resumeAt ?? 1);
+        const base    = S.spawnIntervalMs ?? 1200;
+        const jitter  = S.spawnJitterMs ?? 0;
+        const stagger = S.wave?.staggerMs ?? 250;
+        const between = S.betweenWaveDelayMs ?? S.wave?.betweenMs ?? 900;
 
 
         // finalize round automatically if the scene shuts down without explicit finalize
@@ -570,88 +575,94 @@ export default class SoapSplashScene extends Phaser.Scene {
         });
     }
 
-
-
-
-
-    // update runs every frame handles spawn movement rules and timer display
     update(time, delta) {
-        const SS = CONFIG.soapSplash;
-
         if (this._paused || this.gameOver) return;
 
-        // initialize timer and typing once
         if (this.gameStartAt == null) {
             this.gameStartAt = time;
             systems.soapsplash.timer.init(this);
             systems.soapsplash.typing.init(this);
         }
 
-        // handle germ movement and breaches
+        // 1) move / resolve / draw HUD first
         systems.soapsplash.movement.moveGerms(this, delta);
         systems.soapsplash.rules.checkBreaches(this);
         systems.soapsplash.timer.updateHUD(this, time);
 
-        // --- SPAWNING LOGIC (wave-aware) ---
+        // --- SPAWNING LOGIC (wave-aware, only decrement on success) ---
         const S = CONFIG.soapSplash;
+        const cap     = (S.maxGerms ?? S.waveCap ?? 5);
+        const waveSize= Math.max(1, S.waveSize ?? 5);
+        const resumeAt= Math.max(0, S.resumeAt ?? 1);
+        const base    = S.spawnIntervalMs ?? 1200;
+        const jitter  = S.spawnJitterMs ?? 0;
+        const stagger = S.wave?.staggerMs ?? 250;
+        const between = S.betweenWaveDelayMs ?? S.wave?.betweenMs ?? 900;
 
-// hard ceiling on simultaneous germs
-        const cap = (S.maxGerms ?? S.waveCap ?? 5);
-
-// wave behaviour knobs (with safe defaults)
-        const waveSize = Math.max(1, S.waveSize ?? 5);        // how many per wave
-        const resumeAt = Math.max(0, S.resumeAt ?? 1);        // start next wave when <= this many remain
-        const base    = S.spawnIntervalMs ?? 1200;            // fallback trickle period
-        const jitter  = S.spawnJitterMs ?? 0;                 // +/- ms jitter
-        const stagger = S.wave?.staggerMs ?? 250;             // gap between spawns *within a wave*
-        const between = S.betweenWaveDelayMs ?? S.wave?.betweenMs ?? 900; // gap before a new wave starts
-
-// initialise a next-spawn time if missing
         if (!this._nextSpawnAt) {
             const j = Phaser.Math.Between(-jitter, jitter);
             this._nextSpawnAt = time + base + j;
         }
 
-// if no wave in progress and the field is “low”, start a new wave
+// start wave when field is low
         if (!this._waveActive && this.germs.length <= resumeAt) {
             this._waveActive = true;
-            // don’t exceed the cap with this wave
             this._pendingSpawns = Math.min(waveSize, Math.max(0, cap - this.germs.length));
-            // small breather before the wave begins
+            // after computing _pendingSpawns
+            // start wave when field is low
+            if (!this._waveActive && this.germs.length <= resumeAt) {
+                this._waveActive = true;
+                this._pendingSpawns = Math.min(waveSize, Math.max(0, cap - this.germs.length));
+                this._nextSpawnAt = time + between;
+
+                // prevent getting stuck in wave mode with 0 pending
+                if (this._pendingSpawns <= 0) this._waveActive = false;
+            }
+
+
+            // // NEW: if nothing to emit, don't stay in wave mode
+            //     if (this._pendingSpawns <= 0) this._waveActive = false;
+            // }
+
             this._nextSpawnAt = time + between;
         }
 
-// emit members of the current wave with a stagger
+// emit wave members
         if (this._waveActive &&
             this._pendingSpawns > 0 &&
             this.germs.length < cap &&
             time >= this._nextSpawnAt) {
-            systems.soapsplash.spawn.spawnGerm(this);
-            this._pendingSpawns--;
-            const j = Phaser.Math.Between(-jitter, jitter);
-            this._nextSpawnAt = time + stagger + j;
 
-            // wave finished
-            if (this._pendingSpawns <= 0) {
-                this._waveActive = false;
+            const before = this.germs.length;
+            systems.soapsplash.spawn.spawnGerm(this);
+            const success = this.germs.length > before;
+
+            if (!success) {
+                // don't decrement on failure; retry soon with a tiny backoff
+                console.warn("[SoapSplash] Spawn rejected (no slot) — retrying.");
+                const j = Phaser.Math.Between(-Math.floor(jitter*0.5), Math.floor(jitter*0.5));
+                this._nextSpawnAt = time + Math.max(80, Math.floor(stagger * 0.6)) + j;
+            } else {
+                this._pendingSpawns--;
+                const j = Phaser.Math.Between(-jitter, jitter);
+                this._nextSpawnAt = time + stagger + j;
+                if (this._pendingSpawns <= 0) this._waveActive = false;
             }
         }
 
-// safety net: if not in a wave but we’re below cap, trickle-spawn on the base timer
+// trickle fill when not in a wave
         if (!this._waveActive && this.germs.length < cap && time >= this._nextSpawnAt) {
+            const before = this.germs.length;
             systems.soapsplash.spawn.spawnGerm(this);
+            const success = this.germs.length > before;
+
             const j = Phaser.Math.Between(-jitter, jitter);
-            this._nextSpawnAt = time + base + j;
+            this._nextSpawnAt = time + (success ? base : Math.max(120, Math.floor(base * 0.6))) + j;
+            if (!success) console.warn("[SoapSplash] Trickle spawn rejected (no slot) — retrying.");
         }
 
-
-        // when it’s time to spawn next germ
-        if (time >= this._nextSpawnAt && this.germs.length < cap) {
-            systems.soapsplash.spawn.spawnGerm(this);
-            const j = Phaser.Math.Between(-jitter, jitter);
-            this._nextSpawnAt = time + base + j;
-        }
     }
+
 
 
 

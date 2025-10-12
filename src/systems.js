@@ -452,7 +452,41 @@ const soapsplash = (() => {
                     posFinal = p; break;
                 }
             }
-            if (!posFinal) return;
+
+            if (!posFinal) {
+                // Second pass: relax constraints slightly and try again
+                let tries = triesMax;
+                const sep2 = Math.max(0, Math.floor(sep * 0.5));
+                const minSink2 = Math.max(0, Math.floor(minSink * 0.85));
+
+                while (tries-- > 0) {
+                    const lane = pickLane(lanes);
+                    const p = sampleInside(lane);
+
+                    // relaxed sink distance
+                    if (minSink2 > 0) {
+                        const ds = Phaser.Math.Distance.Between(p.x, p.y, scene.sinkPosition.x, scene.sinkPosition.y);
+                        if (ds < (minSink2 + newR)) continue;
+                    }
+
+                    // relaxed separation
+                    if (sep2 > 0 && scene.germs.length) {
+                        let ok = true;
+                        for (const g of scene.germs) {
+                            const need = (g.hitRadius ?? 0) + newR + sep2;
+                            if (Phaser.Math.Distance.Between(p.x, p.y, g.sprite.x, g.sprite.y) < need) { ok = false; break; }
+                        }
+                        if (!ok) continue;
+                    }
+
+                    posFinal = p; break;
+                }
+
+                if (!posFinal) {
+                    console.warn("[SoapSplash] All attempts failed (even relaxed).");
+                    return;
+                }
+            }
 
             const vx = posFinal.x - scene.sinkPosition.x;
             const vy = posFinal.y - scene.sinkPosition.y;

@@ -106,7 +106,6 @@ window.CONFIG = {
         spawnAngleDeg: { min: 25, max: 155 }, // germ spawn angle range
 
         spawnEveryMs: 1200, // base spawn interval
-        spawnJitterMs: 350, // random spawn variation
         waveCap: 5,         // max germs per wave
 
         wave: {
@@ -123,21 +122,37 @@ window.CONFIG = {
             minSpawnGapMs: 450
         },
 
-        // config.js → CONFIG.soapSplash.spawner
+
+        // Under CONFIG.soapSplash (keep the rest of your config)
+        spawnIntervalMs: 1200,         // fine
+        spawnJitterMs: 140,            // fine
+        maxGerms: 5,                   // cap we want
+
         spawner: {
             lanes: [
-                // (keep yours)
+                { name: "topRight", rect: [0.70, 0.02, 0.98, 0.22], weight: 0.65 },
+                { name: "topMid",   rect: [0.42, 0.02, 0.70, 0.18], weight: 0.20 },
+                { name: "rightMid", rect: [0.78, 0.22, 0.98, 0.65], weight: 0.15 },
+                // { name: "wideTop", rect: [0.20, 0.04, 0.98, 0.46], weight: 1.0 }
+                // { name: "mega", rect: [0.10, 0.04, 0.98, 0.70], weight: 1.0 }
             ],
-            maxSpawnAttempts: 80,     // ↑ was falling back to 7 or 24; give it room
-            minSeparationPx: 24,      // ↓ from 48 to make packing easier
-            minSinkDistancePx: 220,   // ↓ from 260 so more points qualify
+
+            maxSpawnAttempts: 80,   // was 7 (too low)
+            minSeparationPx: 24,    // was 48 (too strict)
+            minSinkDistancePx: 220, // was 260 (shrinks “no-go” zone)
+
+            // // DIAGNOSTIC (temporarily)
+            // maxSpawnAttempts: 200,  // tons of tries
+            // minSeparationPx: 0,     // allow overlap (diagnostic)
+            // minSinkDistancePx: 0,   // allow close to sink (diagnostic)
+            // entry: { offsetPx: 0, fadeMs: 150, scaleFrom: 0.98 }, // start at position to avoid offscreen clamping
+            // offscreenMarginPx: 0
+
+
+
             entry: { offsetPx: 100, fadeMs: 220, scaleFrom: 0.92 },
             offscreenMarginPx: 24
         },
-// keep a single source of truth for cap:
-        maxGerms: 5,  // keep this at 5
-// (waveCap can stay, but both should match)
-
 
 
         useSpawner: true,
@@ -157,8 +172,7 @@ window.CONFIG = {
         timerMs: 60000,          // round length
         breachesAllowed: 5,      // max failures allowed
 
-        spawnIntervalMs: 1500,
-        maxSpawnAttempts: 7,
+        maxSpawnAttempts: 80,
 
         germSpeed: 110,
         wobble: 0.12,
