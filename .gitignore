@@ -7,3 +7,6 @@
 # IDE
 .idea/
 *.iml
+
+# VSCode
+.vscode/
