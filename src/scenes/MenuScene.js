@@ -32,7 +32,7 @@ export default class MenuScene extends Phaser.Scene {
         // pop up + X button + kiko
         this.load.image(
             "dialog_skin",
-            "assets/images/Menu/washed_kikos-day_UI-dialogue-box-v1.png"
+            CONFIG.assets.ui.dialogPanel
         );
         this.load.image(
             "ui_exit",

@@ -50,19 +50,21 @@ window.CONFIG = {
     assets: {
         kiko: {
             base: "assets/images/Kiko/WashEd_kiko_sprite_base.png",
-            cheer: "assets/images/Kiko/WashEd_kiko_sprite_thumbs-up.png"
+            cheer: "assets/images/Kiko/WashEd_kiko_sprite_thumbs-up.png",
+            jump: "assets/images/Kiko/WashEd_kiko_sprite_side-jump.png",
+            sad: "assets/images/Kiko/WashEd_kiko_sprite_sad.png",
         },
         backgrounds: {
             frontpage: "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png",
             sand: "assets/images/backgrounds/sand.png",     // placeholder
             school: "assets/images/backgrounds/school.png", // placeholder
         },
-        ui: {  // skinksnksdxcsdcds
+        ui: {
             pauseBut: "assets/images/UI/washed_kikos-day_UI-Button_PAUSE.png",
             settingsBut: "assets/images/UI/washed_kikos-day_UI-Button_SETTINGS.png",
             homeBut: "assets/images/UI/washed_kikos-day_UI-Button_HOME.png",
             startBut: "assets/images/UI/washed_kikos-day_UI-Button_Main_START.png",
-            dialogPanel: "assets/images/Menu/washed_kikos-day_UI-dialogue-box-v1.png",
+            dialogPanel: "assets/images/UI/washed_kikos-day_UI-dialogue-box-v1.png",
         },
         soapSplash: {
             sink: "assets/images/soap/sink.png", // sink sprite
@@ -102,11 +104,43 @@ window.CONFIG = {
         innerRadiusRel: 0.15,
         outerRadiusRel: 0.48,
         spawnAngleDeg: { min: 25, max: 155 }, // germ spawn angle range
-        maxGerms: 8,                          // limit of germs on screen
 
         spawnEveryMs: 1200, // base spawn interval
         spawnJitterMs: 350, // random spawn variation
         waveCap: 5,         // max germs per wave
+
+        wave: {
+            enabled: true,
+            size: 5,
+            // how quickly members of the SAME wave appear
+            staggerMs: 700,            // ↑ from 160 → feels less spammy
+            staggerJitterMs: 200,      // random +/- to avoid machine-gun cadence
+            // pause before NEXT wave starts (after field is empty)
+            betweenMs: 1500,
+            // only for the very first wave after scene start
+            firstWaveDelayMs: 900,
+            // hard minimum time between *any* two spawns (safety net)
+            minSpawnGapMs: 450
+        },
+
+        // config.js → CONFIG.soapSplash.spawner
+        spawner: {
+            lanes: [
+                // (keep yours)
+            ],
+            maxSpawnAttempts: 80,     // ↑ was falling back to 7 or 24; give it room
+            minSeparationPx: 24,      // ↓ from 48 to make packing easier
+            minSinkDistancePx: 220,   // ↓ from 260 so more points qualify
+            entry: { offsetPx: 100, fadeMs: 220, scaleFrom: 0.92 },
+            offscreenMarginPx: 24
+        },
+// keep a single source of truth for cap:
+        maxGerms: 5,  // keep this at 5
+// (waveCap can stay, but both should match)
+
+
+
+        useSpawner: true,
 
         minSpawnSeparationPx: 120,
         minSinkDistancePx: 180,
@@ -138,7 +172,6 @@ window.CONFIG = {
         gameDurationTextHud: "01:00",
         reason: "Time up",
 
-        useSpawner: true,
         cornerMargin: 120,
         cornerBandWidth: 240,
         angleSpreadDeg: 42,
@@ -202,7 +235,17 @@ window.CONFIG = {
         },
 
         // word bank for typing
-        words: []
+        words: [],
+
+        rSinkRel: 0.075,
+
+        waveSize: 5,               // how many to emit per wave
+        resumeAt: 1,               // pause waves until only <= resumeAt germs remain
+        betweenWaveDelayMs: 900,   // wait before each wave begins
+        showSinkCircle: false,
+        showGermCircles: false
+
+
     },
 
     // rules and parameters for the clean catch mini game

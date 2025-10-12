@@ -26,6 +26,8 @@ export default class SoapSplashScene extends Phaser.Scene {
         // game start timestamp
         this.gameStartAt = null;
 
+        this._lastSadAtBreaches = 0;   // remember the last breach count we showed “sad Kiko” for
+
         // pause state and overlay reference
         this._paused = false;
         this._pauseUi = null;
@@ -83,18 +85,12 @@ export default class SoapSplashScene extends Phaser.Scene {
             this.load.video("SS_BG_VIDEO", sources, "loadeddata", false, true);
         }
 
-        // optional png frames fallback config
-        // expects { dir: "assets/hands_frames", count: 90, zeroPad: 3 }
-        const frames = CONFIG.assets?.soapSplash?.handsFrames;
-        if (frames?.dir && frames?.count) {
-            const z = frames.zeroPad ?? 3;
-            for (let i = 1; i <= frames.count; i++) {
-                const n = String(i).padStart(z, "0");
-                this.load.image(`HANDS_${n}`, `${frames.dir}/hands_${n}.png`);
-            }
-        }
-
         this.load.image("Germ", CONFIG.assets.soapSplash.germ);
+        this.load.image("KikoJump", CONFIG.assets.kiko.jump);
+        this.load.image("DialogPanel", CONFIG.assets.ui.dialogPanel);
+        this.load.image("KikoSad", CONFIG.assets.kiko.sad);
+
+
     }
 
 
@@ -103,11 +99,19 @@ export default class SoapSplashScene extends Phaser.Scene {
         // short name for soap splash config
         const SS = CONFIG.soapSplash;
 
+        // wave (config-only)
+        this._waveActive = false;
+        this._pendingSpawns = 0;
+        this._nextSpawnAt = 0;
 
-        // // TEMP: quick keys to test difficulty without the menu wiring
-        // this.input.keyboard.on("keydown-ONE", () => { this.registry.set("difficulty", 1); this.scene.restart(); });
-        // this.input.keyboard.on("keydown-TWO", () => { this.registry.set("difficulty", 2); this.scene.restart(); });
-        // this.input.keyboard.on("keydown-THREE", () => { this.registry.set("difficulty", 3); this.scene.restart(); });
+        this._waveSize = SS.wave.size;
+        this._spawnStaggerMs = SS.wave.staggerMs;
+        this._betweenWaveDelayMs = SS.wave.betweenMs;
+
+        // === Streak + Encouragement state ===
+        this.streak = 0;
+        this._lastEncouragementAt = 0;   // remembers the last streak we showed a bubble for
+        this._encourageTimer = null;
 
 
         // ---- DIFFICULTY (numeric: 1,2,3) ----
@@ -193,6 +197,13 @@ export default class SoapSplashScene extends Phaser.Scene {
                 .setDepth(2);
         }
 
+
+        // quick-test hotkey: press J to show Kiko encouragement now
+        this.input.keyboard.on("keydown-J", () => this.showKikoEncouragement());
+
+
+
+
         // keep sink accessors consistent
         this.sinkPosition = { ...sinkCenter };
         this.getSinkHitPoint = () => sinkCenter;
@@ -265,6 +276,9 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.germSeq = 0;
         this.breaches = 0;
         this.gameOver = false;
+        // remember where the last-removed germ was (for chaining selection)
+        this._lastRemovedPos = null;
+
 
         // --- begin DB round here using difficulty from registry ---
         const difficulty = this.registry.get("difficulty") || "normal";
@@ -287,10 +301,15 @@ export default class SoapSplashScene extends Phaser.Scene {
         });
 
 
-        // start the shared round timer and typing systems
-        systems.soapsplash.timer.init(this);
-        this.gameStartAt = this.time.now;
-        systems.soapsplash.typing.init(this);
+        this.events.once(Phaser.Scenes.Events.RESUME, () => {
+            systems.soapsplash.timer.init(this);
+            this.gameStartAt = this.time.now;
+            systems.soapsplash.typing.init(this);
+        });
+
+        this.scene.launch("SoapSplashExplain");
+        this.scene.pause();
+
 
         // function to update background based on number of breaches
         this.setSoapSplashBackground = (breaches) => {
@@ -307,8 +326,19 @@ export default class SoapSplashScene extends Phaser.Scene {
             this.scene.start("GameScene", { playerName });
         });
 
-        // set up the blurred background reveal effect under germs
-        this.initSpotBlur();
+        // // set up the blurred background reveal effect under germs
+        // this.initSpotBlur();
+
+        // ── Wave spawner state ─────────────────────────────────────────────
+        const S = CONFIG.soapSplash;
+        this._waveActive = false;
+        this._pendingSpawns = 0;
+        this._waveSize = Math.max(1, S.waveSize ?? 5);
+        this._betweenWaveDelayMs = Math.max(0, S.betweenWaveDelayMs ?? 900);
+
+        this._nextSpawnAt = 0;      // timestamp (ms) of the next allowed spawn
+        this._lastSpawnAt = 0;      // bookkeeping
+
 
         // finalize round automatically if the scene shuts down without explicit finalize
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -341,122 +371,289 @@ export default class SoapSplashScene extends Phaser.Scene {
         });
     }
 
+    showKikoEncouragement(messageOverride = null) {
+        const { width: W, height: H } = this.scale;
+
+        // remove existing popup if one exists
+        if (this._encourageGroup) {
+            const kids = this._encourageGroup.list || [];
+            this.tweens.add({
+                targets: kids,
+                alpha: 0,
+                y: '+=16',
+                duration: 100,
+                onComplete: () => this._encourageGroup?.destroy(true)
+            });
+            this._encourageGroup = null;
+        }
+
+        // pick message
+        const messages = [
+            "Keep going!",
+            "Good job!",
+            "Keep up with the scrubbing! Bye bye, Germs!",
+            "Awesome typing — you’re winning!"
+        ];
+        const msg = messageOverride || messages[Math.floor(Math.random() * messages.length)];
+
+        const g = this.add.container(0, 0).setDepth(500);
+        this._encourageGroup = g;
+
+        // text only — Chewy font
+        const text = this.add.text(0, 0, msg, {
+            fontFamily: 'Chewy, Arial, sans-serif',
+            fontSize: '42px',
+            color: '#ffffff',
+            align: 'right'
+        })
+            .setOrigin(1, 1)
+            .setShadow(0, 3, '#00000090', 6, true, true)
+            .setAlpha(0);
+
+        // optional Kiko sprite beside text
+        let kiko = null;
+        let kikoKey = null;
+        if (this.textures.exists("KikoJump")) kikoKey = "KikoJump";
+        else if (this.textures.exists("KikoCheer")) kikoKey = "KikoCheer";
+        if (kikoKey) {
+            kiko = this.add.sprite(0, 0, kikoKey)
+                .setOrigin(0, 1)
+                .setScale(0.30)
+                .setAlpha(0);
+        }
+
+        g.add([text]);
+        if (kiko) g.add(kiko);
+
+        // bottom-right placement
+        const margin = 20;
+        const baseX = W - margin;
+        const baseY = H - margin;
+
+        // position text and kiko close together
+        text.setPosition(baseX - (kiko ? 70 : 0), baseY);
+        if (kiko) kiko.setPosition(baseX, baseY - 6);
+
+        // fade/slide in
+        const items = [text].concat(kiko ? [kiko] : []);
+        this.tweens.add({
+            targets: items,
+            y: '-=12',
+            alpha: 1,
+            duration: 200,
+            ease: 'Back.Out'
+        });
+
+        // tiny bounce for Kiko
+        if (kiko) {
+            this.tweens.add({
+                targets: kiko,
+                y: '-=6',
+                duration: 500,
+                yoyo: true,
+                repeat: 1,
+                ease: 'Sine.inOut'
+            });
+        }
+
+        // disappear after delay
+        this.time.delayedCall(1600, () => {
+            this.tweens.add({
+                targets: items,
+                y: '+=12',
+                alpha: 0,
+                duration: 250,
+                ease: 'Cubic.In',
+                onComplete: () => {
+                    g.destroy(true);
+                    if (this._encourageGroup === g) this._encourageGroup = null;
+                }
+            });
+        });
+    }
+    showKikoSad(messageOverride = null) {
+        if (this._sadCooldownUntil && this.time.now < this._sadCooldownUntil) return;
+        this._sadCooldownUntil = this.time.now + 400;
+
+        const { width: W, height: H } = this.scale;
+
+
+
+        // clear any existing toast
+        if (this._sadGroup) {
+            const kids = this._sadGroup.list || [];
+            this.tweens.add({
+                targets: kids, alpha: 0, y: '+=10', duration: 100,
+                onComplete: () => this._sadGroup?.destroy(true)
+            });
+            this._sadGroup = null;
+        }
+
+        // default messages (loss prompts)
+        const msgs = [
+            "Stop the germs from spreading!",
+            "Oops, type faster next time!",
+            "Watch out — we need to scrub faster",
+            "Don’t give up, you can still do it!"
+        ];
+        const msg = messageOverride || msgs[Math.floor(Math.random() * msgs.length)];
+
+        const g = this.add.container(0, 0).setDepth(501);
+        this._sadGroup = g;
+
+        // text only — Chewy font, no dialog panel
+        const text = this.add.text(0, 0, msg, {
+            fontFamily: 'Chewy, Arial, sans-serif',
+            fontSize: '36px',
+            color: '#ffffff',
+            align: 'left',
+            wordWrap: { width: Math.min(560, W * 0.7) }
+        })
+            .setOrigin(0, 1)
+            .setShadow(0, 3, '#00000090', 6, true, true)
+            .setAlpha(0);
+
+        // small Kiko on the left (slightly desaturated)
+        let kiko = null;
+        let kikoKey = null;
+
+        // prefer your sad sprite, then fall back
+        if (this.textures.exists("KikoSad"))      kikoKey = "KikoSad";
+        else if (this.textures.exists("KikoJump")) kikoKey = "KikoJump";
+        else if (this.textures.exists("KikoCheer"))kikoKey = "KikoCheer";
+
+        if (kikoKey) {
+            kiko = this.add.image(0, 0, kikoKey)
+                .setOrigin(0, 1)
+                .setScale(0.18)
+                .setAngle(-4)
+                .setAlpha(0)
+                .setScrollFactor(0);
+        }
+
+
+        g.add(kiko ? [kiko, text] : [text]);
+
+        // bottom-left placement
+        const margin = 22;
+        const baseX = margin;
+        const baseY = H - margin;
+
+        if (kiko) {
+            kiko.setPosition(baseX, baseY);
+            text.setPosition(baseX + 140, baseY - 6);
+        } else {
+            text.setPosition(baseX, baseY);
+        }
+
+        // slide/appear
+        const items = kiko ? [kiko, text] : [text];
+        items.forEach(it => it.setY(it.y + 14));
+        this.tweens.add({ targets: items, y: '-=14', alpha: 1, duration: 220, ease: 'Back.Out' });
+
+        // tiny bob on Kiko
+        if (kiko) {
+            this.tweens.add({
+                targets: kiko, y: '-=5', duration: 420, yoyo: true, repeat: 2, ease: 'Sine.inOut'
+            });
+        }
+
+        // auto-hide
+        this.time.delayedCall(1800, () => {
+            this.tweens.add({
+                targets: items, y: '+=12', alpha: 0, duration: 240, ease: 'Cubic.In',
+                onComplete: () => {
+                    g.destroy(true);
+                    if (this._sadGroup === g) this._sadGroup = null;
+                }
+            });
+        });
+    }
+
+
+
+
+
     // update runs every frame handles spawn movement rules and timer display
     update(time, delta) {
         const SS = CONFIG.soapSplash;
-        // stop updates when paused or game over
+
         if (this._paused || this.gameOver) return;
-        // if first frame capture the start time
-        if (this.gameStartAt == null) this.gameStartAt = time;
 
+        // initialize timer and typing once
+        if (this.gameStartAt == null) {
+            this.gameStartAt = time;
+            systems.soapsplash.timer.init(this);
+            systems.soapsplash.typing.init(this);
+        }
 
+        // handle germ movement and breaches
+        systems.soapsplash.movement.moveGerms(this, delta);
+        systems.soapsplash.rules.checkBreaches(this);
+        systems.soapsplash.timer.updateHUD(this, time);
 
-        // spawn pacing parameters from config
-        const cap = SS.waveCap ?? SS.maxGerms ?? 5;
-        const base = SS.spawnIntervalMs ?? SS.spawnEveryMs ?? 1200;
-        const jitter = SS.spawnJitterMs ?? 0;
+        // --- SPAWNING LOGIC (wave-aware) ---
+        const S = CONFIG.soapSplash;
 
-        // schedule the first spawn with random jitter
+// hard ceiling on simultaneous germs
+        const cap = (S.maxGerms ?? S.waveCap ?? 5);
+
+// wave behaviour knobs (with safe defaults)
+        const waveSize = Math.max(1, S.waveSize ?? 5);        // how many per wave
+        const resumeAt = Math.max(0, S.resumeAt ?? 1);        // start next wave when <= this many remain
+        const base    = S.spawnIntervalMs ?? 1200;            // fallback trickle period
+        const jitter  = S.spawnJitterMs ?? 0;                 // +/- ms jitter
+        const stagger = S.wave?.staggerMs ?? 250;             // gap between spawns *within a wave*
+        const between = S.betweenWaveDelayMs ?? S.wave?.betweenMs ?? 900; // gap before a new wave starts
+
+// initialise a next-spawn time if missing
         if (!this._nextSpawnAt) {
             const j = Phaser.Math.Between(-jitter, jitter);
             this._nextSpawnAt = time + base + j;
         }
 
-        // spawn a new germ when time has come and under the cap
-        if (time >= this._nextSpawnAt && this.germs.length < cap) {
+// if no wave in progress and the field is “low”, start a new wave
+        if (!this._waveActive && this.germs.length <= resumeAt) {
+            this._waveActive = true;
+            // don’t exceed the cap with this wave
+            this._pendingSpawns = Math.min(waveSize, Math.max(0, cap - this.germs.length));
+            // small breather before the wave begins
+            this._nextSpawnAt = time + between;
+        }
+
+// emit members of the current wave with a stagger
+        if (this._waveActive &&
+            this._pendingSpawns > 0 &&
+            this.germs.length < cap &&
+            time >= this._nextSpawnAt) {
+            systems.soapsplash.spawn.spawnGerm(this);
+            this._pendingSpawns--;
+            const j = Phaser.Math.Between(-jitter, jitter);
+            this._nextSpawnAt = time + stagger + j;
+
+            // wave finished
+            if (this._pendingSpawns <= 0) {
+                this._waveActive = false;
+            }
+        }
+
+// safety net: if not in a wave but we’re below cap, trickle-spawn on the base timer
+        if (!this._waveActive && this.germs.length < cap && time >= this._nextSpawnAt) {
             systems.soapsplash.spawn.spawnGerm(this);
             const j = Phaser.Math.Between(-jitter, jitter);
             this._nextSpawnAt = time + base + j;
         }
 
-        // move all germs toward the sink update labels and caret and offscreen cleanup
-        systems.soapsplash.movement.moveGerms(this, delta);
-        // redraw blurred reveal mask under each germ
-        this.redrawSpotBlurMask();
-        // check collisions with the sink and update breaches and background
-        systems.soapsplash.rules.checkBreaches(this);
-        // update round timer hud
-        systems.soapsplash.timer.updateHUD(this, this.time.now);
 
-        if (this.gameOver) return;
-        if (this._paused) return;
-    }
-
-    // setup a blurred duplicate background that is revealed in soft spots under germs
-    initSpotBlur() {
-        const SS = CONFIG.soapSplash,
-            S = SS.spotBlur || {};
-        if (!S.enabled || !this.bgSprite?.texture?.key) return;
-
-        // make a blur layer using the same texture as the background
-        this.bgBlur = this.add
-            .image(SS.width / 2, SS.height / 2, this.bgSprite.texture.key, this.bgSprite.frame.name)
-            .setDisplaySize(SS.width, SS.height)
-            .setDepth(1);
-
-        // add a postprocessing blur effect if available
-        if (this.bgBlur.postFX?.addBlur) {
-            this._blurFx = this.bgBlur.postFX.addBlur(S.strength ?? 0.9, S.strength ?? 0.9);
+        // when it’s time to spawn next germ
+        if (time >= this._nextSpawnAt && this.germs.length < cap) {
+            systems.soapsplash.spawn.spawnGerm(this);
+            const j = Phaser.Math.Between(-jitter, jitter);
+            this._nextSpawnAt = time + base + j;
         }
-
-        // create a render texture and a graphics object to draw soft circles as a bitmap mask
-        this._spotRT = this.make.renderTexture({
-            x: 0,
-            y: 0,
-            width: SS.width,
-            height: SS.height,
-            add: false,
-        });
-        this._spotGfx = this.add.graphics().setScrollFactor(0).setVisible(false);
-        const bm = new Phaser.Display.Masks.BitmapMask(this, this._spotRT);
-        this.bgBlur.setMask(bm);
-        this._spotMask = bm;
-
-        // keep sizes in sync on resize and clean up on shutdown
-        const onResize = () => {
-            this.bgBlur?.setDisplaySize(SS.width, SS.height);
-        };
-        this.scale.on(Phaser.Scale.Events.RESIZE, onResize);
-        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-            this.scale.off(Phaser.Scale.Events.RESIZE, onResize);
-            this._spotGfx?.destroy();
-            this._spotGfx = null;
-            this._spotRT?.destroy();
-            this._spotRT = null;
-        });
     }
 
-    // draw the soft circular mask where germs are so the blur layer shows through there
-    redrawSpotBlurMask() {
-        const SS = CONFIG.soapSplash,
-            S = SS.spotBlur || {};
-        if (!S.enabled || !this._spotRT || !this._spotGfx) return;
 
-        // parameters for circle feathering and padding
-        const radiusPad = S.radiusPad ?? 22;
-        const feather = S.feather ?? 28;
-        const steps = Math.max(3, S.steps ?? 7);
 
-        // clear previous mask drawing
-        this._spotRT.clear();
-        this._spotGfx.clear();
 
-        // for each germ draw multiple circles with decreasing alpha to create a soft edge
-        for (const g of this.germs) {
-            if (!g?.sprite?.active) continue;
-
-            const baseR = (g.hitRadius ?? Math.max(16, g.sprite.displayWidth * 0.3)) + radiusPad;
-
-            for (let s = 0; s < steps; s++) {
-                const t = s / (steps - 1);
-                const r = baseR + feather * t;
-                const a = (1 - t) * (1 - t);
-                this._spotGfx.fillStyle(0xffffff, a);
-                this._spotGfx.fillCircle(g.sprite.x, g.sprite.y, r);
-            }
-        }
-
-        // copy the graphics onto the render texture so the bitmap mask updates
-        this._spotRT.draw(this._spotGfx);
-    }
 }
