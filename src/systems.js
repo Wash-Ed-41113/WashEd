@@ -1047,7 +1047,7 @@ const soapsplash = (() => {
 // returns an object with destroy and setPaused so the scene can control it
 // -----------------------------
 const cleancatcher = {
-    create(canvas) {
+    create(scene, canvas, difficulty = "easy") {
         const CC = CONFIG.cleanCatch;
         const ctx = canvas.getContext("2d");
         ctx.imageSmoothingEnabled = true;
@@ -1084,9 +1084,10 @@ const cleancatcher = {
             "Watch out for those germs!"
         ];
 
-// current message to display and timer
+        // current message to display and timer
         let currentMessage = "";       // the text to show
         let messageTimer = 0;          // countdown for how long to display
+        let endDialogShown = false;
         const messageDuration = 60;    // frames (about 1 sec at 60fps)
 
 
@@ -1157,9 +1158,20 @@ const cleancatcher = {
         let items = [];
         let score = 0, lives = 3, timeLeft = 30, gameOver = false;
 
+        // difficulty adjustments
+        let spawnRate = 1000;
+        let baseSpeed = 2;
+        let goodProb = 0.6;
+        if (difficulty === "normal") {
+            spawnRate = 700;
+            baseSpeed = 3;
+            goodProb = 0.4;
+        }
+        // hard uses same as easy, but no images drawn
+
         // spawn either water or germ with a label and speed
         function spawnItem() {
-            const isGood = Math.random() > 0.4; // good or bad
+            const isGood = Math.random() < goodProb;
             const word = isGood ? helpers.words.pick(goodWords) : helpers.words.pick(badWords);
 
             let w, h, img;
@@ -1196,7 +1208,7 @@ const cleancatcher = {
                 type: isGood ? "good" : "bad",
                 word,
                 img,
-                speed: 2 + Math.random() * 2
+                speed: baseSpeed + Math.random() * baseSpeed
             });
         }
 
@@ -1223,37 +1235,43 @@ const cleancatcher = {
                     img = germImg;
                 }
 
-                if (img && img.complete && img.naturalWidth) {
-                    ctx.drawImage(img, item.x, item.y, item.width, item.height);
-                } else {
-                    // fallback shapes
-                    if (item.type === "good") {
-                        ctx.fillStyle = "aqua";
-                        ctx.beginPath();
-                        ctx.moveTo(item.x + item.width / 2, item.y);
-                        ctx.bezierCurveTo(
-                            item.x + item.width * 1.0, item.y + item.height * 0.8,
-                            item.x + item.width * 0.8, item.y + item.height,
-                            item.x + item.width / 2, item.y + item.height
-                        );
-                        ctx.bezierCurveTo(
-                            item.x + item.width * 0.2, item.y + item.height,
-                            item.x, item.y + item.height * 0.8,
-                            item.x + item.width / 2, item.y
-                        );
-                        ctx.closePath();
-                        ctx.fill();
+                if (difficulty !== "hard") {
+                    if (img && img.complete && img.naturalWidth) {
+                        ctx.drawImage(img, item.x, item.y, item.width, item.height);
                     } else {
-                        ctx.fillStyle = "red";
-                        ctx.fillRect(item.x, item.y, item.width, item.height);
+                        // fallback shapes
+                        if (item.type === "good") {
+                            ctx.fillStyle = "aqua";
+                            ctx.beginPath();
+                            ctx.moveTo(item.x + item.width / 2, item.y);
+                            ctx.bezierCurveTo(
+                                item.x + item.width * 1.0, item.y + item.height * 0.8,
+                                item.x + item.width * 0.8, item.y + item.height,
+                                item.x + item.width / 2, item.y + item.height
+                            );
+                            ctx.bezierCurveTo(
+                                item.x + item.width * 0.2, item.y + item.height,
+                                item.x, item.y + item.height * 0.8,
+                                item.x + item.width / 2, item.y
+                            );
+                            ctx.closePath();
+                            ctx.fill();
+                        } else {
+                            ctx.fillStyle = "red";
+                            ctx.fillRect(item.x, item.y, item.width, item.height);
+                        }
                     }
                 }
 
-                // Draw word below the image
+                // Draw word below the image (or centered if hard)
                 ctx.fillStyle = "black";
                 ctx.font = "24px Chewy";
                 ctx.textAlign = "center";
-                ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
+                if (difficulty === "hard") {
+                    ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height / 2 + 8);
+                } else {
+                    ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
+                }
             }
         }
 
@@ -1307,12 +1325,12 @@ const cleancatcher = {
 
             ctx.fillStyle = "black";
             ctx.fillText(timerText, canvas.width / 2 - textWidth / 2, 45);
-            }
+        }
 
-            // time display
-            ctx.fillStyle = "black";
-            ctx.font = "40px Chewy";
-            ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
+        // time display
+        ctx.fillStyle = "black";
+        ctx.font = "40px Chewy";
+        ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
 
 
         // move items down, check collisions, update stats, remove offscreen
@@ -1391,12 +1409,99 @@ const cleancatcher = {
             }
 
             if (gameOver) {
-                ctx.fillStyle = "black";
-                ctx.font = "40px Chewy";
-                ctx.fillText("Game Over!", canvas.width / 2 - 80, canvas.height / 2);
-                ctx.fillText("Score: " + score, canvas.width / 2 - 60, canvas.height / 2 + 40);
+                if (!endDialogShown) {
+                    endDialogShown = true;
+                    stopLoops(); // freeze the canvas
+
+                    // hide the DOM canvas so Phaser display is visible
+                    canvas.style.display = "none";
+                    canvas.style.pointerEvents = "none";
+
+                    const { width, height } = scene.scale;
+
+                    // draw the sink background (so it's not black)
+                    if (scene.textures.exists("cc_sink_bg")) {
+                        scene.add.image(0, 0, "cc_sink_bg")
+                            .setOrigin(0, 0)
+                            .setDisplaySize(width, height)
+                            .setDepth(9997);
+                    }
+
+                    // dialog root (everything above background)
+                    const dialogRoot = scene.add.container(0, 0).setDepth(9999);
+
+                    // dim mask
+                    const overlay = scene.add
+                        .rectangle(0, 0, width, height, 0x000000, 0.35)
+                        .setOrigin(0, 0)
+                        .setInteractive();
+                    dialogRoot.add(overlay);
+
+                    // panel (use MenuScene skin), make it a little smaller (0.9x)
+                    const hasSkin = scene.textures.exists("dialog_skin");
+                    const skinImg = hasSkin
+                        ? scene.textures.get("dialog_skin").getSourceImage()
+                        : { width: 1200, height: 800 };
+
+                    const baseS = Math.min((width * 0.82) / skinImg.width, (height * 0.62) / skinImg.height);
+                    const s = baseS * 0.9; // tiny bit smaller
+
+                    const panel = hasSkin
+                        ? scene.add.image(width / 2, height / 2, "dialog_skin").setScale(s)
+                        : scene.add
+                            .rectangle(width / 2, height / 2, Math.min(width * 0.75, 740), Math.min(height * 0.55, 460), 0xffffff, 1)
+                            .setStrokeStyle(4, 0x9edcff);
+                    dialogRoot.add(panel);
+
+                    const panelW = (panel.displayWidth || skinImg.width * s);
+                    const panelH = (panel.displayHeight || skinImg.height * s);
+
+                    // Kiko OUTSIDE the dialog (left side), sized to ~60% of panel height
+                    if (scene.textures.exists("kiko_dialog")) {
+                        const kiko = scene.add.image(0, 0, "kiko_dialog").setOrigin(0.5, 1);
+                        const targetH = panelH * 0.60;
+                        kiko.setScale(targetH / kiko.height);
+
+                        // place just outside left edge with a small gap
+                        const gap = Math.round(panelW * 0.08);
+                        kiko.setPosition(panel.x - panelW / 2 - gap, panel.y + panelH / 2);
+                        dialogRoot.add(kiko);
+                    }
+
+                    // Title + Score centered INSIDE the dialog
+                    const uiFont = (CONFIG.ui && CONFIG.ui.fontFamily) || "Chewy";
+
+                    const title = scene.add
+                        .text(panel.x, panel.y - panelH * 0.22, "Game Over!", {
+                            fontFamily: uiFont,
+                            color: "#000000",
+                        })
+                        .setOrigin(0.5);
+                    title.setFontSize(Math.max(28, Math.round(44 * s)));
+                    title.setFontStyle("bold");
+                    dialogRoot.add(title);
+
+                    const scoreText = scene.add
+                        .text(panel.x, panel.y, `Score: ${score}`, {
+                            fontFamily: uiFont,
+                            color: "#2a4155",
+                        })
+                        .setOrigin(0.5);
+                    scoreText.setFontSize(Math.max(20, Math.round(28 * s)));
+                    dialogRoot.add(scoreText);
+
+                    // clicking anywhere advances (no X button, no top-right menu)
+                    const goNext = () => {
+                        dialogRoot.destroy(true);
+                        const playerName = scene.registry.get("playerName");
+                        scene.scene.start("GameScene", { playerName });
+                    };
+                    overlay.on("pointerdown", goNext);
+                }
                 return;
             }
+
+
 
             drawPlayer();
             drawItems();
@@ -1412,7 +1517,7 @@ const cleancatcher = {
             rafId = requestAnimationFrame(frame);
 
             if (!moveInterval) moveInterval = setInterval(movePlayer, 16);
-            if (!spawnInterval) spawnInterval = setInterval(spawnItem, 1000);
+            if (!spawnInterval) spawnInterval = setInterval(spawnItem, spawnRate);
             if (!timerInterval) timerInterval = setInterval(() => {
                 if (!paused && !gameOver) {
                     timeLeft--;

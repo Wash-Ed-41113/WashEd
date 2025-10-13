@@ -18,9 +18,28 @@ export default class CleanCatchScene extends Phaser.Scene {
         // _pauseUi will hold the pause overlay ui when pause is active
         this._pauseUi = null;
     }
+    preload() {
+        // Only load if not already in cache (safe and avoids duplicates)
+        if (!this.textures.exists("dialog_skin")) {
+            this.load.image("dialog_skin", "assets/images/Menu/washed_kikos-day_UI-dialogue-box-v1.png");
+        }
+
+        if (!this.textures.exists("kiko_dialog")) {
+            this.load.image("kiko_dialog", "assets/images/Kiko/WashEd_kiko_sprite_base.png");
+        }
+
+        if (!this.textures.exists("cc_sink_bg")) {
+            const A = (CONFIG.assets && CONFIG.assets.cleanCatch) || {};
+            this.load.image("cc_sink_bg", A.background || "assets/images/CleanCatcher/washed_kikos-day_LEVEL_01_scene_04_action_01_soap-splasher_start.png");
+        }
+    }
 
     // create method sets up everything on screen
-    create() {
+    create(data) {
+        // store data into registry if passed in
+        if (data?.difficulty) this.registry.set("difficulty", data.difficulty);
+        if (data?.playerName) this.registry.set("playerName", data.playerName);
+
         // get the width and height of the current game canvas
         const { width, height } = this.scale;
 
@@ -38,7 +57,8 @@ export default class CleanCatchScene extends Phaser.Scene {
 
         // start the clean catch mini game inside the canvas
         // this returns an object with destroy and setPaused methods
-        this._runtime = systems.cleancatcher.create(canvas);
+        const difficulty = this.registry.get("difficulty") || "easy";
+        this._runtime = systems.cleancatcher.create(this, canvas, difficulty);
 
         // build a top bar with home and pause buttons
         systems.ui.topbar(this, {
