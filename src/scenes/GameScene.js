@@ -1,9 +1,8 @@
 import systems from "../systems.js";
 import { DB } from "../db.js";
 
-const soapSplashMusic = new Audio("assets/sounds/bg_music.mp3");
-bgMusic.loop = true;
-bgMusic.volume = 0.4;
+const soapSplashMusic = new Audio("assets/sounds/soap splasher.mp3");
+soapSplashMusic.loop = true;
 
 
 // define the main hub scene for the game flow
