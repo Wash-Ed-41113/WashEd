@@ -42,7 +42,7 @@ export default class SoapSplashExplain extends Phaser.Scene {
         const panelW = panel.displayWidth || panel.width || Math.min(W * 0.8, 900);
         const style = {
             fontFamily: CONFIG.ui.fontFamily,
-            fontSize: "24px",
+            fontSize: "64px",
             color: "#000000",
             wordWrap: { width: Math.max(120, Math.floor(panelW * 0.8)) },
             align: "center"
