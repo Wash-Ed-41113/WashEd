@@ -1439,15 +1439,23 @@ const cleancatcher = {
                     const panelW = (panel.displayWidth || skinImg.width * s);
                     const panelH = (panel.displayHeight || skinImg.height * s);
 
-                    // Kiko OUTSIDE the dialog (left side), sized to ~60% of panel height
                     if (scene.textures.exists("kiko_dialog")) {
-                        const kiko = scene.add.image(0, 0, "kiko_dialog").setOrigin(0.5, 1);
-                        const targetH = panelH * 0.60;
+                        const innerPad  = Math.round(panelW * 0.08);
+                        const innerLeft = panel.x - panelW / 2 + innerPad;           // inner left edge
+                        const innerRight= panel.x + panelW / 2 - innerPad;           // inner right edge
+                        const innerTop  = panel.y - panelH / 2 + innerPad;           // inner top
+                        const innerBot  = panel.y + panelH / 2 - innerPad;           // inner bottom
+
+                        const leftColW  = Math.round((panelW - innerPad * 2) * 0.30); // 30% for Kiko
+                        const kikoX     = innerLeft + leftColW / 2;                   // center of left column
+                        const kikoY     = innerBot;                                   // bottom-aligned inside panel
+
+                        const kiko = scene.add.image(kikoX, kikoY, "kiko_dialog").setOrigin(0.5, 1);
+
+                        // scale Kiko to fit nicely inside the panel height
+                        const targetH = (innerBot - innerTop) * 1.00; // ~100% of inner height
                         kiko.setScale(targetH / kiko.height);
 
-                        // place just outside left edge with a small gap
-                        const gap = Math.round(panelW * 0.08);
-                        kiko.setPosition(panel.x - panelW / 2 - gap, panel.y + panelH / 2);
                         dialogRoot.add(kiko);
                     }
 
@@ -1455,7 +1463,7 @@ const cleancatcher = {
                     const uiFont = (CONFIG.ui && CONFIG.ui.fontFamily) || "Arial";
 
                     const title = scene.add
-                        .text(panel.x, panel.y - panelH * 0.22, "Game Over!", {
+                        .text(panel.x, panel.y - panelH * 0.22, "GAME OVER!", {
                             fontFamily: uiFont,
                             color: "#000000",
                         })
@@ -1474,17 +1482,15 @@ const cleancatcher = {
                     dialogRoot.add(scoreText);
 
                     // clicking anywhere advances (no X button, no top-right menu)
-                    const goNext = () => {
-                        dialogRoot.destroy(true);
-                        const playerName = scene.registry.get("playerName");
-                        scene.scene.start("GameScene", { playerName });
-                    };
+                    // const goNext = () => {
+                    //     dialogRoot.destroy(true);
+                    //     const playerName = scene.registry.get("playerName");
+                    //     scene.scene.start("GameScene", { playerName });
+                    // };
                     overlay.on("pointerdown", goNext);
                 }
                 return;
             }
-
-
 
             drawPlayer();
             drawItems();
