@@ -252,7 +252,8 @@ export default class GameScene extends Phaser.Scene {
                 return { btn, txt };
             };
 
-            // build three buttons with spacing
+            // build three buttons with spacing, commiting
+
             const gap = 78, baseY = 120;
             const b1 = makeBtn("Easy",   baseY,           "easy");
             const b2 = makeBtn("Normal", baseY + gap,     "normal");
