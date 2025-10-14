@@ -173,7 +173,7 @@ export default class MenuScene extends Phaser.Scene {
                 color: "#000000",
             })
             .setOrigin(0, 0.5);
-        title.setFontSize(Math.max(28, Math.round(40 * s)));
+        title.setFontSize(Math.max(40, Math.round(40 * s)));
         title.setFontStyle("bold");
         title.setWordWrapWidth(rightW, true);
         dialogRoot.add(title);
@@ -181,25 +181,20 @@ export default class MenuScene extends Phaser.Scene {
         // DOM form
         const html = `
       <div id="wrap">
-        <div id="row">
-          <input id="nameInput" type="text" placeholder="Type your name..." />
-          <button id="okBtn">Continue</button>
-        </div>
-        <div id="hint">Press Enter to continue…</div>
+        <input id="nameInput" type="text" placeholder="Type your name..." />
+        <button id="okBtn">Continue</button>
       </div>
     `;
         const form = this.add
-            .dom(rightX + rightW / 2, panel.y + panelH * 0.05)
+            .dom(rightX+110, panel.y + panelH * 0.01)
             .createFromHTML(html)
             .setOrigin(0.5);
         dialogRoot.add(form);
 
         // styling
         const wrap = form.getChildByID("wrap");
-        const row = form.getChildByID("row");
         const input = form.getChildByID("nameInput");
         const ok = form.getChildByID("okBtn");
-        const hint = form.getChildByID("hint");
 
         wrap.style.width = `${Math.floor(rightW)}px`;
         wrap.style.display = "flex";
@@ -207,37 +202,27 @@ export default class MenuScene extends Phaser.Scene {
         wrap.style.alignItems = "stretch";
         wrap.style.gap = `${Math.max(10, Math.round(10 * s))}px`;
 
-        row.style.display = "flex";
-        row.style.flexDirection = "row";
-        row.style.alignItems = "center";
-        row.style.gap = `${Math.max(8, Math.round(8 * s))}px`;
-        row.style.width = "100%";
-
         input.style.boxSizing = "border-box";
         input.style.flex = "1 1 auto";
-        input.style.width = "100%";
-        input.style.height = `${Math.round(56 * s)}px`;
+        input.style.width = "60%";
+        input.style.height = `${Math.round(120 * s)}px`;
         input.style.padding = `0 ${Math.round(14 * s)}px`;
-        input.style.fontSize = `${Math.round(24 * s)}px`;
+        input.style.fontSize = `${Math.round(50 * s)}px`;
         input.style.border = `${Math.max(2, Math.round(2 * s))}px solid #9EDCFF`;
         input.style.borderRadius = `${Math.round(10 * s)}px`;
         input.style.outline = "none";
 
-        ok.style.width = `${Math.round(140 * s)}px`;
-        ok.style.height = `${Math.round(56 * s)}px`;
+        ok.style.width = `${Math.round(300 * s)}px`;
+        ok.style.height = `${Math.round(120 * s)}px`;
         ok.style.border = "none";
         ok.style.borderRadius = `${Math.round(12 * s)}px`;
         ok.style.background = "#2db4ff";
         ok.style.color = "#fff";
         ok.style.fontWeight = "700";
-        ok.style.fontSize = `${Math.round(22 * s)}px`;
+        ok.style.fontSize = `${Math.round(50 * s)}px`;
         ok.style.cursor = "pointer";
-
-        hint.style.fontSize = `${Math.round(12 * s)}px`;
-        hint.style.color = "#667085";
-        hint.style.opacity = "0.75";
-        hint.style.textAlign = "right";
-        hint.style.width = "100%";
+        ok.style.marginLeft = `${Math.round(250 * s)}px`;
+        ok.style.marginTop  = `${Math.round(80 * s)}px`;
 
         // close(X)
         const closeBtn = this.add
