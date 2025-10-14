@@ -380,7 +380,7 @@ export default class GameScene extends Phaser.Scene {
                 });
             };
 
-            // put a minimal topbar with home that returns to this scene state
+            // put a minimal topbar with home that returns to this scene state. merging
             systems.ui.topbar(this, {
                 onHome: () => this.scene.start("GameScene", { playerName: this.registry.get("playerName") })
             });
