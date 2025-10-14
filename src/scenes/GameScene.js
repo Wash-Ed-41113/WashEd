@@ -1,6 +1,10 @@
 import systems from "../systems.js";
 import { DB } from "../db.js";
 
+const soapSplashMusic = new Audio("assets/sounds/soap splasher.mp3");
+soapSplashMusic.loop = true;
+
+
 // define the main hub scene for the game flow
 export default class GameScene extends Phaser.Scene {
     // register scene key and set up state flags
@@ -339,7 +343,13 @@ export default class GameScene extends Phaser.Scene {
             // build three mode buttons with equal spacing
             const GAP = 86;
             makeBtn("Play Soap Splash",  -GAP, () => go("SoapSplash"));
-            makeBtn("Play Clean Catch",    0,   () => go("CleanCatch"));
+            makeBtn("Play Clean Catch", 0, () => {
+                soapSplashMusic.play().catch(() => {
+                    console.log("User interaction required before playing music.");
+                });
+                go("CleanCatch");
+            });
+
             makeBtn("Explore Playground",  GAP, () => go("PlaygroundScene"));
 
             // animate panel open then fade in the content
@@ -370,7 +380,7 @@ export default class GameScene extends Phaser.Scene {
                 });
             };
 
-            // put a minimal topbar with home that returns to this scene state
+            // put a minimal topbar with home that returns to this scene state. merging
             systems.ui.topbar(this, {
                 onHome: () => this.scene.start("GameScene", { playerName: this.registry.get("playerName") })
             });

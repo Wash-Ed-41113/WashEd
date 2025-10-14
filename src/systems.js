@@ -1047,7 +1047,7 @@ const soapsplash = (() => {
 // returns an object with destroy and setPaused so the scene can control it
 // -----------------------------
 const cleancatcher = {
-    create(scene, canvas) {
+    create(scene, canvas, difficulty = "easy") {
         const CC = CONFIG.cleanCatch;
         const ctx = canvas.getContext("2d");
         ctx.imageSmoothingEnabled = true;
@@ -1084,7 +1084,7 @@ const cleancatcher = {
             "Watch out for those germs!"
         ];
 
-// current message to display and timer
+        // current message to display and timer
         let currentMessage = "";       // the text to show
         let messageTimer = 0;          // countdown for how long to display
         let endDialogShown = false;
@@ -1158,9 +1158,20 @@ const cleancatcher = {
         let items = [];
         let score = 0, lives = 3, timeLeft = 30, gameOver = false;
 
+        // difficulty adjustments
+        let spawnRate = 1000;
+        let baseSpeed = 2;
+        let goodProb = 0.6;
+        if (difficulty === "normal") {
+            spawnRate = 700;
+            baseSpeed = 3;
+            goodProb = 0.4;
+        }
+        // hard uses same as easy, but no images drawn
+
         // spawn either water or germ with a label and speed
         function spawnItem() {
-            const isGood = Math.random() > 0.4; // good or bad
+            const isGood = Math.random() < goodProb;
             const word = isGood ? helpers.words.pick(goodWords) : helpers.words.pick(badWords);
 
             let w, h, img;
@@ -1197,7 +1208,7 @@ const cleancatcher = {
                 type: isGood ? "good" : "bad",
                 word,
                 img,
-                speed: 2 + Math.random() * 2
+                speed: baseSpeed + Math.random() * baseSpeed
             });
         }
 
@@ -1224,37 +1235,43 @@ const cleancatcher = {
                     img = germImg;
                 }
 
-                if (img && img.complete && img.naturalWidth) {
-                    ctx.drawImage(img, item.x, item.y, item.width, item.height);
-                } else {
-                    // fallback shapes
-                    if (item.type === "good") {
-                        ctx.fillStyle = "aqua";
-                        ctx.beginPath();
-                        ctx.moveTo(item.x + item.width / 2, item.y);
-                        ctx.bezierCurveTo(
-                            item.x + item.width * 1.0, item.y + item.height * 0.8,
-                            item.x + item.width * 0.8, item.y + item.height,
-                            item.x + item.width / 2, item.y + item.height
-                        );
-                        ctx.bezierCurveTo(
-                            item.x + item.width * 0.2, item.y + item.height,
-                            item.x, item.y + item.height * 0.8,
-                            item.x + item.width / 2, item.y
-                        );
-                        ctx.closePath();
-                        ctx.fill();
+                if (difficulty !== "hard") {
+                    if (img && img.complete && img.naturalWidth) {
+                        ctx.drawImage(img, item.x, item.y, item.width, item.height);
                     } else {
-                        ctx.fillStyle = "red";
-                        ctx.fillRect(item.x, item.y, item.width, item.height);
+                        // fallback shapes
+                        if (item.type === "good") {
+                            ctx.fillStyle = "aqua";
+                            ctx.beginPath();
+                            ctx.moveTo(item.x + item.width / 2, item.y);
+                            ctx.bezierCurveTo(
+                                item.x + item.width * 1.0, item.y + item.height * 0.8,
+                                item.x + item.width * 0.8, item.y + item.height,
+                                item.x + item.width / 2, item.y + item.height
+                            );
+                            ctx.bezierCurveTo(
+                                item.x + item.width * 0.2, item.y + item.height,
+                                item.x, item.y + item.height * 0.8,
+                                item.x + item.width / 2, item.y
+                            );
+                            ctx.closePath();
+                            ctx.fill();
+                        } else {
+                            ctx.fillStyle = "red";
+                            ctx.fillRect(item.x, item.y, item.width, item.height);
+                        }
                     }
                 }
 
-                // Draw word below the image
+                // Draw word below the image (or centered if hard)
                 ctx.fillStyle = "black";
                 ctx.font = "24px Chewy";
                 ctx.textAlign = "center";
-                ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
+                if (difficulty === "hard") {
+                    ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height / 2 + 8);
+                } else {
+                    ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
+                }
             }
         }
 
@@ -1308,12 +1325,12 @@ const cleancatcher = {
 
             ctx.fillStyle = "black";
             ctx.fillText(timerText, canvas.width / 2 - textWidth / 2, 45);
-            }
+        }
 
-            // time display
-            ctx.fillStyle = "black";
-            ctx.font = "40px Chewy";
-            ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
+        // time display
+        ctx.fillStyle = "black";
+        ctx.font = "40px Chewy";
+        ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
 
 
         // move items down, check collisions, update stats, remove offscreen
@@ -1460,7 +1477,7 @@ const cleancatcher = {
                     }
 
                     // Title + Score centered INSIDE the dialog
-                    const uiFont = (CONFIG.ui && CONFIG.ui.fontFamily) || "Arial";
+                    const uiFont = (CONFIG.ui && CONFIG.ui.fontFamily) || "Chewy";
 
                     const title = scene.add
                         .text(panel.x, panel.y - panelH * 0.22, "GAME OVER!", {
@@ -1506,7 +1523,7 @@ const cleancatcher = {
             rafId = requestAnimationFrame(frame);
 
             if (!moveInterval) moveInterval = setInterval(movePlayer, 16);
-            if (!spawnInterval) spawnInterval = setInterval(spawnItem, 1000);
+            if (!spawnInterval) spawnInterval = setInterval(spawnItem, spawnRate);
             if (!timerInterval) timerInterval = setInterval(() => {
                 if (!paused && !gameOver) {
                     timeLeft--;
