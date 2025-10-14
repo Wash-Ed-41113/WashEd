@@ -50,9 +50,7 @@ window.CONFIG = {
     assets: {
         kiko: {
             base: "assets/images/Kiko/WashEd_kiko_sprite_base.png",
-            cheer: "assets/images/Kiko/WashEd_kiko_sprite_thumbs-up.png",
-            jump: "assets/images/Kiko/WashEd_kiko_sprite_side-jump.png",
-            sad: "assets/images/Kiko/WashEd_kiko_sprite_sad.png",
+            cheer: "assets/images/Kiko/WashEd_kiko_sprite_thumbs-up.png"
         },
         backgrounds: {
             frontpage: "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png",
@@ -104,58 +102,11 @@ window.CONFIG = {
         innerRadiusRel: 0.15,
         outerRadiusRel: 0.48,
         spawnAngleDeg: { min: 25, max: 155 }, // germ spawn angle range
+        maxGerms: 8,                          // limit of germs on screen
 
         spawnEveryMs: 1200, // base spawn interval
+        spawnJitterMs: 350, // random spawn variation
         waveCap: 5,         // max germs per wave
-
-        wave: {
-            enabled: true,
-            size: 5,
-            // how quickly members of the SAME wave appear
-            staggerMs: 700,            // ↑ from 160 → feels less spammy
-            staggerJitterMs: 200,      // random +/- to avoid machine-gun cadence
-            // pause before NEXT wave starts (after field is empty)
-            betweenMs: 1500,
-            // only for the very first wave after scene start
-            firstWaveDelayMs: 900,
-            // hard minimum time between *any* two spawns (safety net)
-            minSpawnGapMs: 450
-        },
-
-
-        // Under CONFIG.soapSplash (keep the rest of your config)
-        spawnIntervalMs: 1200,         // fine
-        spawnJitterMs: 140,            // fine
-        maxGerms: 5,                   // cap we want
-
-        spawner: {
-            lanes: [
-                { name: "topRight", rect: [0.70, 0.02, 0.98, 0.22], weight: 0.65 },
-                { name: "topMid",   rect: [0.42, 0.02, 0.70, 0.18], weight: 0.20 },
-                { name: "rightMid", rect: [0.78, 0.22, 0.98, 0.65], weight: 0.15 },
-                // { name: "wideTop", rect: [0.20, 0.04, 0.98, 0.46], weight: 1.0 }
-                // { name: "mega", rect: [0.10, 0.04, 0.98, 0.70], weight: 1.0 }
-            ],
-
-            maxSpawnAttempts: 80,   // was 7 (too low)
-            minSeparationPx: 24,    // was 48 (too strict)
-            minSinkDistancePx: 220, // was 260 (shrinks “no-go” zone)
-
-            // // DIAGNOSTIC (temporarily)
-            // maxSpawnAttempts: 200,  // tons of tries
-            // minSeparationPx: 0,     // allow overlap (diagnostic)
-            // minSinkDistancePx: 0,   // allow close to sink (diagnostic)
-            // entry: { offsetPx: 0, fadeMs: 150, scaleFrom: 0.98 }, // start at position to avoid offscreen clamping
-            // offscreenMarginPx: 0
-
-
-
-            entry: { offsetPx: 100, fadeMs: 220, scaleFrom: 0.92 },
-            offscreenMarginPx: 24
-        },
-
-
-        useSpawner: true,
 
         minSpawnSeparationPx: 120,
         minSinkDistancePx: 180,
@@ -172,7 +123,8 @@ window.CONFIG = {
         timerMs: 60000,          // round length
         breachesAllowed: 5,      // max failures allowed
 
-        maxSpawnAttempts: 80,
+        spawnIntervalMs: 1500,
+        maxSpawnAttempts: 7,
 
         germSpeed: 110,
         wobble: 0.12,
@@ -186,6 +138,7 @@ window.CONFIG = {
         gameDurationTextHud: "01:00",
         reason: "Time up",
 
+        useSpawner: true,
         cornerMargin: 120,
         cornerBandWidth: 240,
         angleSpreadDeg: 42,
@@ -249,17 +202,7 @@ window.CONFIG = {
         },
 
         // word bank for typing
-        words: [],
-
-        rSinkRel: 0.075,
-
-        waveSize: 5,               // how many to emit per wave
-        resumeAt: 1,               // pause waves until only <= resumeAt germs remain
-        betweenWaveDelayMs: 900,   // wait before each wave begins
-        showSinkCircle: false,
-        showGermCircles: false
-
-
+        words: []
     },
 
     // rules and parameters for the clean catch mini game

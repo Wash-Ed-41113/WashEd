@@ -2,18 +2,24 @@
 // loads global CONFIG and shared SYSTEMS modules first so scenes can read them
 import "./config.js";
 import "./systems.js";
+
+// import all scenes used by the game flow
 import PreloadScene from "./scenes/PreloadScene.js";
 import MenuScene from "./scenes/MenuScene.js";
 import GameScene from "./scenes/GameScene.js";
 import PlaygroundScene from "./scenes/PlaygroundScene.js";
 import SoapSplashScene from "./scenes/SoapSplashScene.js";
 import CleanCatchScene from "./scenes/CleanCatchScene.js";
-import SchoolBathroomScene from "./scenes/SchoolBathroomScene.js";
-import EndingScene from "./scenes/EndingScene.js";
 import SoapSplashExplain from "./scenes/SoapSplashExplain.js";
+
 
 import { DB } from "./db.js";
 DB.init();
+
+
+import SchoolBathroomScene from "./scenes/SchoolBathroomScene.js";
+import EndingScene from "./scenes/EndingScene.js";
+
 
 
 // phaser game configuration object
@@ -47,8 +53,17 @@ const config = {
 
     // list of scenes in the order phaser will understand and can switch between
     // preload runs first then menu then game hub and the two mini-games and the playground
-    scene: [PreloadScene, MenuScene, GameScene, PlaygroundScene, SoapSplashScene,
-        CleanCatchScene, SchoolBathroomScene,SoapSplashExplain, EndingScene],
+    scene: [
+        PreloadScene,
+        MenuScene,
+        GameScene,
+        PlaygroundScene,
+        SoapSplashExplain,
+        SoapSplashScene,
+        CleanCatchScene,
+        SchoolBathroomScene,
+        EndingScene
+    ],
 
     // enable phaser DOM plugin so scenes can create html elements like input fields
     dom: { createContainer: true },

@@ -12,44 +12,59 @@ const CC = CONFIG.cleanCatch;   // clean catch game config values
 // small pure functions that do math picking words formatting time and simple checks
 // -----------------------------
 const helpers = {
+    // pick a random angle between two degrees inclusive
+    // returned angle is in radians because trig functions use radians
     sampleAngle(minDeg, maxDeg) {
         const a0 = Phaser.Math.DegToRad(minDeg);
         const a1 = Phaser.Math.DegToRad(maxDeg);
         return Phaser.Math.FloatBetween(a0, a1);
     },
 
-    isAliveText(t) {
-    return !!(t && t.scene && !t.destroyed && t.active !== false);
-    },
-
+    // pick a random radius in a ring area so density is uniform
+    // uses inverse transform sampling for a disk annulus
     sampleRadius(rInner, rOuter) {
         const u = Math.random();
         return Math.sqrt(u * (rOuter * rOuter - rInner * rInner) + rInner * rInner);
     },
+
+    // convert polar coordinates relative to an origin into world x y
+    // note y uses minus sin to point up in screen space
     polarToWorld(origin, r, theta) {
         return { x: origin.x + Math.cos(theta) * r, y: origin.y - Math.sin(theta) * r };
     },
+
+    // clamp a value between lo and hi
     clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); },
+
+    // test axis aligned rectangle overlap
     aabbIntersect(ax, ay, aw, ah, bx, by, bw, bh) {
         return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
     },
+
+    // check if a point is on screen within a small margin
     isOnScreen(scene, x, y, margin = 10) {
         const view = scene.cameras.main.worldView;
         return x >= view.x - margin && y >= view.y - margin &&
             x <= view.right + margin && y <= view.bottom + margin;
     },
+
+    // word helpers provide lists and a picker
     words: {
         soapSplashWords() { return SS.words || []; },
         cleanGood() { return (CC.words && CC.words.good) || []; },
         cleanBad()  { return (CC.words && CC.words.bad)  || []; },
         pick(list)  { return (list && list.length) ? list[Math.floor(Math.random() * list.length)] : ""; }
+
     },
+
+    // format milliseconds as mm ss string for hud
     mmss(ms) {
         const mm = Math.floor(ms / 60000);
         const ss = Math.floor((ms % 60000) / 1000);
         const two = (n) => (n < 10 ? "0" + n : "" + n);
         return `${two(mm)}:${two(ss)}`;
     },
+    // show a simple floating "+N" streak popup
     streakPopup(scene, value, x, y) {
         const t = scene.add.text(x, y, `+${value}`, {
             fontFamily: SS.fontFamily,
@@ -72,6 +87,8 @@ const helpers = {
             onComplete: () => t.destroy()
         });
     },
+
+
 };
 
 const telemetry = {
@@ -97,8 +114,10 @@ const telemetry = {
 
 // -----------------------------
 // ui
+// immediate mode ui helpers built on phaser primitives
 // -----------------------------
 const ui = {
+    // draw a rectangle button with a text label and a click handler
     button(scene, x, y, label, onClick) {
         const B = CONFIG.ui.button;
         const btn = scene.add.rectangle(x, y, B.width, B.height, B.fill, 1)
@@ -112,11 +131,15 @@ const ui = {
         return { btn, txt };
     },
 
+    // modal dialog for player name entry made from a dim overlay a panel some text and a dom input
     nameDialog(scene, onOk) {
         const { width, height } = scene.scale;
+
+        // dark overlay to block interactions behind
         const overlay = scene.add.rectangle(0, 0, width, height, 0x000000, 0.55)
             .setOrigin(0, 0).setDepth(10).setInteractive();
 
+        // choose an image panel if loaded otherwise draw a rectangle panel
         const useImg = scene.textures.exists("ui_dialog");
         let panel;
         if (useImg) {
@@ -129,6 +152,7 @@ const ui = {
                 .setOrigin(0.5).setDepth(11).setStrokeStyle(4, 0x7ec8ff);
         }
 
+        // headline message
         const headline = scene.add.text(width/2, (height/2)-(useImg?110:120),
             "Hey, I’m Kiko — what’s your name?",
             {
@@ -140,8 +164,10 @@ const ui = {
                 align: "center",
                 wordWrap: { width: Math.min(900, width*0.7) }
             }
-        ).setOrigin(0.5).setDepth(12).setShadow(0, 3, "#00000055", 4);
+        ).setOrigin(0.5).setDepth(12)
+            .setShadow(0, 3, "#00000055", 4);
 
+        // optional kiko image for personality and delight
         let kiko = null;
         if (scene.textures.exists("kiko_cheer")) {
             const pw = panel.displayWidth || 760, ph = panel.displayHeight || 360;
@@ -151,21 +177,24 @@ const ui = {
             kiko.setScale(kScale);
         }
 
+        // dom content for input and button
         const html = `
-      <div style="display:flex;flex-direction:column;align-items:center;gap:14px;">
-        <input id="nameInput" type="text" maxlength="20" placeholder="Type your name…"
-          style="padding:12px 14px;font-size:22px;width:360px;border-radius:12px;border:2px solid #89bfff;outline:none;" />
-        <button id="okBtn"
-          style="padding:10px 18px;font-size:18px;cursor:pointer;border-radius:10px;border:1px solid #89bfff;background:#cfe8ff;">
-          Continue
-        </button>
-        <div style="font-size:14px;color:#3a5070;opacity:0.85;margin-top:-4px;">Press Enter to continue…</div>
-      </div>`;
+            <div style="display:flex;flex-direction:column;align-items:center;gap:14px;">
+              <input id="nameInput" type="text" maxlength="20" placeholder="Type your name…"
+                style="padding:12px 14px;font-size:22px;width:360px;border-radius:12px;border:2px solid #89bfff;outline:none;" />
+              <button id="okBtn"
+                style="padding:10px 18px;font-size:18px;cursor:pointer;border-radius:10px;border:1px solid #89bfff;background:#cfe8ff;">
+                Continue
+              </button>
+              <div style="font-size:14px;color:#3a5070;opacity:0.85;margin-top:-4px;">Press Enter to continue…</div>
+            </div>`;
         const dom = scene.add.dom(width/2, (height/2) + (useImg ? 22 : 10))
             .createFromHTML(html).setDepth(12);
 
+        // cache the input
         const inputEl = dom.getChildByID("nameInput");
 
+        // submit function validates stores and calls back then closes
         let close;
         const submit = () => {
             const name = (inputEl?.value || "").trim();
@@ -175,6 +204,7 @@ const ui = {
             onOk?.(name);
         };
 
+        // handlers for enter key and click on continue
         const onKeyDown = (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } };
         window.addEventListener("keydown", onKeyDown);
         inputEl?.addEventListener?.("keydown", onKeyDown);
@@ -182,15 +212,22 @@ const ui = {
         dom.addListener("click");
         dom.on("click", (e) => { if (e.target?.id === "okBtn") submit(); });
 
+        // focus the input after mount
         setTimeout(() => inputEl?.focus(), 0);
 
+        // close cleans up listeners and visuals
         close = () => {
             window.removeEventListener("keydown", onKeyDown);
             inputEl?.removeEventListener?.("keydown", onKeyDown);
-            dom.destroy(); headline.destroy(); panel.destroy(); overlay.destroy(); kiko?.destroy();
+            dom.destroy();
+            headline.destroy();
+            panel.destroy();
+            overlay.destroy();
+            kiko?.destroy();
         };
     },
 
+    // top bar with optional home pause settings icons anchored to top right
     topbar(scene, { onHome, onPause, onSettings } = {}) {
         const T = CONFIG.ui.topbar;
         let x = scene.scale.width - T.padding;
@@ -214,6 +251,7 @@ const ui = {
         return { home, pause, settings };
     },
 
+    // pause overlay with menu, resume, audio toggle, and live stats
     pauseOverlay(scene, { onResume, onHome } = {}) {
         const { width, height } = scene.scale;
         const P = CONFIG.ui.pauseOverlay;
@@ -225,12 +263,14 @@ const ui = {
         const panel = scene.add.rectangle(width / 2, height / 2, panelW, panelH, P.panelColor, 1)
             .setOrigin(0.5).setDepth(1000).setStrokeStyle(4, P.panelStroke);
 
+        // Title
         const title = scene.add.text(width / 2, height / 2 - 150, "Paused", {
             fontFamily: CONFIG.ui.fontFamily,
             fontSize: `${P.titleSize}px`,
             color: "#ffffff"
         }).setOrigin(0.5).setDepth(1001);
 
+        // Live stats: score + streak (reads from streakSys if present)
         const base  = scene.streakSys?.baseScore ?? 0;
         const mult  = scene.streakSys?.multiplier?.() ?? 0;
         const total = scene.streakSys?.totalScore ?? scene.typing?.score ?? 0;
@@ -243,6 +283,7 @@ const ui = {
             { fontFamily: CONFIG.ui.fontFamily, fontSize: "24px", color: "#ffffff", align: "center" }
         ).setOrigin(0.5).setDepth(1001);
 
+        // Buttons (reuse your ui.button helper)
         const y0 = height / 2 + 10;
         const mkBtn = (label, y, cb) => {
             const { btn, txt } = ui.button(scene, width / 2, y, label, cb);
@@ -253,6 +294,7 @@ const ui = {
         const resumeBtn = mkBtn("Resume", y0, () => onResume?.());
         const homeBtn   = mkBtn("Main Menu", y0 + 90, () => onHome?.());
 
+        // Mute/Unmute toggle
         const isMuted = !!scene.sound?.mute;
         let audioLabel = scene.add.text(width / 2, y0 + 155, isMuted ? "Unmute" : "Mute", {
             fontFamily: CONFIG.ui.fontFamily, fontSize: "22px", color: "#ffffff",
@@ -262,10 +304,12 @@ const ui = {
         const toggleAudio = () => {
             if (scene.sound) {
                 scene.sound.mute = !scene.sound.mute;
+                // persist mute across scenes
                 scene.registry.set("mute", scene.sound.mute);
                 audioLabel.setText(scene.sound.mute ? "Unmute" : "Mute");
             }
         };
+
         audioLabel.on("pointerup", toggleAudio);
 
         return {
@@ -279,14 +323,21 @@ const ui = {
     },
 
     togglePause() {
+        // flip paused state
         if (this._paused) {
             this._paused = false;
-            this._pauseUi?.destroy(); this._pauseUi = null;
+
+            // unpause SoapSplash timers/motion if you gate them elsewhere
+            this._pauseUi?.destroy();
+            this._pauseUi = null;
         } else {
             this._paused = true;
+
+            // build the rich pause overlay from systems.js
             this._pauseUi = systems.ui.pauseOverlay(this, {
                 onResume: () => this.togglePause(),
                 onHome: () => {
+                    // wrap up the round politely, then bounce to your hub/menu scene
                     this.finalizeRound?.("Paused → Main Menu");
                     const playerName = this.registry.get("playerName");
                     this.scene.start("GameScene", { playerName });
@@ -294,30 +345,61 @@ const ui = {
             });
         }
     }
+
+
 };
+
 
 // -----------------------------
 // streak / score engine
+// rules:
+// - keep a "clean run" count of consecutive clean completions (no mistakes in that word)
+// - a streak starts ONLY after two clean words in a row:
+// - totalScore = baseScore * (streak * 0.5)
+// - any mistake before a word completes resets cleanRun and streak to 0
 // -----------------------------
 const streakScore = (() => {
     function create() {
         return {
-            baseScore: 0, totalScore: 0, cleanRun: 0, streak: 0, bestStreak: 0,
+            baseScore: 0,
+            totalScore: 0,
+            cleanRun: 0,
+            streak: 0,
+            bestStreak: 0,
+
+            // Add or subtract base points, then recompute total
             addBase(points) {
                 this.baseScore = Math.max(0, this.baseScore + (points || 0));
                 this._recompute();
             },
+
+            // Call when a word finishes; pass clean=true if no mistakes for that word
             onWord(clean) {
                 if (clean) {
                     this.cleanRun += 1;
+                    // streak begins at the second clean word and then increments
                     this.streak = Math.max(0, this.cleanRun - 1);
                     this.bestStreak = Math.max(this.bestStreak, this.streak);
-                } else { this.cleanRun = 0; this.streak = 0; }
+                } else {
+                    this.cleanRun = 0;
+                    this.streak = 0;
+                }
                 this._recompute();
             },
-            onMistake() { this.cleanRun = 0; this.streak = 0; this._recompute(); },
+
+            // Call on any keystroke error
+            onMistake() {
+                this.cleanRun = 0;
+                this.streak = 0;
+                this._recompute();
+            },
+
             multiplier() { return this.streak * 0.5; },
-            _recompute() { this.totalScore = Math.floor(this.baseScore * this.multiplier()); }
+
+            _recompute() {
+                // spec: total = (streak * 0.5) * baseScore
+                this.totalScore = Math.floor(this.baseScore * this.multiplier());
+            }
         };
     }
     return { create };
@@ -325,16 +407,20 @@ const streakScore = (() => {
 
 // -----------------------------
 // soap splash engine
+// includes spawn movement rules timer and typing logic
+// implemented as an iife that returns namespaces
 // -----------------------------
 const soapsplash = (() => {
-
+    // create a germ with sprite labels caret and optional debug circle
     function addGerm(scene, pos, word) {
         const id = ++scene.germSeq;
 
+        // visual sprite
         const sprite = scene.add.sprite(pos.x, pos.y, "Germ")
             .setDepth(4)
             .setScale(SS.germSpriteSize);
 
+        // typed and remaining labels stacked starting at same x y then laid out in renderTarget
         const ty = scene.add.text(pos.x, pos.y + SS.verticalSpaceLabel, "", {
             fontFamily: SS.fontFamily, fontSize: SS.labelTextSize, color: "#000000"
         }).setOrigin(0.5, 0).setDepth(5);
@@ -347,16 +433,22 @@ const soapsplash = (() => {
         ty.setColor(C.typed ?? "#000000");
         rm.setColor(C.remain ?? "#000000");
 
+        // caret underline to highlight the next character width is adjusted dynamically
         const caretH = 3;
         const caretCol = 0xff7043;
         const cur = scene.add.rectangle(
             pos.x, pos.y + SS.verticalSpaceLabel,
             12, caretH, caretCol, 0.9
-        ).setOrigin(0, 1).setDepth(6).setVisible(false);
+        )
+            .setOrigin(0, 1)
+            .setDepth(6)
+            .setVisible(false);
 
+        // hit radius decides collision with sink either from config or derived from sprite
         const derivedRadius = Math.round(sprite.displayWidth * (SS.germHitRadiusFromSprite ?? 0.35));
         const hitRadius = (SS.germHitRadiusPx ?? derivedRadius);
 
+        // optional debug hit circle
         let hitCircle = null;
         if (SS.debug?.showGermCircles) {
             hitCircle = scene.add.circle(
@@ -366,6 +458,7 @@ const soapsplash = (() => {
             ).setDepth(3);
         }
 
+        // store runtime data on the germ
         const germ = {
             id, sprite,
             labelTyped: ty, labelRemain: rm, curBox: cur,
@@ -373,179 +466,86 @@ const soapsplash = (() => {
             hitRadius, _hitCircle: hitCircle
         };
         scene.germs.push(germ);
-        return germ;
+        return id;
     }
 
+    // remove germ and all its visual parts by array index
     function removeGermByIndex(scene, i) {
         const g = scene.germs[i]; if (!g) return;
+
         if (g.curBox) { scene.tweens.killTweensOf(g.curBox); g.curBox.destroy(); g.curBox = null; }
         if (g._add)   { scene.tweens.killTweensOf(g._add);   g._add.destroy();   g._add  = null; }
         if (g._glow && g.sprite?.postFX?.remove) { g.sprite.postFX.remove(g._glow); g._glow = null; }
         if (g._hitCircle) { g._hitCircle.destroy(); g._hitCircle = null; }
-        g.sprite.destroy(); g.labelTyped.destroy(); g.labelRemain.destroy();
+
+        g.sprite.destroy();
+        g.labelTyped.destroy();
+        g.labelRemain.destroy();
         scene.germs.splice(i, 1);
     }
 
+    // pick a word for a new germ
     function pickWord() { return helpers.words.pick(helpers.words.soapSplashWords()); }
 
     // ---------------- spawn ----------------
     const spawn = {
+        // attempt to spawn one germ in the corner ring with separation and min sink distance
         spawnGerm(scene) {
             if (scene.gameOver) return;
-            const SS = CONFIG.soapSplash;
-            const cap = SS.maxGerms ?? 5;
+
+            const cap = SS.waveCap ?? SS.maxGerms ?? 5;
             if (scene.germs.length >= cap) return;
 
-            const lanes = SS.spawner?.lanes || [];
-            if (!lanes.length) return;
+            const triesMax = SS.maxSpawnAttempts ?? 24;
+            const sep = SS.minSpawnSeparationPx ?? 0;
+            const minSink = SS.minSinkDistancePx ?? 0;
 
-            const triesMax = SS.spawner?.maxSpawnAttempts ?? SS.maxSpawnAttempts ?? 24;
-            const sep      = SS.spawner?.minSeparationPx ?? 0;
-            const minSink  = SS.spawner?.minSinkDistancePx ?? 0;
+            // estimate hit radius of a new germ from texture size and sprite scale so spacing feels right
+            const tex = scene.textures.get("Germ");
+            const texW = tex?.getSourceImage()?.width || 64;
+            const scaledW = (SS.germSpriteSize ?? 1) * texW;
+            const newR = SS.germHitRadiusPx ?? Math.round(scaledW * (SS.germHitRadiusFromSprite ?? 0.35));
 
-            const entryOffset = SS.spawner?.entry?.offsetPx ?? 100;
-            const entryMs     = SS.spawner?.entry?.fadeMs ?? 220;
-            const entryScale  = SS.spawner?.entry?.scaleFrom ?? 0.92;
-            const offM        = SS.spawner?.offscreenMarginPx ?? 24;
+            let tries = triesMax;
+            let pos = null;
 
-            const tex   = scene.textures.get("Germ");
-            const texW  = tex?.getSourceImage()?.width || 64;
-            const scale = SS.germSpriteSize ?? 1;
-            const newR  = SS.germHitRadiusPx ?? Math.round(texW * scale * (SS.germHitRadiusFromSprite ?? 0.35));
+            while (tries-- > 0) {
+                // sample position in ring sector
+                const theta = helpers.sampleAngle(scene.angleMinDeg, scene.angleMaxDeg);
+                const r = helpers.sampleRadius(scene.rInner, scene.rOuter);
+                const p = helpers.polarToWorld(scene.sinkPosition, r, theta);
 
-            const W = SS.width, H = SS.height;
-
-            function pickLane(ls) {
-                const total = ls.reduce((s, l) => s + (l.weight || 0), 0) || 1;
-                let r = Math.random() * total;
-                for (const l of ls) { r -= (l.weight || 0); if (r <= 0) return l; }
-                return ls[ls.length - 1];
-            }
-            function sampleInside(lane) {
-                const [rx0, ry0, rx1, ry1] = lane.rect;
-                const x = Phaser.Math.Between((rx0 * W) | 0, (rx1 * W) | 0);
-                const y = Phaser.Math.Between((ry0 * H) | 0, (ry1 * H) | 0);
-                return { x, y };
-            }
-
-            let posFinal = null;
-            {
-                let tries = triesMax;
-                while (tries-- > 0) {
-                    const lane = pickLane(lanes);
-                    const p = sampleInside(lane);
-
-                    if (minSink > 0) {
-                        const ds = Phaser.Math.Distance.Between(p.x, p.y, scene.sinkPosition.x, scene.sinkPosition.y);
-                        if (ds < (minSink + newR)) continue;
-                    }
-
-                    if (sep > 0 && scene.germs.length) {
-                        let ok = true;
-                        for (const g of scene.germs) {
-                            const need = (g.hitRadius ?? 0) + newR + sep;
-                            if (Phaser.Math.Distance.Between(p.x, p.y, g.sprite.x, g.sprite.y) < need) { ok = false; break; }
-                        }
-                        if (!ok) continue;
-                    }
-
-                    posFinal = p; break;
-                }
-            }
-
-            if (!posFinal) {
-                // Second pass: relax constraints slightly and try again
-                let tries = triesMax;
-                const sep2 = Math.max(0, Math.floor(sep * 0.5));
-                const minSink2 = Math.max(0, Math.floor(minSink * 0.85));
-
-                while (tries-- > 0) {
-                    const lane = pickLane(lanes);
-                    const p = sampleInside(lane);
-
-                    // relaxed sink distance
-                    if (minSink2 > 0) {
-                        const ds = Phaser.Math.Distance.Between(p.x, p.y, scene.sinkPosition.x, scene.sinkPosition.y);
-                        if (ds < (minSink2 + newR)) continue;
-                    }
-
-                    // relaxed separation
-                    if (sep2 > 0 && scene.germs.length) {
-                        let ok = true;
-                        for (const g of scene.germs) {
-                            const need = (g.hitRadius ?? 0) + newR + sep2;
-                            if (Phaser.Math.Distance.Between(p.x, p.y, g.sprite.x, g.sprite.y) < need) { ok = false; break; }
-                        }
-                        if (!ok) continue;
-                    }
-
-                    posFinal = p; break;
+                // enforce minimum distance from sink
+                if (minSink > 0) {
+                    const ds = Phaser.Math.Distance.Between(p.x, p.y, scene.sinkPosition.x, scene.sinkPosition.y);
+                    if (ds < (minSink + newR)) continue;
                 }
 
-                if (!posFinal) {
-                    console.warn("[SoapSplash] All attempts failed (even relaxed).");
-                    return;
+                // enforce separation from existing germs
+                if (sep > 0 && scene.germs.length) {
+                    let ok = true;
+                    for (let i = 0; i < scene.germs.length; i++) {
+                        const g = scene.germs[i];
+                        const need = (g.hitRadius ?? 0) + newR + sep;
+                        if (Phaser.Math.Distance.Between(p.x, p.y, g.sprite.x, g.sprite.y) < need) { ok = false; break; }
+                    }
+                    if (!ok) continue;
                 }
+
+                pos = p; break;
             }
 
-            const vx = posFinal.x - scene.sinkPosition.x;
-            const vy = posFinal.y - scene.sinkPosition.y;
-            const vlen = Math.hypot(vx, vy) || 1;
-            const nx = vx / vlen, ny = vy / vlen;
-
-            let startX = posFinal.x + nx * entryOffset;
-            let startY = posFinal.y + ny * entryOffset;
-
-            if (startX > W) startX = W + offM;
-            if (startX < 0) startX = -offM;
-            if (startY > H) startY = H + offM;
-            if (startY < 0) startY = -offM;
-
+            if (!pos) return;
             const word = pickWord();
-            const germObj = addGerm(scene, { x: startX, y: startY }, word);
-
-            const targets = [
-                germObj?.sprite,
-                germObj?.labelTyped,
-                germObj?.labelRemain,
-            ].filter(Boolean);
-
-            targets.forEach(t => {
-                t.setAlpha(0.0);
-                if (t === germObj.sprite) t.setScale((t.scaleX || 1) * entryScale);
-            });
-
-            scene.tweens.add({
-                targets,
-                x: (_t, i) => (i === 0 ? posFinal.x : undefined),
-                y: (_t, i) => (i === 0 ? posFinal.y : undefined),
-                alpha: 1,
-                duration: entryMs,
-                ease: "Cubic.Out",
-                onUpdate: () => {
-                    if (germObj?.labelTyped && germObj?.sprite) {
-                        const s = germObj.sprite;
-                        const lx = s.x;
-                        const ly = s.y + (SS.verticalSpaceLabel ?? 34);
-                        germObj.labelTyped.setPosition(lx, ly);
-                        germObj.labelRemain?.setPosition(lx, ly);
-                    }
-                },
-                onComplete: () => {
-                    if (germObj?.sprite) {
-                        const baseScale = SS.germSpriteSize ?? 1;
-                        germObj.sprite.setScale(baseScale);
-                    }
-                }
-            });
-
-            // ensure there is an active target (first-spawned, then chain)
-            if (!scene.typing?.activeId) typing.hardRetarget(scene);
+            addGerm(scene, pos, word);
+            // ensure there is an active target
+            if (!scene.typing?.activeId) typing.pickNearest(scene);
         },
     };
 
     // ---------------- movement ----------------
     const movement = {
+        // move germs toward sink with small wobble and update their labels and effects
         moveGerms(scene, delta) {
             const base = SS.germBaseSpeed ?? 110;
             const rand = SS.germSpeedRand ?? 0;
@@ -560,26 +560,29 @@ const soapsplash = (() => {
                 const mag = Math.hypot(dx, dy) || 1;
                 let ux = dx / mag, uy = dy / mag;
 
+                // add tiny random offsets so paths are not perfectly straight
                 ux += (Math.random() - 0.5) * wobble;
                 uy += (Math.random() - 0.5) * wobble;
                 const mm = Math.hypot(ux, uy) || 1; ux /= mm; uy /= mm;
 
+                // move sprite
                 g.sprite.x += ux * speed;
                 g.sprite.y += uy * speed;
 
+                // keep attached effects centered
                 if (g._halo) g._halo.setPosition(g.sprite.x, g.sprite.y);
                 if (g._add)  g._add.setPosition(g.sprite.x, g.sprite.y);
 
+                // position labels just under the germ and re render target text
                 g.labelTyped.setPosition(g.sprite.x, g.sprite.y + 14);
                 g.labelRemain.setPosition(g.sprite.x, g.sprite.y + 14);
                 typing.renderTarget(g, scene);
 
-                // off-screen cleanup
+                // if a germ leaves the screen clean it up and retarget typing
                 if (g.sprite.x > SS.width + margin || g.sprite.y > SS.height + margin) {
                     const wasActive = (scene.germs[i]?.id === scene.typing?.activeId);
-                    scene._lastRemovedPos = { x: g.sprite.x, y: g.sprite.y };
                     removeGermByIndex(scene, i);
-                    if (wasActive) { scene.typing.activeId = null; typing.hardRetarget(scene); }
+                    if (wasActive) { scene.typing.activeId = null; typing.pickNearest(scene); }
                 }
             }
         }
@@ -587,6 +590,7 @@ const soapsplash = (() => {
 
     // ---------------- rules ----------------
     const rules = {
+        // check collision between each germ and the sink hit circle then update hud and state
         checkBreaches(scene) {
             const hit = scene.getSinkHitPoint();
             const rSink = scene.rSink ?? SS.rSink ?? Math.max(16, Math.round(SS.height * 0.06));
@@ -600,8 +604,6 @@ const soapsplash = (() => {
 
                 if (d <= rSink + gR) {
                     const wasActive = (g.id === scene.typing?.activeId);
-
-                    scene._lastRemovedPos = { x: g.sprite.x, y: g.sprite.y };
                     removeGermByIndex(scene, i);
 
                     scene.breaches++;
@@ -613,14 +615,19 @@ const soapsplash = (() => {
 
                     if (wasActive) {
                         scene.typing.activeId = null;
-                        typing.hardRetarget(scene);
+                        if (scene.germs.length) typing.pickNearest(scene);
                     }
 
                     if (scene.streakSys) {
+                        // Deduct from BASE so total recomputes with the (streak * 0.5) multiplier
                         scene.streakSys.addBase(-penalty);
+
+                        // Sync legacy fields used by overlay & any other UI
                         scene.typing.score = scene.streakSys.totalScore;
                         scene.typing.streak = scene.streakSys.streak;
                         scene.typing.bestStreak = Math.max(scene.typing.bestStreak, scene.streakSys.bestStreak);
+
+                        // Refresh HUD so the penalty is visible immediately
                         soapsplash.typing.updateHud(scene);
                     }
 
@@ -630,8 +637,11 @@ const soapsplash = (() => {
         }
     };
 
+
+
     // ---------------- timer ----------------
     const timer = {
+        // create hud and schedule round end
         init(scene) {
             scene.gameOver = false;
             scene.timerHud = scene.add.text(
@@ -645,11 +655,13 @@ const soapsplash = (() => {
                 () => timer.endGame(scene, "Time up")
             );
         },
+        // update remaining time label every frame from start time
         updateHUD(scene, now) {
             if (scene.gameStartAt == null) return;
             const remaining = Math.max(0, (SS.gameDurationMin * 60 * 1000) - (now - scene.gameStartAt));
             scene.timerHud.setText(`Time: ${helpers.mmss(remaining)}`);
         },
+        // end round clean up germs show summary and allow tap to restart
         endGame(scene, reason = SS.reason || "Game over") {
             if (scene.gameOver) return;
             scene.gameOver = true;
@@ -660,7 +672,10 @@ const soapsplash = (() => {
             scene.timerHud?.setText("Time: 00:00");
             scene.endEvent?.remove(false);
 
-            if (typeof scene.finalizeRound === "function") scene.finalizeRound(reason);
+            // write summary to the DB via scene helper (SoapSplashScene provides finalizeRound)
+            if (typeof scene.finalizeRound === "function") {
+                scene.finalizeRound(reason);
+            }
 
             const overlay = scene.add.text(
                 SS.width / 2, SS.height / 2,
@@ -672,23 +687,77 @@ const soapsplash = (() => {
         },
     };
 
+    function showStreakPopup(scene, value, x, y) {
+        const msg = `+${value}`;
+        const t = scene.add.text(x, y, msg, {
+            fontFamily: SS.fontFamily,
+            fontSize: "22px",
+            color: "#ffffff",
+            fontStyle: "bold",
+            backgroundColor: "#2aa84a",
+            padding: { left: 10, right: 10, top: 6, bottom: 6 },
+            align: "center"
+        }).setOrigin(0.5).setDepth(200);
+
+        // small scale pop + float up + fade
+        t.setScale(0.8);
+        scene.tweens.add({
+            targets: t,
+            y: y - 35,
+            alpha: { from: 1, to: 0 },
+            scale: { from: 0.95, to: 1.05 },
+            duration: 750,
+            ease: "Cubic.Out",
+            onComplete: () => t.destroy()
+        });
+    }
+
     // ---------------- typing ----------------
     const typing = {
+        // initialize typing state create measurement helper and keyboard handler
         init(scene) {
             scene.typing = {
                 activeId: null, keystrokes: 0, mistakes: 0, startedAt: null, locked: false,
+                // score shown on the “summary” must still live here for compatibility
                 score: 0, streak: 0, bestStreak: 0, wordClean: true, wordsCompleted: 0,
-                streakPops: 0,
+                streakPops: 0, // include here on first (and only) assignment
             };
+
+            // attach reusable streak/score engine
             scene.streakSys = streakScore.create();
 
+            // HUD shows base, multiplier, and total
+            // add a larger, prominent HUD panel (white with black border)
+            scene.hudPanel = scene.add.rectangle(
+                10, SS.height - 56,          // x, y (anchored bottom-left)
+                SS.width - 20, 48,           // width, height
+                0xffffff, 0.90               // fill color & alpha
+            )
+                .setOrigin(0, 0)
+                .setStrokeStyle(2, 0x000000)   // black outline
+                .setDepth(9);
+
+            scene.typeHud = scene.add.text(
+                20, SS.height - 46,
+                `Score: 0  (base 0 × x0.0)   Streak: 0`,
+                {
+                    fontFamily: SS.fontFamily,
+                    fontSize: "20px",
+                    fontStyle: "700",          // Phaser accepts numeric weight or "bold"
+                    color: "#000000"           // <-- black
+                }
+            ).setDepth(10);
+
+
+            // hidden text for measuring caret etc (unchanged)
             scene.typing._measure = scene.add.text(-9999, -9999, "", {
                 fontFamily: SS.fontFamily, fontSize: SS.labelTextSize, color: "#000000"
             }).setVisible(false);
 
             scene.typing.measureChar = (ch) => {
                 const sizeNum = typeof SS.labelTextSize === "string"
-                    ? parseInt(SS.labelTextSize, 10) : (SS.labelTextSize || 30);
+                    ? parseInt(SS.labelTextSize, 10)
+                    : (SS.labelTextSize || 30);
                 const s = ch && ch.length ? ch : " ";
                 scene.typing._measure.setText(s);
                 const b = scene.typing._measure.getTextBounds?.();
@@ -698,6 +767,9 @@ const soapsplash = (() => {
             scene.input.keyboard.on("keydown", (e) => typing.onKey(e, scene));
         },
 
+
+
+        // clear highlights and caret for all germs
         deactivateAll(scene) {
             for (const g of scene.germs) {
                 g.active = false;
@@ -711,96 +783,7 @@ const soapsplash = (() => {
             }
         },
 
-        // --- authoritative retarget (re-entrant safe) ---
-        hardRetarget(scene) {
-            if (scene._retargetBusy) { scene._retargetQueued = true; return; }
-            scene._retargetBusy = true;
-
-            const runOnce = () => {
-                typing.selectAutoTarget(scene);
-                typing.ensureActiveVisible(scene);
-            };
-
-            runOnce();
-
-            if (!scene._retargetPostrender) {
-                scene._retargetPostrender = true;
-                scene.events.once('postrender', () => {
-                    runOnce();
-                    scene._retargetPostrender = false;
-
-                    scene._retargetBusy = false;
-                    if (scene._retargetQueued) {
-                        scene._retargetQueued = false;
-                        scene.events.once('postupdate', () => typing.hardRetarget(scene));
-                    }
-                });
-                return;
-            }
-
-            scene._retargetBusy = false;
-            if (scene._retargetQueued) {
-                scene._retargetQueued = false;
-                scene.events.once('postupdate', () => typing.hardRetarget(scene));
-            }
-        },
-
-        ensureActiveVisible(scene) {
-            const g = scene._activeGerm;
-            if (!g || !g.sprite) return;
-
-            scene.tweens.killTweensOf(g.sprite);
-            scene.tweens.killTweensOf(g.labelTyped);
-            scene.tweens.killTweensOf(g.labelRemain);
-
-            g.sprite.setAlpha(1).setDepth(Math.max(6, g.sprite.depth || 6));
-            g.labelTyped?.setAlpha(1).setDepth((g.sprite.depth || 6) + 1);
-            g.labelRemain?.setAlpha(1).setDepth((g.sprite.depth || 6) + 1);
-
-            if (g.curBox) g.curBox.setVisible(true).setAlpha(0.9);
-
-            typing.renderTarget(g, scene);
-        },
-
-        // --- NEW: auto-select (first-spawned; then chain to last removed) ---
-        selectAutoTarget(scene) {
-            const germs = scene.germs;
-            if (!germs || germs.length === 0) return null;
-
-            if (!scene._lastRemovedPos) {
-                let first = null;
-                for (const g of germs) {
-                    if (!g || !g.sprite) continue;
-                    if (!first || g.id < first.id) first = g;
-                }
-                if (first) typing.setActiveGerm(scene, first);
-                return first;
-            }
-
-            const last = scene._lastRemovedPos;
-            let best = null, bestD2 = Infinity;
-            for (const g of germs) {
-                if (!g || !g.sprite) continue;
-                const dx = g.sprite.x - last.x, dy = g.sprite.y - last.y;
-                const d2 = dx*dx + dy*dy;
-                if (d2 < bestD2) { bestD2 = d2; best = g; }
-            }
-            if (best) typing.setActiveGerm(scene, best);
-            return best;
-        },
-
-        setActiveGerm(scene, germ) {
-            typing.activate(scene, germ);
-            scene._activeGerm = germ;
-            typing.ensureActiveVisible(scene);
-        },
-
-        setGermHighlight(germ, on) {
-            if (!germ || !germ.sprite) return;
-            germ.sprite.setTint(on ? 0xffffaa : 0xffffff);
-            if (germ.labelRemain) germ.labelRemain.setAlpha(on ? 1 : 0.85);
-        },
-
+        // activate a target germ add glow additive sprite and caret pulse
         activate(scene, g) {
             typing.deactivateAll(scene);
             if (g._caretPulse) { g._caretPulse.remove(); g._caretPulse = null; }
@@ -812,6 +795,7 @@ const soapsplash = (() => {
             g.active = true;
             g.sprite.clearTint();
 
+            // soft outer glow using postfx if available and pulsing over time
             if (F.useGlow && g.sprite?.postFX?.addGlow) {
                 const baseOuter = (F.glowOuter ?? 6);
                 g._glow = g.sprite.postFX.addGlow(
@@ -832,6 +816,7 @@ const soapsplash = (() => {
                 }
             }
 
+            // additive duplicate sprite for a bright focus aura
             if (F.additiveSprite !== false) {
                 const baseAlpha = F.addAlpha ?? 0.18;
                 const addScale  = F.addScale ?? 1.10;
@@ -855,19 +840,18 @@ const soapsplash = (() => {
                 });
             }
 
+            // show caret underline with a slow pulse
             if (g.curBox) {
                 g.curBox.setVisible(true);
                 scene.tweens.add({ targets: g.curBox, alpha: 0.05, duration: 500, yoyo: true, repeat: -1 });
             }
 
+            // mark as active and lay out labels and caret
             scene.typing.activeId = g.id;
-            g.sprite.setAlpha(1).setDepth(Math.max(6, g.sprite.depth));
-            g.labelTyped.setAlpha(1).setDepth((g.sprite.depth || 6) + 1);
-            g.labelRemain.setAlpha(1).setDepth((g.sprite.depth || 6) + 1);
-
             typing.renderTarget(g, scene);
         },
 
+        // choose a random target or the nearest to the sink depending on strategy
         pickRandom(scene) {
             if (!scene.germs.length) { scene.typing.activeId = null; return; }
             const idx = Math.floor(Math.random() * scene.germs.length);
@@ -886,35 +870,32 @@ const soapsplash = (() => {
             if (best) typing.activate(scene, best);
         },
 
+        // lay out typed and remaining strings and position caret box
         renderTarget(g, scene) {
-            // bail if anything we need is gone
-            if (!g || !g.sprite || !helpers.isAliveText(g.labelTyped) || !helpers.isAliveText(g.labelRemain)) return;
+            const sc = scene || g.labelTyped?.scene || g.labelRemain?.scene;
 
-            const sc = scene || g.labelTyped.scene || g.labelRemain.scene;
             const baseY = g.sprite.y + SS.verticalSpaceLabel;
-
-            const theWord  = g.word || "";
-            const typedStr = theWord.slice(0, g.typedIdx);
+            const theWord   = g.word || "";
+            const typedStr  = theWord.slice(0, g.typedIdx);
             const remainStr = theWord.slice(g.typedIdx);
 
-            // update text safely
-            if (helpers.isAliveText(g.labelTyped))  g.labelTyped.setText(typedStr);
-            if (helpers.isAliveText(g.labelRemain)) g.labelRemain.setText(remainStr);
+            g.labelTyped.setText(typedStr);
+            g.labelRemain.setText(remainStr);
 
             const typedW  = g.labelTyped.displayWidth;
             const remainW = g.labelRemain.displayWidth;
             const totalW  = typedW + remainW;
             const leftX   = g.sprite.x - totalW / 2;
 
-            if (helpers.isAliveText(g.labelTyped))  g.labelTyped.setOrigin(0, 0).setPosition(leftX, baseY);
-            if (helpers.isAliveText(g.labelRemain)) g.labelRemain.setOrigin(0, 0).setPosition(leftX + typedW, baseY);
+            g.labelTyped.setOrigin(0, 0).setPosition(leftX, baseY);
+            g.labelRemain.setOrigin(0, 0).setPosition(leftX + typedW, baseY);
 
             const isActive = !!(sc?.typing?.activeId === g.id && g.active);
             if (!g.curBox) return;
 
             const sizeNum = (typeof SS.labelTextSize === "string")
                 ? parseInt(SS.labelTextSize, 10) : (SS.labelTextSize || 30);
-            const nextCh = g.word[g.typedIdx] || " ";
+            const nextCh  = g.word[g.typedIdx] || " ";
             const cw = (sc?.typing?.measureChar) ? sc.typing.measureChar(nextCh) : 0.6 * sizeNum;
             const underlineY = baseY + sizeNum + 2;
 
@@ -942,7 +923,7 @@ const soapsplash = (() => {
             }
         },
 
-
+        // key handling for typing game including backspace correct and incorrect letters
         onKey(e, scene) {
             if (scene.gameOver || scene._paused) return;
             if (!scene.typing.startedAt) scene.typing.startedAt = scene.time.now;
@@ -971,13 +952,18 @@ const soapsplash = (() => {
                 scene.typing.mistakes++;
                 scene.typing.wordClean = false;
 
+                // NEW: mistakes wipe the clean run & streak immediately
                 scene.streakSys.onMistake();
+
+                // DB hook: log a mistake event
                 telemetry.onMistake(scene);
+
 
                 const C = CONFIG.soapSplash.colors || {};
                 g.labelRemain.setColor(C.errorRemain ?? "#ff4d4d");
                 g.labelTyped.setColor(C.errorTyped ?? g.labelTyped.style.color);
 
+                // small shake feedback on error
                 scene.tweens.add({
                     targets: g.labelRemain,
                     x: g.labelRemain.x + 4,
@@ -987,51 +973,58 @@ const soapsplash = (() => {
                 });
             }
 
+
             typing.updateHud(scene);
         },
 
+        // when a word is completed remove germ update score and streak and retarget
         onWordComplete(scene, g) {
-            // remember where this one died for chaining target selection
-            scene._lastRemovedPos = { x: g.sprite.x, y: g.sprite.y };
+            const idx = scene.germs.indexOf(g);
+            if (idx >= 0) removeGermByIndex(scene, idx);
+            scene.typing.activeId = null;
 
-            // scoring bookkeeping before we destroy anything
+            // capture current streak before we change it
             const oldStreak = scene.streakSys?.streak ?? 0;
+
             scene.typing.wordsCompleted++;
+
             const clean = !!scene.typing.wordClean;
 
-            // update scores / streaks
+            // award base points first
             scene.streakSys.addBase(100);
+
+            // apply streak rule
             scene.streakSys.onWord(clean);
+
+            // keep legacy fields in sync
             scene.typing.streak = scene.streakSys.streak;
             scene.typing.bestStreak = Math.max(scene.typing.bestStreak, scene.streakSys.bestStreak);
             scene.typing.score = scene.streakSys.totalScore;
 
-            // log while g still exists
-            telemetry.onWordComplete(scene, g, clean);  // :contentReference[oaicite:0]{index=0}
+            // optional telemetry
+            telemetry.onWordComplete(scene, g, clean);
 
-            // pop UI before destruction (uses g.sprite only)
             if (scene.typing.streak > oldStreak && scene.typing.streak >= 1) {
                 const px = g.sprite?.x ?? (SS.width / 2);
                 const py = (g.sprite?.y ?? (SS.height / 2)) - 10;
-                helpers.streakPopup(scene, scene.typing.streak, px, py);   // :contentReference[oaicite:1]{index=1}
+                helpers.streakPopup(scene, scene.typing.streak, px, py);
                 scene.typing.streakPops += 1;
             }
 
-            // now safely destroy the germ & its labels
-            const idx = scene.germs.indexOf(g);
-            if (idx >= 0) removeGermByIndex(scene, idx);                 // :contentReference[oaicite:2]{index=2}
-            scene.typing.activeId = null;
-
-            // reset per-word flags
+            // reset per-word cleanliness for the next word
             scene.typing.wordClean = true;
 
-            // IMPORTANT: do NOT touch g.labelTyped / g.labelRemain after this point
-            typing.updateHud(scene);                                     // :contentReference[oaicite:3]{index=3}
-            typing.hardRetarget(scene);                                  // :contentReference[oaicite:4]{index=4}
-            return; // guard against accidental fall-through
+            const C = CONFIG.soapSplash.colors || {};
+            g.labelTyped.setColor(C.typed ?? "#000000");
+            g.labelRemain.setColor(C.remain ?? "#000000");
+
+            typing.updateHud(scene);
+            typing.pickNearest(scene);
         },
 
 
+
+        // refresh the score and streak hud text
         updateHud(scene) {
             const base = scene.streakSys?.baseScore ?? 0;
             const mult = scene.streakSys?.multiplier?.() ?? 0;
@@ -1042,13 +1035,16 @@ const soapsplash = (() => {
                 `Score: ${total}  (base ${base} × x${mult.toFixed(1)})   Streak: ${s}`
             );
         },
+
     };
 
+    // expose all namespaces to scenes through systems so they can call systems.soapsplash.whatever
     return { spawn, movement, rules, timer, typing };
 })();
 
 // -----------------------------
 // clean catch engine
+// returns an object with destroy and setPaused so the scene can control it
 // -----------------------------
 const cleancatcher = {
     create(canvas) {
@@ -1056,144 +1052,247 @@ const cleancatcher = {
         const ctx = canvas.getContext("2d");
         ctx.imageSmoothingEnabled = true;
 
+        // set canvas resolution to the game size so drawing is crisp
         canvas.width = CC.width;
         canvas.height = CC.height;
 
+        // images and word lists
         const A = CONFIG.assets.cleanCatch || {};
-        const background = new Image(); background.src = A.background || "";
-        const germImg = new Image(); germImg.src = A.germ || "";
-        const waterImg = new Image(); waterImg.src = A.waterDroplet || "";
-        const soapImg = new Image(); soapImg.src = A.soap || "";
+        const background = new Image();
+        background.src = A.background || "";
+        const germImg = new Image();
+        germImg.src = A.germ || "";
+        const waterImg = new Image();
+        waterImg.src = A.waterDroplet || "";
+        const soapImg = new Image();
+        soapImg.src = A.soap || "";
 
         const goodMessages = [
-            "Nice work!","Good catch!","We love clean water!","We love soap!","Keep going!","Great job!"
-        ];
-        const badMessages = [
-            "That’s a germ!","Oops, not that one!","Be careful! We don't want your hands to get more dirty!",
-            "Yikes, dirty water!","Watch out for those germs!"
+            "Nice work!",
+            "Good catch!",
+            "We love clean water!",
+            "We love soap!",
+            "Keep going!",
+            "Great job!"
         ];
 
-        let currentMessage = "";
-        let messageTimer = 0;
-        const messageDuration = 60;
+        const badMessages = [
+            "That’s a germ!",
+            "Oops, not that one!",
+            "Be careful! We don't want your hands to get more dirty!",
+            "Yikes, dirty water!",
+            "Watch out for those germs!"
+        ];
+
+// current message to display and timer
+        let currentMessage = "";       // the text to show
+        let messageTimer = 0;          // countdown for how long to display
+        const messageDuration = 60;    // frames (about 1 sec at 60fps)
+
 
         const goodWords = helpers.words.cleanGood();
         const badWords = helpers.words.cleanBad();
 
-        function aspect(img){const w=img.naturalWidth||0,h=img.naturalHeight||0;return{w,h,r:(w&&h)?w/h:1};}
-        function sizeFrom(img, opts={}, defaultSquare=120){
-            const {w:iw,h:ih,r}=aspect(img); const fallback=opts.fallbackSize??defaultSquare;
-            if (opts.width!=null && opts.height!=null){
-                let W=opts.width,H=opts.height;
-                if (opts.maxPixels){const k=Math.min(opts.maxPixels/W,opts.maxPixels/H,1);W=Math.round(W*k);H=Math.round(H*k);}
-                return {w:W,h:H};
-            }
-            if (opts.width!=null) return {w:opts.width,h:Math.round(opts.width/(r||1))};
-            if (opts.height!=null) return {w:Math.round(opts.height*(r||1)),h:opts.height};
-            if (opts.scale!=null && iw>0 && ih>0){
-                let W=Math.max(1,Math.round(iw*opts.scale));
-                let H=Math.max(1,Math.round(ih*opts.scale));
-                if (opts.maxPixels){const k=Math.min(opts.maxPixels/W,opts.maxPixels/H,1);W=Math.round(W*k);H=Math.round(H*k);}
-                return {w:W,h:H};
-            }
-            return {w:fallback,h:fallback};
+        // helpers for sizing images with aspect ratio and constraints
+        function aspect(img) {
+            const w = img.naturalWidth || 0, h = img.naturalHeight || 0;
+            return {w, h, r: (w && h) ? w / h : 1};
         }
 
+        function sizeFrom(img, opts = {}, defaultSquare = 120) {
+            const {w: iw, h: ih, r} = aspect(img);
+            const fallback = opts.fallbackSize ?? defaultSquare;
+
+
+            if (opts.width != null && opts.height != null) {
+                let W = opts.width, H = opts.height;
+                if (opts.maxPixels) {
+                    const k = Math.min(opts.maxPixels / W, opts.maxPixels / H, 1);
+                    W = Math.round(W * k);
+                    H = Math.round(H * k);
+                }
+                return {w: W, h: H};
+            }
+            if (opts.width != null) return {w: opts.width, h: Math.round(opts.width / (r || 1))};
+            if (opts.height != null) return {w: Math.round(opts.height * (r || 1)), h: opts.height};
+
+            if (opts.scale != null && iw > 0 && ih > 0) {
+                let W = Math.max(1, Math.round(iw * opts.scale));
+                let H = Math.max(1, Math.round(ih * opts.scale));
+                if (opts.maxPixels) {
+                    const k = Math.min(opts.maxPixels / W, opts.maxPixels / H, 1);
+                    W = Math.round(W * k);
+                    H = Math.round(H * k);
+                }
+                return {w: W, h: H};
+            }
+            return {w: fallback, h: fallback};
+        }
+
+        // build player state and apply image sizing
         const P = CC.player || {};
-        const playerImg = new Image(); playerImg.src = (A.player || "");
+        const playerImg = new Image();
+        playerImg.src = (A.player || "");
+
         let pSize = sizeFrom(playerImg, P, 290);
         const player = {
             x: (canvas.width - pSize.w) / 2,
             y: canvas.height - (P.bottom ?? 30) - pSize.h,
-            width: pSize.w, height: pSize.h, dx: 0
+            width: pSize.w,
+            height: pSize.h,
+            dx: 0
         };
+
+        // when the player image finishes loading recompute size and keep player inside bounds
         playerImg.onload = () => {
             pSize = sizeFrom(playerImg, P, 180);
             const baseline = canvas.height - (P.bottom ?? 30);
-            player.width = pSize.w; player.height = pSize.h;
+            player.width = pSize.w;
+            player.height = pSize.h;
             player.x = helpers.clamp(player.x, 0, canvas.width - player.width);
             player.y = baseline - player.height;
         };
 
+        // falling items list and game stats
         let items = [];
         let score = 0, lives = 3, timeLeft = 30, gameOver = false;
 
+        // spawn either water or germ with a label and speed
         function spawnItem() {
-            const isGood = Math.random() > 0.4;
+            const isGood = Math.random() > 0.4; // good or bad
             const word = isGood ? helpers.words.pick(goodWords) : helpers.words.pick(badWords);
-            let w,h,img;
+
+            let w, h, img;
+
             if (isGood) {
+                // randomly pick water or soap
                 img = Math.random() > 0.5 ? waterImg : soapImg;
-                const gSize = sizeFrom(img, { width: 50, height: 50 });
-                w=gSize.w; h=gSize.h;
+
+                if (img === soapImg) {
+                    // soap very small
+                    const gSize = sizeFrom(img, { width: 50, height: 50 });
+                    w = gSize.w;
+                    h = gSize.h;
+                } else {
+                    // water smaller than germs
+                    const gSize = sizeFrom(img, { width: 50, height: 50 });
+                    w = gSize.w;
+                    h = gSize.h;
+                }
+
             } else {
+                // germs normal size
                 img = germImg;
                 const gSize = sizeFrom(germImg, CC.germ || {}, 56);
-                w=gSize.w; h=gSize.h;
+                w = gSize.w;
+                h = gSize.h;
             }
-            items.push({ x: Math.random()*Math.max(1,canvas.width-w), y:0, width:w, height:h,
-                type: isGood ? "good" : "bad", word, img, speed: 2 + Math.random()*2 });
+
+            items.push({
+                x: Math.random() * Math.max(1, canvas.width - w),
+                y: 0,
+                width: w,
+                height: h,
+                type: isGood ? "good" : "bad",
+                word,
+                img,
+                speed: 2 + Math.random() * 2
+            });
         }
 
+        // draw player sprite or a rectangle fallback
         function drawPlayer() {
-            if (playerImg.complete && playerImg.naturalWidth) ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
-            else { ctx.fillStyle = "blue"; ctx.fillRect(player.x, player.y, player.width, player.height); }
+            if (playerImg.complete && playerImg.naturalWidth) {
+                ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+            } else {
+                ctx.fillStyle = "blue";
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+            }
         }
 
+
+        // draw all items with labels
         function drawItems() {
             for (const item of items) {
-                let img = item.type === "good" ? (item.img || (Math.random()>0.5?waterImg:soapImg)) : germImg;
-                if (img && img.complete && img.naturalWidth) ctx.drawImage(img, item.x, item.y, item.width, item.height);
-                else {
+                // Draw the assigned image for this item
+                let img;
+                if (item.type === "good") {
+                    // randomly pick water or soap for good items
+                    img = item.img || (Math.random() > 0.5 ? waterImg : soapImg);
+                } else {
+                    img = germImg;
+                }
+
+                if (img && img.complete && img.naturalWidth) {
+                    ctx.drawImage(img, item.x, item.y, item.width, item.height);
+                } else {
+                    // fallback shapes
                     if (item.type === "good") {
                         ctx.fillStyle = "aqua";
                         ctx.beginPath();
-                        ctx.moveTo(item.x + item.width/2, item.y);
-                        ctx.bezierCurveTo(item.x + item.width*1.0, item.y + item.height*0.8,
-                            item.x + item.width*0.8, item.y + item.height,
-                            item.x + item.width/2, item.y + item.height);
-                        ctx.bezierCurveTo(item.x + item.width*0.2, item.y + item.height,
-                            item.x, item.y + item.height*0.8,
-                            item.x + item.width/2, item.y);
-                        ctx.closePath(); ctx.fill();
+                        ctx.moveTo(item.x + item.width / 2, item.y);
+                        ctx.bezierCurveTo(
+                            item.x + item.width * 1.0, item.y + item.height * 0.8,
+                            item.x + item.width * 0.8, item.y + item.height,
+                            item.x + item.width / 2, item.y + item.height
+                        );
+                        ctx.bezierCurveTo(
+                            item.x + item.width * 0.2, item.y + item.height,
+                            item.x, item.y + item.height * 0.8,
+                            item.x + item.width / 2, item.y
+                        );
+                        ctx.closePath();
+                        ctx.fill();
                     } else {
                         ctx.fillStyle = "red";
                         ctx.fillRect(item.x, item.y, item.width, item.height);
                     }
                 }
-                ctx.fillStyle = "black"; ctx.font = "24px Arial"; ctx.textAlign = "center";
-                ctx.fillText(item.word, item.x + item.width/2, item.y + item.height + 24);
+
+                // Draw word below the image
+                ctx.fillStyle = "black";
+                ctx.font = "24px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
             }
         }
 
+        //better time display
         function formatTime(seconds) {
             const m = Math.floor(seconds / 60).toString().padStart(2, "0");
             const s = (seconds % 60).toString().padStart(2, "0");
-            return `${m}:${s}`;
-        }
+            return `${m}:${s}`;}
 
+        // draw score, lives and time
         function drawUI() {
-            ctx.fillStyle = "black"; ctx.font = "18px Arial";
+            ctx.fillStyle = "black";
+            ctx.font = "18px Arial";
             ctx.fillText("Score: " + score, 10, 20);
 
             if (messageTimer > 0 && currentMessage) {
-                ctx.fillStyle = "black"; ctx.font = "30px Montserrat"; ctx.textAlign = "center";
+                ctx.fillStyle = "black";
+                ctx.font = "30px Montserrat";
+                ctx.textAlign = "center";
                 ctx.fillText(currentMessage, canvas.width / 2, canvas.height / 2 - 100);
                 messageTimer--;
             }
 
+            // draw hearts
             const heartSize = 50;
             for (let i = 0; i < lives; i++) {
                 ctx.beginPath();
-                const x = 10 + i * (heartSize + 5), y = 40;
-                ctx.moveTo(x + heartSize/2, y + heartSize/5);
-                ctx.bezierCurveTo(x + heartSize/2, y, x, y, x, y + heartSize/3);
-                ctx.bezierCurveTo(x, y + heartSize*2/3, x + heartSize/2, y + heartSize, x + heartSize/2, y + heartSize);
-                ctx.bezierCurveTo(x + heartSize/2, y + heartSize, x + heartSize, y + heartSize*2/3, x + heartSize, y + heartSize/3);
-                ctx.bezierCurveTo(x + heartSize, y, x + heartSize/2, y, x + heartSize/2, y + heartSize/5);
-                ctx.fillStyle = "red"; ctx.fill();
+                const x = 10 + i * (heartSize + 5);
+                const y = 40;
+                ctx.moveTo(x + heartSize / 2, y + heartSize / 5);
+                ctx.bezierCurveTo(x + heartSize / 2, y, x, y, x, y + heartSize / 3);
+                ctx.bezierCurveTo(x, y + heartSize * 2 / 3, x + heartSize / 2, y + heartSize, x + heartSize / 2, y + heartSize);
+                ctx.bezierCurveTo(x + heartSize / 2, y + heartSize, x + heartSize, y + heartSize * 2 / 3, x + heartSize, y + heartSize / 3);
+                ctx.bezierCurveTo(x + heartSize, y, x + heartSize / 2, y, x + heartSize / 2, y + heartSize / 5);
+                ctx.fillStyle = "red";
+                ctx.fill();
             }
 
+            // centered timer with white background
             const timerText = formatTime(timeLeft);
             ctx.font = "40px Arial";
             const textWidth = ctx.measureText(timerText).width;
@@ -1203,38 +1302,56 @@ const cleancatcher = {
             const boxWidth = textWidth + padding * 2;
             const boxHeight = 50;
 
-            ctx.fillStyle = "white"; ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-            ctx.fillStyle = "black"; ctx.fillText(timerText, canvas.width / 2 - textWidth / 2, 45);
-        }
+            ctx.fillStyle = "white";
+            ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
 
-        ctx.fillStyle = "black";
-        ctx.font = "40px Arial";
-        ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
+            ctx.fillStyle = "black";
+            ctx.fillText(timerText, canvas.width / 2 - textWidth / 2, 45);
+            }
 
+            // time display
+            ctx.fillStyle = "black";
+            ctx.font = "40px Arial";
+            ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
+
+
+        // move items down, check collisions, update stats, remove offscreen
         function updateItems() {
             for (let i = items.length - 1; i >= 0; i--) {
                 const item = items[i];
                 item.y += item.speed;
 
-                if (helpers.aabbIntersect(item.x, item.y, item.width, item.height,
-                    player.x, player.y, player.width, player.height)) {
+                // check collision with player
+                if (helpers.aabbIntersect(
+                    item.x, item.y, item.width, item.height,
+                    player.x, player.y, player.width, player.height
+                )) {
                     if (item.type === "good") {
                         score += 10;
+                        // pick a random positive message
                         currentMessage = helpers.words.pick(goodMessages);
                     } else {
                         lives -= 1;
+                        // pick a random negative message
                         currentMessage = helpers.words.pick(badMessages);
                         if (lives <= 0) gameOver = true;
                     }
+
+                    // reset message timer
                     messageTimer = messageDuration;
+
+                    // remove the item from the array
                     items.splice(i, 1);
                     continue;
                 }
 
+                // remove items that fall off the screen
                 if (item.y > canvas.height) items.splice(i, 1);
             }
         }
 
+
+        // input events arrow keys and mouse move
         const onKeyDown = (e) => {
             if (e.key === "ArrowLeft") player.dx = -5;
             if (e.key === "ArrowRight") player.dx = 5;
@@ -1251,23 +1368,31 @@ const cleancatcher = {
         document.addEventListener("keyup", onKeyUp);
         canvas.addEventListener("pointermove", onPointerMove);
 
+        // continuous player motion from key state
         function movePlayer() {
             player.x = helpers.clamp(player.x + player.dx, 0, canvas.width - player.width);
         }
 
+        // main loop control flags and ids
         let paused = false;
         let rafId = null, moveInterval = null, spawnInterval = null, timerInterval = null;
 
+        // animation frame loop draws background player items ui and updates items
         function frame() {
             if (paused) return;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if (background.complete && background.naturalWidth) ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
-            else { ctx.fillStyle = "#add8e6"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+            if (background.complete && background.naturalWidth) {
+                ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = "#add8e6";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
 
             if (gameOver) {
-                ctx.fillStyle = "black"; ctx.font = "40px Arial";
+                ctx.fillStyle = "black";
+                ctx.font = "40px Arial";
                 ctx.fillText("Game Over!", canvas.width / 2 - 80, canvas.height / 2);
                 ctx.fillText("Score: " + score, canvas.width / 2 - 60, canvas.height / 2 + 40);
                 return;
@@ -1281,6 +1406,7 @@ const cleancatcher = {
             rafId = requestAnimationFrame(frame);
         }
 
+        // start all periodic loops animation item spawning movement and timer countdown
         function startLoops() {
             if (rafId) cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(frame);
@@ -1295,13 +1421,27 @@ const cleancatcher = {
             }, 1000);
         }
 
+        // stop every loop and clear ids
         function stopLoops() {
-            if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-            if (moveInterval) { clearInterval(moveInterval); moveInterval = null; }
-            if (spawnInterval) { clearInterval(spawnInterval); spawnInterval = null; }
-            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+            if (rafId) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+            if (moveInterval) {
+                clearInterval(moveInterval);
+                moveInterval = null;
+            }
+            if (spawnInterval) {
+                clearInterval(spawnInterval);
+                spawnInterval = null;
+            }
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
         }
 
+        // allow external control of pause state from the phaser scene
         function setPaused(p) {
             p = !!p;
             if (paused === p) return;
@@ -1309,6 +1449,7 @@ const cleancatcher = {
             if (paused) stopLoops(); else startLoops();
         }
 
+        // cleanup when the scene leaves or dom is removed
         function destroy() {
             stopLoops();
             document.removeEventListener("keydown", onKeyDown);
@@ -1316,13 +1457,16 @@ const cleancatcher = {
             canvas.removeEventListener("pointermove", onPointerMove);
         }
 
+        // kick off the game
         startLoops();
-        return { destroy, setPaused };
+
+        // expose control surface to the owning scene
+        return {destroy, setPaused};
     }
 };
 
 // -----------------------------
-// simple menu builder
+// simple menu builder for vertical stacks of buttons
 // -----------------------------
 const menu = {
     build(scene, spec) {
@@ -1338,6 +1482,8 @@ const menu = {
 
 // -----------------------------
 // public systems object
+// scenes import this default to access helpers ui and game engines
+// legacy aliases are included for convenience
 // -----------------------------
 const systems = {
     helpers, ui, soapsplash, cleancatcher, menu,
