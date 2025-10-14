@@ -87,6 +87,12 @@ window.CONFIG = {
         menu: {
             frontpage: "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png",
         },
+
+        endingScreen: {
+            classroom_bg: "assets/images/background/classroom.png",
+            kiko_cheer: "assets/images/WashEd_kiko_sprite/kiko_cheer.png",
+            confetti: "assets/images/background/confetti.png"
+        },
     },
 
     // rules and parameters for the soap splash mini game

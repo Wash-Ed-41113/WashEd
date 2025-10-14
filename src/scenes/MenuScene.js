@@ -2,7 +2,7 @@
 export default class MenuScene extends Phaser.Scene {
     constructor() {
         super("MenuScene");
-        this.video = null;
+        this.video= null;
         this.fallback = null;
 
         this.startButton = null;
