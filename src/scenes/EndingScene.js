@@ -277,6 +277,7 @@ export default class EndingScene extends Phaser.Scene {
                 ease: "Cubic.easeOut",
                 onComplete: () => { img.destroy(); this.liveConfetti--; }
             });
+            // heheheh
         }
     }
 }
