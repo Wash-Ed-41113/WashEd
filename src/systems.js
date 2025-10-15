@@ -1265,7 +1265,7 @@ const cleancatcher = {
 
                 // Draw word below the image (or centered if hard)
                 ctx.fillStyle = "black";
-                ctx.font = "24px Chewy";
+                ctx.font = "50px Chewy";
                 ctx.textAlign = "center";
                 if (difficulty === "hard") {
                     ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height / 2 + 8);
