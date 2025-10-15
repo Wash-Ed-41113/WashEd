@@ -1419,7 +1419,7 @@ const cleancatcher = {
 
                     const { width, height } = scene.scale;
 
-                    // draw the sink background (so it's not black)
+                    // optional background
                     if (scene.textures.exists("cc_sink_bg")) {
                         scene.add.image(0, 0, "cc_sink_bg")
                             .setOrigin(0, 0)
@@ -1427,24 +1427,24 @@ const cleancatcher = {
                             .setDepth(9997);
                     }
 
-                    // dialog root (everything above background)
+                    // dialog root
                     const dialogRoot = scene.add.container(0, 0).setDepth(9999);
 
-                    // dim mask
+                    // dim overlay (NO navigation)
                     const overlay = scene.add
                         .rectangle(0, 0, width, height, 0x000000, 0.35)
                         .setOrigin(0, 0)
                         .setInteractive();
                     dialogRoot.add(overlay);
 
-                    // panel (use MenuScene skin), make it a little smaller (0.9x)
+                    // panel
                     const hasSkin = scene.textures.exists("dialog_skin");
                     const skinImg = hasSkin
                         ? scene.textures.get("dialog_skin").getSourceImage()
                         : { width: 1200, height: 800 };
 
                     const baseS = Math.min((width * 0.82) / skinImg.width, (height * 0.62) / skinImg.height);
-                    const s = baseS * 0.9; // tiny bit smaller
+                    const s = baseS * 0.9;
 
                     const panel = hasSkin
                         ? scene.add.image(width / 2, height / 2, "dialog_skin").setScale(s)
@@ -1453,60 +1453,43 @@ const cleancatcher = {
                             .setStrokeStyle(4, 0x9edcff);
                     dialogRoot.add(panel);
 
-                    const panelW = (panel.displayWidth || skinImg.width * s);
-                    const panelH = (panel.displayHeight || skinImg.height * s);
+                    const panelW = panel.displayWidth || (skinImg.width * s);
+                    const panelH = panel.displayHeight || (skinImg.height * s);
 
+                    // Kiko
                     if (scene.textures.exists("kiko_dialog")) {
                         const innerPad  = Math.round(panelW * 0.08);
-                        const innerLeft = panel.x - panelW / 2 + innerPad;           // inner left edge
-                        const innerRight= panel.x + panelW / 2 - innerPad;           // inner right edge
-                        const innerTop  = panel.y - panelH / 2 + innerPad;           // inner top
-                        const innerBot  = panel.y + panelH / 2 - innerPad;           // inner bottom
+                        const innerLeft = panel.x - panelW / 2 + innerPad;
+                        const innerTop  = panel.y - panelH / 2 + innerPad;
+                        const innerBot  = panel.y + panelH / 2 - innerPad;
 
-                        const leftColW  = Math.round((panelW - innerPad * 2) * 0.30); // 30% for Kiko
-                        const kikoX     = innerLeft + leftColW / 2;                   // center of left column
-                        const kikoY     = innerBot;                                   // bottom-aligned inside panel
+                        const leftColW  = Math.round((panelW - innerPad * 2) * 0.30);
+                        const kikoX     = innerLeft + leftColW / 2;
+                        const kikoY     = innerBot;
 
                         const kiko = scene.add.image(kikoX, kikoY, "kiko_dialog").setOrigin(0.5, 1);
-
-                        // scale Kiko to fit nicely inside the panel height
-                        const targetH = (innerBot - innerTop) * 1.00; // ~100% of inner height
+                        const targetH = (innerBot - innerTop) * 1.00;
                         kiko.setScale(targetH / kiko.height);
-
                         dialogRoot.add(kiko);
                     }
 
-                    // Title + Score centered INSIDE the dialog
+                    // Title + Score
                     const uiFont = (CONFIG.ui && CONFIG.ui.fontFamily) || "Chewy";
 
-                    const title = scene.add
-                        .text(panel.x, panel.y - panelH * 0.22, "GAME OVER!", {
-                            fontFamily: uiFont,
-                            color: "#000000",
-                        })
-                        .setOrigin(0.5);
-                    title.setFontSize(Math.max(28, Math.round(44 * s)));
+                    const title = scene.add.text(panel.x, panel.y - panelH * 0.22, "GAME OVER!", {
+                        fontFamily: uiFont, color: "#000000"
+                    }).setOrigin(0.5);
+                    title.setFontSize(Math.max(35, Math.round(44 * s)));
                     title.setFontStyle("bold");
                     dialogRoot.add(title);
 
-                    const scoreText = scene.add
-                        .text(panel.x, panel.y, `Score: ${score}`, {
-                            fontFamily: uiFont,
-                            color: "#2a4155",
-                        })
-                        .setOrigin(0.5);
-                    scoreText.setFontSize(Math.max(20, Math.round(28 * s)));
+                    const scoreText = scene.add.text(panel.x, panel.y, `Score: ${score}`, {
+                        fontFamily: uiFont, color: "#2a4155"
+                    }).setOrigin(0.5);
+                    scoreText.setFontSize(Math.max(40, Math.round(28 * s)));
                     dialogRoot.add(scoreText);
-
-                    // clicking anywhere advances (no X button, no top-right menu)
-                    // const goNext = () => {
-                    //     dialogRoot.destroy(true);
-                    //     const playerName = scene.registry.get("playerName");
-                    //     scene.scene.start("GameScene", { playerName });
-                    // };
-                    overlay.on("pointerdown", goNext);
                 }
-                return;
+                return; // stop drawing further frames while dialog is up
             }
 
             drawPlayer();
