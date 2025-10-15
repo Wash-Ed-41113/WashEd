@@ -26,7 +26,7 @@ export default class CleanCatchScene extends Phaser.Scene {
             );
         }
 
-        // ✅ Clean Catch music (only loaded/played in this scene)
+        // Clean Catch music (only loaded/played in this scene)
         if (!this.cache.audio.exists("cleanCatchMusic")) {
             this.load.audio("cleanCatchMusic", "assets/sounds/soap splasher.mp3");
         }
@@ -93,7 +93,7 @@ export default class CleanCatchScene extends Phaser.Scene {
             this._pauseUi?.destroy?.();
             this._pauseUi = null;
 
-            // ✅ make sure music is stopped/destroyed when leaving this scene
+            // make sure music is stopped/destroyed when leaving this scene
             if (this._bgm) { this._bgm.stop(); this._bgm.destroy(); this._bgm = null; }
         });
     }
