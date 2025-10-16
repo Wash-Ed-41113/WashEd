@@ -1,0 +1,2 @@
+*.mov filter=lfs diff=lfs merge=lfs -text
+assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_germ-scrubber__Arms_alpha_ver_MOV.mov filter=lfs diff=lfs merge=lfs -text

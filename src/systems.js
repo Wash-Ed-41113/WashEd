@@ -1047,7 +1047,7 @@ const soapsplash = (() => {
 // returns an object with destroy and setPaused so the scene can control it
 // -----------------------------
 const cleancatcher = {
-    create(scene, canvas, difficulty = "easy") {
+    create(canvas) {
         const CC = CONFIG.cleanCatch;
         const ctx = canvas.getContext("2d");
         ctx.imageSmoothingEnabled = true;
@@ -1084,10 +1084,9 @@ const cleancatcher = {
             "Watch out for those germs!"
         ];
 
-        // current message to display and timer
+// current message to display and timer
         let currentMessage = "";       // the text to show
         let messageTimer = 0;          // countdown for how long to display
-        let endDialogShown = false;
         const messageDuration = 60;    // frames (about 1 sec at 60fps)
 
 
@@ -1158,20 +1157,9 @@ const cleancatcher = {
         let items = [];
         let score = 0, lives = 3, timeLeft = 30, gameOver = false;
 
-        // difficulty adjustments
-        let spawnRate = 1000;
-        let baseSpeed = 2;
-        let goodProb = 0.6;
-        if (difficulty === "normal") {
-            spawnRate = 700;
-            baseSpeed = 3;
-            goodProb = 0.4;
-        }
-        // hard uses same as easy, but no images drawn
-
         // spawn either water or germ with a label and speed
         function spawnItem() {
-            const isGood = Math.random() < goodProb;
+            const isGood = Math.random() > 0.4; // good or bad
             const word = isGood ? helpers.words.pick(goodWords) : helpers.words.pick(badWords);
 
             let w, h, img;
@@ -1208,7 +1196,7 @@ const cleancatcher = {
                 type: isGood ? "good" : "bad",
                 word,
                 img,
-                speed: baseSpeed + Math.random() * baseSpeed
+                speed: 2 + Math.random() * 2
             });
         }
 
@@ -1235,43 +1223,37 @@ const cleancatcher = {
                     img = germImg;
                 }
 
-                if (difficulty !== "hard") {
-                    if (img && img.complete && img.naturalWidth) {
-                        ctx.drawImage(img, item.x, item.y, item.width, item.height);
+                if (img && img.complete && img.naturalWidth) {
+                    ctx.drawImage(img, item.x, item.y, item.width, item.height);
+                } else {
+                    // fallback shapes
+                    if (item.type === "good") {
+                        ctx.fillStyle = "aqua";
+                        ctx.beginPath();
+                        ctx.moveTo(item.x + item.width / 2, item.y);
+                        ctx.bezierCurveTo(
+                            item.x + item.width * 1.0, item.y + item.height * 0.8,
+                            item.x + item.width * 0.8, item.y + item.height,
+                            item.x + item.width / 2, item.y + item.height
+                        );
+                        ctx.bezierCurveTo(
+                            item.x + item.width * 0.2, item.y + item.height,
+                            item.x, item.y + item.height * 0.8,
+                            item.x + item.width / 2, item.y
+                        );
+                        ctx.closePath();
+                        ctx.fill();
                     } else {
-                        // fallback shapes
-                        if (item.type === "good") {
-                            ctx.fillStyle = "aqua";
-                            ctx.beginPath();
-                            ctx.moveTo(item.x + item.width / 2, item.y);
-                            ctx.bezierCurveTo(
-                                item.x + item.width * 1.0, item.y + item.height * 0.8,
-                                item.x + item.width * 0.8, item.y + item.height,
-                                item.x + item.width / 2, item.y + item.height
-                            );
-                            ctx.bezierCurveTo(
-                                item.x + item.width * 0.2, item.y + item.height,
-                                item.x, item.y + item.height * 0.8,
-                                item.x + item.width / 2, item.y
-                            );
-                            ctx.closePath();
-                            ctx.fill();
-                        } else {
-                            ctx.fillStyle = "red";
-                            ctx.fillRect(item.x, item.y, item.width, item.height);
-                        }
+                        ctx.fillStyle = "red";
+                        ctx.fillRect(item.x, item.y, item.width, item.height);
                     }
                 }
 
-                // Draw word below the image (or centered if hard)
+                // Draw word below the image
                 ctx.fillStyle = "black";
-                ctx.font = "24px Chewy";
+                ctx.font = "24px Arial";
                 ctx.textAlign = "center";
-                if (difficulty === "hard") {
-                    ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height / 2 + 8);
-                } else {
-                    ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
-                }
+                ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
             }
         }
 
@@ -1284,7 +1266,7 @@ const cleancatcher = {
         // draw score, lives and time
         function drawUI() {
             ctx.fillStyle = "black";
-            ctx.font = "18px Chewy";
+            ctx.font = "18px Arial";
             ctx.fillText("Score: " + score, 10, 20);
 
             if (messageTimer > 0 && currentMessage) {
@@ -1312,7 +1294,7 @@ const cleancatcher = {
 
             // centered timer with white background
             const timerText = formatTime(timeLeft);
-            ctx.font = "40px Chewy";
+            ctx.font = "40px Arial";
             const textWidth = ctx.measureText(timerText).width;
             const padding = 10;
             const boxX = (canvas.width - textWidth) / 2 - padding;
@@ -1325,12 +1307,12 @@ const cleancatcher = {
 
             ctx.fillStyle = "black";
             ctx.fillText(timerText, canvas.width / 2 - textWidth / 2, 45);
-        }
+            }
 
-        // time display
-        ctx.fillStyle = "black";
-        ctx.font = "40px Chewy";
-        ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
+            // time display
+            ctx.fillStyle = "black";
+            ctx.font = "40px Arial";
+            ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
 
 
         // move items down, check collisions, update stats, remove offscreen
@@ -1409,87 +1391,11 @@ const cleancatcher = {
             }
 
             if (gameOver) {
-                if (!endDialogShown) {
-                    endDialogShown = true;
-                    stopLoops(); // freeze the canvas
-
-                    // hide the DOM canvas so Phaser display is visible
-                    canvas.style.display = "none";
-                    canvas.style.pointerEvents = "none";
-
-                    const { width, height } = scene.scale;
-
-                    // optional background
-                    if (scene.textures.exists("cc_sink_bg")) {
-                        scene.add.image(0, 0, "cc_sink_bg")
-                            .setOrigin(0, 0)
-                            .setDisplaySize(width, height)
-                            .setDepth(9997);
-                    }
-
-                    // dialog root
-                    const dialogRoot = scene.add.container(0, 0).setDepth(9999);
-
-                    // dim overlay (NO navigation)
-                    const overlay = scene.add
-                        .rectangle(0, 0, width, height, 0x000000, 0.35)
-                        .setOrigin(0, 0)
-                        .setInteractive();
-                    dialogRoot.add(overlay);
-
-                    // panel
-                    const hasSkin = scene.textures.exists("dialog_skin");
-                    const skinImg = hasSkin
-                        ? scene.textures.get("dialog_skin").getSourceImage()
-                        : { width: 1200, height: 800 };
-
-                    const baseS = Math.min((width * 0.82) / skinImg.width, (height * 0.62) / skinImg.height);
-                    const s = baseS * 0.9;
-
-                    const panel = hasSkin
-                        ? scene.add.image(width / 2, height / 2, "dialog_skin").setScale(s)
-                        : scene.add
-                            .rectangle(width / 2, height / 2, Math.min(width * 0.75, 740), Math.min(height * 0.55, 460), 0xffffff, 1)
-                            .setStrokeStyle(4, 0x9edcff);
-                    dialogRoot.add(panel);
-
-                    const panelW = panel.displayWidth || (skinImg.width * s);
-                    const panelH = panel.displayHeight || (skinImg.height * s);
-
-                    // Kiko
-                    if (scene.textures.exists("kiko_dialog")) {
-                        const innerPad  = Math.round(panelW * 0.08);
-                        const innerLeft = panel.x - panelW / 2 + innerPad;
-                        const innerTop  = panel.y - panelH / 2 + innerPad;
-                        const innerBot  = panel.y + panelH / 2 - innerPad;
-
-                        const leftColW  = Math.round((panelW - innerPad * 2) * 0.30);
-                        const kikoX     = innerLeft + leftColW / 2;
-                        const kikoY     = innerBot;
-
-                        const kiko = scene.add.image(kikoX, kikoY, "kiko_dialog").setOrigin(0.5, 1);
-                        const targetH = (innerBot - innerTop) * 1.00;
-                        kiko.setScale(targetH / kiko.height);
-                        dialogRoot.add(kiko);
-                    }
-
-                    // Title + Score
-                    const uiFont = (CONFIG.ui && CONFIG.ui.fontFamily) || "Chewy";
-
-                    const title = scene.add.text(panel.x, panel.y - panelH * 0.22, "GAME OVER!", {
-                        fontFamily: uiFont, color: "#000000"
-                    }).setOrigin(0.5);
-                    title.setFontSize(Math.max(35, Math.round(44 * s)));
-                    title.setFontStyle("bold");
-                    dialogRoot.add(title);
-
-                    const scoreText = scene.add.text(panel.x, panel.y, `Score: ${score}`, {
-                        fontFamily: uiFont, color: "#2a4155"
-                    }).setOrigin(0.5);
-                    scoreText.setFontSize(Math.max(40, Math.round(28 * s)));
-                    dialogRoot.add(scoreText);
-                }
-                return; // stop drawing further frames while dialog is up
+                ctx.fillStyle = "black";
+                ctx.font = "40px Arial";
+                ctx.fillText("Game Over!", canvas.width / 2 - 80, canvas.height / 2);
+                ctx.fillText("Score: " + score, canvas.width / 2 - 60, canvas.height / 2 + 40);
+                return;
             }
 
             drawPlayer();
@@ -1506,7 +1412,7 @@ const cleancatcher = {
             rafId = requestAnimationFrame(frame);
 
             if (!moveInterval) moveInterval = setInterval(movePlayer, 16);
-            if (!spawnInterval) spawnInterval = setInterval(spawnItem, spawnRate);
+            if (!spawnInterval) spawnInterval = setInterval(spawnItem, 1000);
             if (!timerInterval) timerInterval = setInterval(() => {
                 if (!paused && !gameOver) {
                     timeLeft--;
