@@ -1410,7 +1410,7 @@ const cleancatcher = {
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 🎨 choose background based on current lives
+            // choose background based on current lives
             let targetBackground;
             if (lives >= 3 && backgroundFullLives.complete && backgroundFullLives.naturalWidth > 0) {
                 targetBackground = backgroundFullLives;

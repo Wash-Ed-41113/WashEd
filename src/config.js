@@ -81,7 +81,7 @@ window.CONFIG = {
             germ: "assets/images/Germs/washed_kikos-day_LEVEL_01_scene_05_germ-catcher_GERM_01.png",
             player: 'assets/images/CleanCatcher/washed_day_UI_LEVEL_01_scene_04_soap-splasher_Hands.png',
             waterDroplet: "assets/images/CleanCatcher/washed_day_UI_LEVEL_01_scene_04_soap-splasher_droplet__Water.png",
-            soap: "assets/images/CleanCatcher/washed_day_UI_LEVEL_01_scene_04_soap-splasher_droplet__Soap-water.png"
+            soap: "assets/images/CleanCatcher/washed_day_UI_LEVEL_01_scene_04_soap-splasher_droplet__Soap-water.png",
             backgroundFullLives: "assets/images/CleanCatcher/1.jpg",
             backgroundTwoLives: "assets/images/CleanCatcher/2.jpg",
             backgroundOneLife: "assets/images/CleanCatcher/3.jpg",
