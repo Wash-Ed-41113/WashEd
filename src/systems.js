@@ -1072,7 +1072,9 @@ const cleancatcher = {
         backgroundTwoLives.src = A.backgroundTwoLives || "";
         const backgroundOneLife = new Image();
         backgroundOneLife.src = A.backgroundOneLife || "";
-        this.load.image("cc_gameover_bg", "assets/images/CleanCatcher/4.jpg");
+        const backgroundNoLife = new Image();
+        backgroundNoLife.src = A.backgroundNoLife || "";
+
 
 
 
@@ -1475,14 +1477,26 @@ const cleancatcher = {
 
                     const { width, height } = scene.scale;
 
-                    // 🔹 NEW: draw the game-over background if available, else fallback to sink background
-                    if (scene.textures.exists("cc_gameover_bg")) {
-                        scene.add.image(0, 0, "cc_gameover_bg")
+                    // Set Game Over background using your preloaded backgroundNoLife image
+                    if (backgroundNoLife.complete && backgroundNoLife.naturalWidth > 0) {
+                        // create a Phaser texture from the existing image
+                        const textureKey = "bgNoLife";
+                        if (!scene.textures.exists(textureKey)) {
+                            const tempCanvas = scene.textures.createCanvas(textureKey, backgroundNoLife.width, backgroundNoLife.height);
+                            const ctx = tempCanvas.getContext();
+                            ctx.drawImage(backgroundNoLife, 0, 0);
+                            tempCanvas.refresh();
+                        }
+
+                        scene.add
+                            .image(0, 0, textureKey)
                             .setOrigin(0, 0)
                             .setDisplaySize(width, height)
-                            .setDepth(9996); // slightly behind the dialog
+                            .setDepth(9996);
                     } else if (scene.textures.exists("cc_sink_bg")) {
-                        scene.add.image(0, 0, "cc_sink_bg")
+                        // fallback if no image found
+                        scene.add
+                            .image(0, 0, "cc_sink_bg")
                             .setOrigin(0, 0)
                             .setDisplaySize(width, height)
                             .setDepth(9996);
@@ -1498,14 +1512,14 @@ const cleancatcher = {
                         .setInteractive();
                     dialogRoot.add(overlay);
 
-                    // panel (use MenuScene skin), make it a little smaller (0.9x)
+                    // panel (use MenuScene skin)
                     const hasSkin = scene.textures.exists("dialog_skin");
                     const skinImg = hasSkin
                         ? scene.textures.get("dialog_skin").getSourceImage()
                         : { width: 1200, height: 800 };
 
                     const baseS = Math.min((width * 0.82) / skinImg.width, (height * 0.62) / skinImg.height);
-                    const s = baseS * 0.9; // tiny bit smaller
+                    const s = baseS * 0.9;
 
                     const panel = hasSkin
                         ? scene.add.image(width / 2, height / 2, "dialog_skin").setScale(s)
@@ -1517,19 +1531,18 @@ const cleancatcher = {
                     const panelW = (panel.displayWidth || skinImg.width * s);
                     const panelH = (panel.displayHeight || skinImg.height * s);
 
-                    // Kiko OUTSIDE the dialog (left side), sized to ~60% of panel height
+                    // Kiko character image beside panel
                     if (scene.textures.exists("kiko_dialog")) {
                         const kiko = scene.add.image(0, 0, "kiko_dialog").setOrigin(0.5, 1);
                         const targetH = panelH * 0.60;
                         kiko.setScale(targetH / kiko.height);
 
-                        // place just outside left edge with a small gap
                         const gap = Math.round(panelW * 0.08);
                         kiko.setPosition(panel.x - panelW / 2 - gap, panel.y + panelH / 2);
                         dialogRoot.add(kiko);
                     }
 
-                    // Title + Score centered INSIDE the dialog
+                    // Title + Score inside panel
                     const uiFont = (CONFIG.ui && CONFIG.ui.fontFamily) || "Chewy";
 
                     const title = scene.add
@@ -1551,7 +1564,7 @@ const cleancatcher = {
                     scoreText.setFontSize(Math.max(20, Math.round(28 * s)));
                     dialogRoot.add(scoreText);
 
-                    // clicking anywhere advances (no X button, no top-right menu)
+                    // Click anywhere to return to main menu
                     const goNext = () => {
                         dialogRoot.destroy(true);
                         const playerName = scene.registry.get("playerName");

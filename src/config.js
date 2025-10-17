@@ -88,6 +88,7 @@ window.CONFIG = {
             backgroundOneLife: "assets/images/CleanCatcher/3.jpg",
             backgroundNoLife: "assets/images/CleanCatcher/4.jpg",
 
+
         },
         menu: {
             frontpage: "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png",
