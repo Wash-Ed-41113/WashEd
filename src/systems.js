@@ -1066,6 +1066,15 @@ const cleancatcher = {
         waterImg.src = A.waterDroplet || "";
         const soapImg = new Image();
         soapImg.src = A.soap || "";
+        const backgroundFullLives = new Image();
+        backgroundFullLives.src = A.backgroundFullLives || "";
+        const backgroundTwoLives = new Image();
+        backgroundTwoLives.src = A.backgroundTwoLives || "";
+        const backgroundOneLife = new Image();
+        backgroundOneLife.src = A.backgroundOneLife || "";
+        const backgroundNoLife = new Image();
+        backgroundNoLife.src = A.backgroundNoLife || "";
+
 
         const goodMessages = [
             "Nice work!",
@@ -1084,7 +1093,7 @@ const cleancatcher = {
             "Watch out for those germs!"
         ];
 
-// current message to display and timer
+        // current message to display and timer
         let currentMessage = "";       // the text to show
         let messageTimer = 0;          // countdown for how long to display
         let endDialogShown = false;
@@ -1135,7 +1144,7 @@ const cleancatcher = {
         const playerImg = new Image();
         playerImg.src = (A.player || "");
 
-        let pSize = sizeFrom(playerImg, P, 290);
+        let pSize = sizeFrom(playerImg, P, 450);
         const player = {
             x: (canvas.width - pSize.w) / 2,
             y: canvas.height - (P.bottom ?? 30) - pSize.h,
@@ -1146,7 +1155,7 @@ const cleancatcher = {
 
         // when the player image finishes loading recompute size and keep player inside bounds
         playerImg.onload = () => {
-            pSize = sizeFrom(playerImg, P, 180);
+            pSize = sizeFrom(playerImg, P, 300);
             const baseline = canvas.height - (P.bottom ?? 30);
             player.width = pSize.w;
             player.height = pSize.h;
@@ -1158,9 +1167,21 @@ const cleancatcher = {
         let items = [];
         let score = 0, lives = 3, timeLeft = 30, gameOver = false;
 
+
+        // difficulty adjustments
+        let spawnRate = 1000;
+        let baseSpeed = 2;
+        let goodProb = 0.6;
+        if (difficulty === "normal") {
+            spawnRate = 700;
+            baseSpeed = 3;
+            goodProb = 0.4;
+        }
+        // hard uses same as easy, but no images drawn
+
         // spawn either water or germ with a label and speed
         function spawnItem() {
-            const isGood = Math.random() > 0.4; // good or bad
+            const isGood = Math.random() < goodProb;
             const word = isGood ? helpers.words.pick(goodWords) : helpers.words.pick(badWords);
 
             let w, h, img;
@@ -1170,13 +1191,13 @@ const cleancatcher = {
                 img = Math.random() > 0.5 ? waterImg : soapImg;
 
                 if (img === soapImg) {
-                    // soap very small
-                    const gSize = sizeFrom(img, { width: 50, height: 50 });
+                    // soap
+                    const gSize = sizeFrom(img, { width: 85, height: 85 });
                     w = gSize.w;
                     h = gSize.h;
                 } else {
-                    // water smaller than germs
-                    const gSize = sizeFrom(img, { width: 50, height: 50 });
+                    // water
+                    const gSize = sizeFrom(img, { width: 95, height: 95 });
                     w = gSize.w;
                     h = gSize.h;
                 }
@@ -1184,7 +1205,7 @@ const cleancatcher = {
             } else {
                 // germs normal size
                 img = germImg;
-                const gSize = sizeFrom(germImg, CC.germ || {}, 56);
+                const gSize = sizeFrom(germImg, CC.germ || {}, 125);
                 w = gSize.w;
                 h = gSize.h;
             }
@@ -1197,7 +1218,7 @@ const cleancatcher = {
                 type: isGood ? "good" : "bad",
                 word,
                 img,
-                speed: 2 + Math.random() * 2
+                speed: baseSpeed + Math.random() * baseSpeed
             });
         }
 
@@ -1224,37 +1245,43 @@ const cleancatcher = {
                     img = germImg;
                 }
 
-                if (img && img.complete && img.naturalWidth) {
-                    ctx.drawImage(img, item.x, item.y, item.width, item.height);
-                } else {
-                    // fallback shapes
-                    if (item.type === "good") {
-                        ctx.fillStyle = "aqua";
-                        ctx.beginPath();
-                        ctx.moveTo(item.x + item.width / 2, item.y);
-                        ctx.bezierCurveTo(
-                            item.x + item.width * 1.0, item.y + item.height * 0.8,
-                            item.x + item.width * 0.8, item.y + item.height,
-                            item.x + item.width / 2, item.y + item.height
-                        );
-                        ctx.bezierCurveTo(
-                            item.x + item.width * 0.2, item.y + item.height,
-                            item.x, item.y + item.height * 0.8,
-                            item.x + item.width / 2, item.y
-                        );
-                        ctx.closePath();
-                        ctx.fill();
+                if (difficulty !== "hard") {
+                    if (img && img.complete && img.naturalWidth) {
+                        ctx.drawImage(img, item.x, item.y, item.width, item.height);
                     } else {
-                        ctx.fillStyle = "red";
-                        ctx.fillRect(item.x, item.y, item.width, item.height);
+                        // fallback shapes
+                        if (item.type === "good") {
+                            ctx.fillStyle = "aqua";
+                            ctx.beginPath();
+                            ctx.moveTo(item.x + item.width / 2, item.y);
+                            ctx.bezierCurveTo(
+                                item.x + item.width * 1.0, item.y + item.height * 0.8,
+                                item.x + item.width * 0.8, item.y + item.height,
+                                item.x + item.width / 2, item.y + item.height
+                            );
+                            ctx.bezierCurveTo(
+                                item.x + item.width * 0.2, item.y + item.height,
+                                item.x, item.y + item.height * 0.8,
+                                item.x + item.width / 2, item.y
+                            );
+                            ctx.closePath();
+                            ctx.fill();
+                        } else {
+                            ctx.fillStyle = "red";
+                            ctx.fillRect(item.x, item.y, item.width, item.height);
+                        }
                     }
                 }
 
-                // Draw word below the image
+                // Draw word below the image (or centered if hard)
                 ctx.fillStyle = "black";
-                ctx.font = "24px Arial";
+                ctx.font = "50px Chewy";
                 ctx.textAlign = "center";
-                ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
+                if (difficulty === "hard") {
+                    ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height / 2 + 8);
+                } else {
+                    ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
+                }
             }
         }
 
@@ -1262,58 +1289,34 @@ const cleancatcher = {
         function formatTime(seconds) {
             const m = Math.floor(seconds / 60).toString().padStart(2, "0");
             const s = (seconds % 60).toString().padStart(2, "0");
-            return `${m}:${s}`;}
+            return `${s}`;}
 
-        // draw score, lives and time
+        // draw score and timer
         function drawUI() {
+            // SCORE
             ctx.fillStyle = "black";
-            ctx.font = "18px Arial";
-            ctx.fillText("Score: " + score, 10, 20);
+            ctx.font = "42px Chewy";
+            ctx.textAlign = "left";
+            const scoreText = score.toString().padStart(2, "0");
+            ctx.fillText(scoreText, 85, 95);
 
+            // TIMER
+            const timerText = formatTime(timeLeft);
+            ctx.font = "42px Chewy";
+            ctx.fillStyle = "white";
+            ctx.textAlign = "center";
+            ctx.fillText(timerText, canvas.width / 2, 95);
+
+
+            // message display (center screen)
             if (messageTimer > 0 && currentMessage) {
                 ctx.fillStyle = "black";
-                ctx.font = "30px Montserrat";
+                ctx.font = "32px Chewy";
                 ctx.textAlign = "center";
                 ctx.fillText(currentMessage, canvas.width / 2, canvas.height / 2 - 100);
                 messageTimer--;
             }
-
-            // draw hearts
-            const heartSize = 50;
-            for (let i = 0; i < lives; i++) {
-                ctx.beginPath();
-                const x = 10 + i * (heartSize + 5);
-                const y = 40;
-                ctx.moveTo(x + heartSize / 2, y + heartSize / 5);
-                ctx.bezierCurveTo(x + heartSize / 2, y, x, y, x, y + heartSize / 3);
-                ctx.bezierCurveTo(x, y + heartSize * 2 / 3, x + heartSize / 2, y + heartSize, x + heartSize / 2, y + heartSize);
-                ctx.bezierCurveTo(x + heartSize / 2, y + heartSize, x + heartSize, y + heartSize * 2 / 3, x + heartSize, y + heartSize / 3);
-                ctx.bezierCurveTo(x + heartSize, y, x + heartSize / 2, y, x + heartSize / 2, y + heartSize / 5);
-                ctx.fillStyle = "red";
-                ctx.fill();
-            }
-
-            // centered timer with white background
-            const timerText = formatTime(timeLeft);
-            ctx.font = "40px Arial";
-            const textWidth = ctx.measureText(timerText).width;
-            const padding = 10;
-            const boxX = (canvas.width - textWidth) / 2 - padding;
-            const boxY = 10;
-            const boxWidth = textWidth + padding * 2;
-            const boxHeight = 50;
-
-            ctx.fillStyle = "white";
-            ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-
-            ctx.fillStyle = "black";
-            ctx.fillText(timerText, canvas.width / 2 - textWidth / 2, 45);
-            }
-
-            // time display
-            ctx.fillStyle = "black";
-            ctx.font = "40px Arial";
-            ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
+        }
 
 
         // move items down, check collisions, update stats, remove offscreen
@@ -1378,49 +1381,112 @@ const cleancatcher = {
         let paused = false;
         let rafId = null, moveInterval = null, spawnInterval = null, timerInterval = null;
 
-        // animation frame loop draws background player items ui and updates items
+
+        // animation frame loop draws background, player, items, UI, and updates items
         function frame() {
             if (paused) return;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if (background.complete && background.naturalWidth) {
-                ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+            // choose background based on current lives
+            let targetBackground;
+            if (lives >= 3 && backgroundFullLives.complete && backgroundFullLives.naturalWidth > 0) {
+                targetBackground = backgroundFullLives;
+            } else if (lives === 2 && backgroundTwoLives.complete && backgroundTwoLives.naturalWidth > 0) {
+                targetBackground = backgroundTwoLives;
+            } else if (lives === 1 && backgroundOneLife.complete && backgroundOneLife.naturalWidth > 0) {
+                targetBackground = backgroundOneLife;
             } else {
-                ctx.fillStyle = "#add8e6";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                targetBackground = backgroundFullLives; // fallback
+            }
+
+            // smooth fade transition between backgrounds
+            if (!frame.lastBackground) frame.lastBackground = targetBackground;
+            if (frame.lastBackground !== targetBackground) {
+                if (!frame.fadeStart) frame.fadeStart = performance.now();
+            }
+
+            const fadeDuration = 500; // ms
+            let alpha = 1.0;
+            if (frame.fadeStart) {
+                const elapsed = performance.now() - frame.fadeStart;
+                alpha = Math.min(elapsed / fadeDuration, 1.0);
+
+                // draw previous background fading out
+                if (frame.lastBackground && frame.lastBackground.naturalWidth) {
+                    ctx.globalAlpha = 1 - alpha;
+                    ctx.drawImage(frame.lastBackground, 0, 0, canvas.width, canvas.height);
+                }
+
+                // draw new background fading in
+                if (targetBackground && targetBackground.naturalWidth) {
+                    ctx.globalAlpha = alpha;
+                    ctx.drawImage(targetBackground, 0, 0, canvas.width, canvas.height);
+                }
+                ctx.globalAlpha = 1.0;
+
+                // transition finished
+                if (alpha >= 1.0) {
+                    frame.lastBackground = targetBackground;
+                    frame.fadeStart = null;
+                }
+            } else {
+                // draw static background normally
+                if (targetBackground && targetBackground.naturalWidth) {
+                    ctx.drawImage(targetBackground, 0, 0, canvas.width, canvas.height);
+                } else {
+                    ctx.fillStyle = "#add8e6";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
             }
 
             if (gameOver) {
                 if (!endDialogShown) {
                     endDialogShown = true;
-                    stopLoops();                        // freeze gameplay loops
+                    stopLoops(); // freeze the canvas
 
-                    // hide the drawing canvas so the Phaser overlay is fully visible
+                    // hide the DOM canvas so Phaser display is visible
                     canvas.style.display = "none";
                     canvas.style.pointerEvents = "none";
 
                     const { width, height } = scene.scale;
 
-                    // optional: background behind the dialog (so it doesn't look black)
-                    if (scene.textures.exists("cc_sink_bg")) {
-                        scene.add.image(0, 0, "cc_sink_bg")
+                    // Set Game Over background using no life image
+                    if (backgroundNoLife.complete && backgroundNoLife.naturalWidth > 0) {
+                        // create a Phaser texture from the existing image
+                        const textureKey = "bgNoLife";
+                        if (!scene.textures.exists(textureKey)) {
+                            const tempCanvas = scene.textures.createCanvas(textureKey, backgroundNoLife.width, backgroundNoLife.height);
+                            const ctx = tempCanvas.getContext();
+                            ctx.drawImage(backgroundNoLife, 0, 0);
+                            tempCanvas.refresh();
+                        }
+
+                        scene.add
+                            .image(0, 0, textureKey)
                             .setOrigin(0, 0)
                             .setDisplaySize(width, height)
-                            .setDepth(9997);
+                            .setDepth(9996);
+                    } else if (scene.textures.exists("cc_sink_bg")) {
+                        // fallback if no image found
+                        scene.add
+                            .image(0, 0, "cc_sink_bg")
+                            .setOrigin(0, 0)
+                            .setDisplaySize(width, height)
+                            .setDepth(9996);
                     }
 
-                    // root container for everything in the dialog
+                    // dialog root (everything above background)
                     const dialogRoot = scene.add.container(0, 0).setDepth(9999);
 
-                    // dim overlay (clickable)
+                    // dim mask
                     const overlay = scene.add
                         .rectangle(0, 0, width, height, 0x000000, 0.35)
                         .setOrigin(0, 0)
                         .setInteractive();
                     dialogRoot.add(overlay);
 
-                    // panel skin (or simple rectangle fallback)
+                    // panel (use MenuScene skin)
                     const hasSkin = scene.textures.exists("dialog_skin");
                     const skinImg = hasSkin
                         ? scene.textures.get("dialog_skin").getSourceImage()
@@ -1439,46 +1505,52 @@ const cleancatcher = {
                     const panelW = (panel.displayWidth || skinImg.width * s);
                     const panelH = (panel.displayHeight || skinImg.height * s);
 
-                    // Kiko! (left column inside panel)
+                    // Kiko character image beside panel
                     if (scene.textures.exists("kiko_dialog")) {
-                        const innerPad  = Math.round(panelW * 0.08);
-                        const innerLeft = panel.x - panelW / 2 + innerPad;
-                        const innerRight= panel.x + panelW / 2 - innerPad;
-                        const innerTop  = panel.y - panelH / 2 + innerPad;
-                        const innerBot  = panel.y + panelH / 2 - innerPad;
-
-                        const leftColW  = Math.round((panelW - innerPad * 2) * 0.30);
-                        const kikoX     = innerLeft + leftColW / 2;
-                        const kikoY     = innerBot;
-
-                        const kiko = scene.add.image(kikoX, kikoY, "kiko_dialog").setOrigin(0.5, 1);
-                        const targetH = (innerBot - innerTop) * 1.00;
+                        const kiko = scene.add.image(0, 0, "kiko_dialog").setOrigin(0.5, 1);
+                        const targetH = panelH * 0.60;
                         kiko.setScale(targetH / kiko.height);
+
+                        const gap = Math.round(panelW * 0.08);
+                        kiko.setPosition(panel.x - panelW / 2 - gap, panel.y + panelH / 2);
                         dialogRoot.add(kiko);
                     }
 
-                    const uiFont = "Chewy";
+                    // Title + Score inside panel
+                    const uiFont = (CONFIG.ui && CONFIG.ui.fontFamily) || "Chewy";
 
-                    // Title
-                    const title = scene.add.text(panel.x, panel.y - panelH * 0.28, "GAME OVER!", {
-                        fontFamily: uiFont,
-                        color: "#000000",
-                    }).setOrigin(0.5);
-                    title.setFontSize(Math.max(45, Math.round(44 * s)));
+                    const title = scene.add
+                        .text(panel.x, panel.y - panelH * 0.22, "Game Over!", {
+                            fontFamily: uiFont,
+                            color: "#000000",
+                        })
+                        .setOrigin(0.5);
+                    title.setFontSize(Math.max(28, Math.round(44 * s)));
                     title.setFontStyle("bold");
                     dialogRoot.add(title);
 
-                    // Score
-                    const scoreText = scene.add.text(panel.x, panel.y - panelH * 0.02, `Score: ${score}`, {
-                        fontFamily: uiFont,
-                        color: "#2a4155",
-                    }).setOrigin(0.5);
-                    scoreText.setFontSize(Math.max(28, Math.round(30 * s)));
+                    const scoreText = scene.add
+                        .text(panel.x, panel.y, `Score: ${score}`, {
+                            fontFamily: uiFont,
+                            color: "#2a4155",
+                        })
+                        .setOrigin(0.5);
+                    scoreText.setFontSize(Math.max(20, Math.round(28 * s)));
                     dialogRoot.add(scoreText);
 
+                    // Click anywhere to return to main menu
+                    const goNext = () => {
+                        dialogRoot.destroy(true);
+                        const playerName = scene.registry.get("playerName");
+                        scene.scene.start("GameScene", { playerName });
+                    };
+                    overlay.on("pointerdown", goNext);
                 }
                 return;
             }
+
+
+
 
             drawPlayer();
             drawItems();
@@ -1494,7 +1566,7 @@ const cleancatcher = {
             rafId = requestAnimationFrame(frame);
 
             if (!moveInterval) moveInterval = setInterval(movePlayer, 16);
-            if (!spawnInterval) spawnInterval = setInterval(spawnItem, 1000);
+            if (!spawnInterval) spawnInterval = setInterval(spawnItem, spawnRate);
             if (!timerInterval) timerInterval = setInterval(() => {
                 if (!paused && !gameOver) {
                     timeLeft--;

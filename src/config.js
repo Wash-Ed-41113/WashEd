@@ -79,11 +79,16 @@ window.CONFIG = {
             backgroundVid: "assets/images/SopaSplash/hands_alpha.webm",
         },
         cleanCatch: {
-            background: "assets/images/CleanCatcher/washed_kikos-day_LEVEL_01_scene_04_action_00_soap-splasher_HIT-zero.png",
             germ: "assets/images/Germs/washed_kikos-day_LEVEL_01_scene_05_germ-catcher_GERM_01.png",
             player: 'assets/images/CleanCatcher/washed_day_UI_LEVEL_01_scene_04_soap-splasher_Hands.png',
             waterDroplet: "assets/images/CleanCatcher/washed_day_UI_LEVEL_01_scene_04_soap-splasher_droplet__Water.png",
-            soap: "assets/images/CleanCatcher/washed_day_UI_LEVEL_01_scene_04_soap-splasher_droplet__Soap-water.png"
+            soap: "assets/images/CleanCatcher/washed_day_UI_LEVEL_01_scene_04_soap-splasher_droplet__Soap-water.png",
+            backgroundFullLives: "assets/images/CleanCatcher/1.jpg",
+            backgroundTwoLives: "assets/images/CleanCatcher/2.jpg",
+            backgroundOneLife: "assets/images/CleanCatcher/3.jpg",
+            backgroundNoLife: "assets/images/CleanCatcher/4.jpg",
+
+
         },
         menu: {
             frontpage: "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png",
