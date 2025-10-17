@@ -57,12 +57,12 @@ window.CONFIG = {
             sand: "assets/images/backgrounds/sand.png",     // placeholder
             school: "assets/images/backgrounds/school.png", // placeholder
         },
-        ui: {  // skinksnksdxcsdcds
+        ui: {
             pauseBut: "assets/images/UI/washed_kikos-day_UI-Button_PAUSE.png",
             settingsBut: "assets/images/UI/washed_kikos-day_UI-Button_SETTINGS.png",
             homeBut: "assets/images/UI/washed_kikos-day_UI-Button_HOME.png",
             startBut: "assets/images/UI/washed_kikos-day_UI-Button_Main_START.png",
-            dialogPanel: "assets/images/Menu/washed_kikos-day_UI-dialogue-box-v1.png",
+            dialogPanel: "assets/images/UI/washed_kikos-day_UI-dialogue-box-v1.png",
         },
         soapSplash: {
             sink: "assets/images/soap/sink.png", // sink sprite
@@ -70,12 +70,13 @@ window.CONFIG = {
             // backgrounds change as breaches increase
             backgrounds: [
                 "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_01_germ-catcher_HIT-zero.png",
-                "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_02_germ-catcher_HIT-one.png",
-                "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_03_germ-catcher_HIT-two.png",
-                "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_04_germ-catcher_HIT-three.png",
-                "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_05_germ-catcher_HIT-four.png",
-                "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_06_germ-catcher_HIT-five.png"
-            ]
+                "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_01_germ-scrubber_HIT-one.png",
+                "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_02_germ-scrubber_HIT-two.png",
+                "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_03_germ-scrubber_HIT-three.png",
+                "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_04_germ-scrubber_HIT-four.png",
+                "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_05_germ-scrubber_HIT-five.png"
+            ],
+            backgroundVid: "assets/images/SopaSplash/hands_alpha.webm",
         },
         cleanCatch: {
             germ: "assets/images/Germs/washed_kikos-day_LEVEL_01_scene_05_germ-catcher_GERM_01.png",

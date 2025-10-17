@@ -31,9 +31,7 @@ export default class MenuScene extends Phaser.Scene {
 
         // pop up + X button + kiko
         this.load.image(
-            "dialog_skin",
-            "assets/images/Menu/washed_kikos-day_UI-dialogue-box-v1.png"
-        );
+            "dialog_skin","assets/images/UI/washed_kikos-day_UI-dialogue-box-v1.png");
         this.load.image(
             "ui_exit",
             "assets/images/UI/washed_kikos-day_UI-Button_EXIT.png"
@@ -152,9 +150,9 @@ export default class MenuScene extends Phaser.Scene {
         let kikoDialog = null;
         if (this.textures.exists("kiko_dialog")) {
             kikoDialog = this.add
-                .image(innerLeft + leftColW / 2, panel.y + panelH * 0.24, "kiko_dialog")
+                .image(innerLeft + leftColW / 2, panel.y + panelH * 0.35, "kiko_dialog")
                 .setOrigin(0.5, 1);
-            const targetH = panelH * 0.55;
+            const targetH = panelH * 0.70;
             kikoDialog.setScale(targetH / kikoDialog.height);
             dialogRoot.add(kikoDialog);
         }
