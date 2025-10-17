@@ -1072,6 +1072,8 @@ const cleancatcher = {
         backgroundTwoLives.src = A.backgroundTwoLives || "";
         const backgroundOneLife = new Image();
         backgroundOneLife.src = A.backgroundOneLife || "";
+        this.load.image("cc_gameover_bg", "assets/images/CleanCatcher/4.jpg");
+
 
 
         const goodMessages = [
@@ -1462,8 +1464,6 @@ const cleancatcher = {
                 }
             }
 
-
-
             if (gameOver) {
                 if (!endDialogShown) {
                     endDialogShown = true;
@@ -1475,12 +1475,17 @@ const cleancatcher = {
 
                     const { width, height } = scene.scale;
 
-                    // draw the sink background (so it's not black)
-                    if (scene.textures.exists("cc_sink_bg")) {
+                    // 🔹 NEW: draw the game-over background if available, else fallback to sink background
+                    if (scene.textures.exists("cc_gameover_bg")) {
+                        scene.add.image(0, 0, "cc_gameover_bg")
+                            .setOrigin(0, 0)
+                            .setDisplaySize(width, height)
+                            .setDepth(9996); // slightly behind the dialog
+                    } else if (scene.textures.exists("cc_sink_bg")) {
                         scene.add.image(0, 0, "cc_sink_bg")
                             .setOrigin(0, 0)
                             .setDisplaySize(width, height)
-                            .setDepth(9997);
+                            .setDepth(9996);
                     }
 
                     // dialog root (everything above background)
@@ -1556,6 +1561,7 @@ const cleancatcher = {
                 }
                 return;
             }
+
 
 
 

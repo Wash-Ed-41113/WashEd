@@ -86,6 +86,7 @@ window.CONFIG = {
             backgroundFullLives: "assets/images/CleanCatcher/1.jpg",
             backgroundTwoLives: "assets/images/CleanCatcher/2.jpg",
             backgroundOneLife: "assets/images/CleanCatcher/3.jpg",
+            backgroundNoLife: "assets/images/CleanCatcher/4.jpg",
 
         },
         menu: {
