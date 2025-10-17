@@ -1076,8 +1076,6 @@ const cleancatcher = {
         backgroundNoLife.src = A.backgroundNoLife || "";
 
 
-
-
         const goodMessages = [
             "Nice work!",
             "Good catch!",
@@ -1293,56 +1291,31 @@ const cleancatcher = {
             const s = (seconds % 60).toString().padStart(2, "0");
             return `${m}:${s}`;}
 
-        // draw score, lives and time
+        // draw score and timer
+        // draw score and timer (cleaner layout, no hearts)
         function drawUI() {
+            // SCORE (top-left, numbers only)
             ctx.fillStyle = "black";
-            ctx.font = "18px Chewy";
-            ctx.fillText("Score: " + score, 10, 20);
+            ctx.font = "42px Chewy";
+            ctx.textAlign = "left";
+            const scoreText = score.toString().padStart(2, "0");
+            ctx.fillText(scoreText, 20, 55);
 
+            // TIMER (center-top, no background box)
+            const timerText = formatTime(timeLeft);
+            ctx.font = "42px Chewy";
+            ctx.textAlign = "center";
+            ctx.fillText(timerText, canvas.width / 2, 55);
+
+            // message display (center screen)
             if (messageTimer > 0 && currentMessage) {
                 ctx.fillStyle = "black";
-                ctx.font = "30px Montserrat";
+                ctx.font = "32px Montserrat";
                 ctx.textAlign = "center";
                 ctx.fillText(currentMessage, canvas.width / 2, canvas.height / 2 - 100);
                 messageTimer--;
             }
-
-            // draw hearts
-            const heartSize = 50;
-            for (let i = 0; i < lives; i++) {
-                ctx.beginPath();
-                const x = 10 + i * (heartSize + 5);
-                const y = 40;
-                ctx.moveTo(x + heartSize / 2, y + heartSize / 5);
-                ctx.bezierCurveTo(x + heartSize / 2, y, x, y, x, y + heartSize / 3);
-                ctx.bezierCurveTo(x, y + heartSize * 2 / 3, x + heartSize / 2, y + heartSize, x + heartSize / 2, y + heartSize);
-                ctx.bezierCurveTo(x + heartSize / 2, y + heartSize, x + heartSize, y + heartSize * 2 / 3, x + heartSize, y + heartSize / 3);
-                ctx.bezierCurveTo(x + heartSize, y, x + heartSize / 2, y, x + heartSize / 2, y + heartSize / 5);
-                ctx.fillStyle = "red";
-                ctx.fill();
-            }
-
-            // centered timer with white background
-            const timerText = formatTime(timeLeft);
-            ctx.font = "40px Chewy";
-            const textWidth = ctx.measureText(timerText).width;
-            const padding = 10;
-            const boxX = (canvas.width - textWidth) / 2 - padding;
-            const boxY = 10;
-            const boxWidth = textWidth + padding * 2;
-            const boxHeight = 50;
-
-            ctx.fillStyle = "white";
-            ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-
-            ctx.fillStyle = "black";
-            ctx.fillText(timerText, canvas.width / 2 - textWidth / 2, 45);
         }
-
-        // time display
-        ctx.fillStyle = "black";
-        ctx.font = "40px Chewy";
-        ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
 
 
         // move items down, check collisions, update stats, remove offscreen
@@ -1477,7 +1450,7 @@ const cleancatcher = {
 
                     const { width, height } = scene.scale;
 
-                    // Set Game Over background using your preloaded backgroundNoLife image
+                    // Set Game Over background using no life image
                     if (backgroundNoLife.complete && backgroundNoLife.naturalWidth > 0) {
                         // create a Phaser texture from the existing image
                         const textureKey = "bgNoLife";
