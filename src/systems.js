@@ -1047,7 +1047,7 @@ const soapsplash = (() => {
 // returns an object with destroy and setPaused so the scene can control it
 // -----------------------------
 const cleancatcher = {
-    create(canvas) {
+    create(scene, canvas, difficulty = "easy") {
         const CC = CONFIG.cleanCatch;
         const ctx = canvas.getContext("2d");
         ctx.imageSmoothingEnabled = true;
@@ -1087,6 +1087,7 @@ const cleancatcher = {
 // current message to display and timer
         let currentMessage = "";       // the text to show
         let messageTimer = 0;          // countdown for how long to display
+        let endDialogShown = false;
         const messageDuration = 60;    // frames (about 1 sec at 60fps)
 
 
@@ -1391,10 +1392,91 @@ const cleancatcher = {
             }
 
             if (gameOver) {
-                ctx.fillStyle = "black";
-                ctx.font = "40px Arial";
-                ctx.fillText("Game Over!", canvas.width / 2 - 80, canvas.height / 2);
-                ctx.fillText("Score: " + score, canvas.width / 2 - 60, canvas.height / 2 + 40);
+                if (!endDialogShown) {
+                    endDialogShown = true;
+                    stopLoops();                        // freeze gameplay loops
+
+                    // hide the drawing canvas so the Phaser overlay is fully visible
+                    canvas.style.display = "none";
+                    canvas.style.pointerEvents = "none";
+
+                    const { width, height } = scene.scale;
+
+                    // optional: background behind the dialog (so it doesn't look black)
+                    if (scene.textures.exists("cc_sink_bg")) {
+                        scene.add.image(0, 0, "cc_sink_bg")
+                            .setOrigin(0, 0)
+                            .setDisplaySize(width, height)
+                            .setDepth(9997);
+                    }
+
+                    // root container for everything in the dialog
+                    const dialogRoot = scene.add.container(0, 0).setDepth(9999);
+
+                    // dim overlay (clickable)
+                    const overlay = scene.add
+                        .rectangle(0, 0, width, height, 0x000000, 0.35)
+                        .setOrigin(0, 0)
+                        .setInteractive();
+                    dialogRoot.add(overlay);
+
+                    // panel skin (or simple rectangle fallback)
+                    const hasSkin = scene.textures.exists("dialog_skin");
+                    const skinImg = hasSkin
+                        ? scene.textures.get("dialog_skin").getSourceImage()
+                        : { width: 1200, height: 800 };
+
+                    const baseS = Math.min((width * 0.82) / skinImg.width, (height * 0.62) / skinImg.height);
+                    const s = baseS * 0.9;
+
+                    const panel = hasSkin
+                        ? scene.add.image(width / 2, height / 2, "dialog_skin").setScale(s)
+                        : scene.add
+                            .rectangle(width / 2, height / 2, Math.min(width * 0.75, 740), Math.min(height * 0.55, 460), 0xffffff, 1)
+                            .setStrokeStyle(4, 0x9edcff);
+                    dialogRoot.add(panel);
+
+                    const panelW = (panel.displayWidth || skinImg.width * s);
+                    const panelH = (panel.displayHeight || skinImg.height * s);
+
+                    // Kiko! (left column inside panel)
+                    if (scene.textures.exists("kiko_dialog")) {
+                        const innerPad  = Math.round(panelW * 0.08);
+                        const innerLeft = panel.x - panelW / 2 + innerPad;
+                        const innerRight= panel.x + panelW / 2 - innerPad;
+                        const innerTop  = panel.y - panelH / 2 + innerPad;
+                        const innerBot  = panel.y + panelH / 2 - innerPad;
+
+                        const leftColW  = Math.round((panelW - innerPad * 2) * 0.30);
+                        const kikoX     = innerLeft + leftColW / 2;
+                        const kikoY     = innerBot;
+
+                        const kiko = scene.add.image(kikoX, kikoY, "kiko_dialog").setOrigin(0.5, 1);
+                        const targetH = (innerBot - innerTop) * 1.00;
+                        kiko.setScale(targetH / kiko.height);
+                        dialogRoot.add(kiko);
+                    }
+
+                    const uiFont = "Chewy";
+
+                    // Title
+                    const title = scene.add.text(panel.x, panel.y - panelH * 0.28, "GAME OVER!", {
+                        fontFamily: uiFont,
+                        color: "#000000",
+                    }).setOrigin(0.5);
+                    title.setFontSize(Math.max(45, Math.round(44 * s)));
+                    title.setFontStyle("bold");
+                    dialogRoot.add(title);
+
+                    // Score
+                    const scoreText = scene.add.text(panel.x, panel.y - panelH * 0.02, `Score: ${score}`, {
+                        fontFamily: uiFont,
+                        color: "#2a4155",
+                    }).setOrigin(0.5);
+                    scoreText.setFontSize(Math.max(28, Math.round(30 * s)));
+                    dialogRoot.add(scoreText);
+
+                }
                 return;
             }
 
