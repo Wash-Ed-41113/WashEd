@@ -1144,7 +1144,7 @@ const cleancatcher = {
         const playerImg = new Image();
         playerImg.src = (A.player || "");
 
-        let pSize = sizeFrom(playerImg, P, 290);
+        let pSize = sizeFrom(playerImg, P, 450);
         const player = {
             x: (canvas.width - pSize.w) / 2,
             y: canvas.height - (P.bottom ?? 30) - pSize.h,
@@ -1155,7 +1155,7 @@ const cleancatcher = {
 
         // when the player image finishes loading recompute size and keep player inside bounds
         playerImg.onload = () => {
-            pSize = sizeFrom(playerImg, P, 180);
+            pSize = sizeFrom(playerImg, P, 300);
             const baseline = canvas.height - (P.bottom ?? 30);
             player.width = pSize.w;
             player.height = pSize.h;
@@ -1191,13 +1191,13 @@ const cleancatcher = {
                 img = Math.random() > 0.5 ? waterImg : soapImg;
 
                 if (img === soapImg) {
-                    // soap very small
-                    const gSize = sizeFrom(img, { width: 50, height: 50 });
+                    // soap
+                    const gSize = sizeFrom(img, { width: 85, height: 85 });
                     w = gSize.w;
                     h = gSize.h;
                 } else {
-                    // water smaller than germs
-                    const gSize = sizeFrom(img, { width: 50, height: 50 });
+                    // water
+                    const gSize = sizeFrom(img, { width: 95, height: 95 });
                     w = gSize.w;
                     h = gSize.h;
                 }
@@ -1205,7 +1205,7 @@ const cleancatcher = {
             } else {
                 // germs normal size
                 img = germImg;
-                const gSize = sizeFrom(germImg, CC.germ || {}, 56);
+                const gSize = sizeFrom(germImg, CC.germ || {}, 125);
                 w = gSize.w;
                 h = gSize.h;
             }
@@ -1289,28 +1289,29 @@ const cleancatcher = {
         function formatTime(seconds) {
             const m = Math.floor(seconds / 60).toString().padStart(2, "0");
             const s = (seconds % 60).toString().padStart(2, "0");
-            return `${m}:${s}`;}
+            return `${s}`;}
 
         // draw score and timer
-        // draw score and timer (cleaner layout, no hearts)
         function drawUI() {
-            // SCORE (top-left, numbers only)
+            // SCORE
             ctx.fillStyle = "black";
             ctx.font = "42px Chewy";
             ctx.textAlign = "left";
             const scoreText = score.toString().padStart(2, "0");
-            ctx.fillText(scoreText, 20, 55);
+            ctx.fillText(scoreText, 85, 95);
 
-            // TIMER (center-top, no background box)
+            // TIMER
             const timerText = formatTime(timeLeft);
             ctx.font = "42px Chewy";
+            ctx.fillStyle = "white";
             ctx.textAlign = "center";
-            ctx.fillText(timerText, canvas.width / 2, 55);
+            ctx.fillText(timerText, canvas.width / 2, 95);
+
 
             // message display (center screen)
             if (messageTimer > 0 && currentMessage) {
                 ctx.fillStyle = "black";
-                ctx.font = "32px Montserrat";
+                ctx.font = "32px Chewy";
                 ctx.textAlign = "center";
                 ctx.fillText(currentMessage, canvas.width / 2, canvas.height / 2 - 100);
                 messageTimer--;
