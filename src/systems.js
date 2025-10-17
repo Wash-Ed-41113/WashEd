@@ -1295,17 +1295,17 @@ const cleancatcher = {
         function drawUI() {
             // SCORE
             ctx.fillStyle = "black";
-            ctx.font = "42px Chewy";
+            ctx.font = "50px Chewy";
             ctx.textAlign = "left";
             const scoreText = score.toString().padStart(2, "0");
             ctx.fillText(scoreText, 85, 95);
 
             // TIMER
             const timerText = formatTime(timeLeft);
-            ctx.font = "42px Chewy";
+            ctx.font = "52px Chewy";
             ctx.fillStyle = "white";
             ctx.textAlign = "center";
-            ctx.fillText(timerText, canvas.width / 2, 95);
+            ctx.fillText(timerText, canvas.width / 2, 105);
 
 
             // message display (center screen)
