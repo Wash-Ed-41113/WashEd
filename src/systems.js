@@ -1066,6 +1066,13 @@ const cleancatcher = {
         waterImg.src = A.waterDroplet || "";
         const soapImg = new Image();
         soapImg.src = A.soap || "";
+        const backgroundFullLives = new Image();
+        backgroundFullLives.src = A.backgroundFullLives || "";
+        const backgroundTwoLives = new Image();
+        backgroundTwoLives.src = A.backgroundTwoLives || "";
+        const backgroundOneLife = new Image();
+        backgroundOneLife.src = A.backgroundOneLife || "";
+
 
         const goodMessages = [
             "Nice work!",
@@ -1157,6 +1164,7 @@ const cleancatcher = {
         // falling items list and game stats
         let items = [];
         let score = 0, lives = 3, timeLeft = 30, gameOver = false;
+
 
         // difficulty adjustments
         let spawnRate = 1000;
@@ -1395,18 +1403,66 @@ const cleancatcher = {
         let paused = false;
         let rafId = null, moveInterval = null, spawnInterval = null, timerInterval = null;
 
-        // animation frame loop draws background player items ui and updates items
+
+        // animation frame loop draws background, player, items, UI, and updates items
         function frame() {
             if (paused) return;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if (background.complete && background.naturalWidth) {
-                ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+            // 🎨 choose background based on current lives
+            let targetBackground;
+            if (lives >= 3 && backgroundFullLives.complete && backgroundFullLives.naturalWidth > 0) {
+                targetBackground = backgroundFullLives;
+            } else if (lives === 2 && backgroundTwoLives.complete && backgroundTwoLives.naturalWidth > 0) {
+                targetBackground = backgroundTwoLives;
+            } else if (lives === 1 && backgroundOneLife.complete && backgroundOneLife.naturalWidth > 0) {
+                targetBackground = backgroundOneLife;
             } else {
-                ctx.fillStyle = "#add8e6";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                targetBackground = backgroundFullLives; // fallback
             }
+
+            // smooth fade transition between backgrounds
+            if (!frame.lastBackground) frame.lastBackground = targetBackground;
+            if (frame.lastBackground !== targetBackground) {
+                if (!frame.fadeStart) frame.fadeStart = performance.now();
+            }
+
+            const fadeDuration = 500; // ms
+            let alpha = 1.0;
+            if (frame.fadeStart) {
+                const elapsed = performance.now() - frame.fadeStart;
+                alpha = Math.min(elapsed / fadeDuration, 1.0);
+
+                // draw previous background fading out
+                if (frame.lastBackground && frame.lastBackground.naturalWidth) {
+                    ctx.globalAlpha = 1 - alpha;
+                    ctx.drawImage(frame.lastBackground, 0, 0, canvas.width, canvas.height);
+                }
+
+                // draw new background fading in
+                if (targetBackground && targetBackground.naturalWidth) {
+                    ctx.globalAlpha = alpha;
+                    ctx.drawImage(targetBackground, 0, 0, canvas.width, canvas.height);
+                }
+                ctx.globalAlpha = 1.0;
+
+                // transition finished
+                if (alpha >= 1.0) {
+                    frame.lastBackground = targetBackground;
+                    frame.fadeStart = null;
+                }
+            } else {
+                // draw static background normally
+                if (targetBackground && targetBackground.naturalWidth) {
+                    ctx.drawImage(targetBackground, 0, 0, canvas.width, canvas.height);
+                } else {
+                    ctx.fillStyle = "#add8e6";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+            }
+
+
 
             if (gameOver) {
                 if (!endDialogShown) {
