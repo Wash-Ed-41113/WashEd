@@ -31,6 +31,11 @@ export default class CleanCatchScene extends Phaser.Scene {
         if (!this.cache.audio.exists("cleanCatchMusic")) {
             this.load.audio("cleanCatchMusic", "assets/sounds/soap splasher.mp3");
         }
+
+        this.load.audio("sfx_goodCatch", "assets/sounds/bubble pop Soap Splasher.wav");
+        this.load.audio("sfx_badCatch", "assets/sounds/germ touch Soap Splasher.mp3");
+        this.load.audio("sfx_beep", "assets/sounds/timerSound.mp3");
+
     }
 
     create(data) {

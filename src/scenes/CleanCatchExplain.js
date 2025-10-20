@@ -1,4 +1,5 @@
-// src/scenes/CleanCatchExplain.js
+import systems from "../systems.js";
+
 export default class CleanCatchExplain extends Phaser.Scene {
     constructor() {
         super("CleanCatchExplain");
@@ -6,41 +7,69 @@ export default class CleanCatchExplain extends Phaser.Scene {
 
     preload() {
         const explain = CONFIG.assets.kiko;
+        const A = CONFIG.assets.cleanCatch || {};
+
+        // Kiko art
         this.load.image("KikoBase", explain.base);
+        this.load.image("KikoCheer", explain.cheer);
         this.load.image("DialogPanel", CONFIG.assets.ui.dialogPanel);
+
+        // Background image
+        this.load.image("backgroundFullLives", A.background || "assets/images/CleanCatcher/1.jpg");
+
+        // Background music
+        if (!this.cache.audio.exists("cleanCatchExplainMusic")) {
+            this.load.audio("cleanCatchExplainMusic", "assets/sounds/soap splasher.mp3");
+        }
     }
 
     create(data) {
         console.log("[Explain] Difficulty received:", data?.difficulty);
-
         const { width: W, height: H } = this.scale;
         const username = this.registry.get("playerName") || "friend";
-        const difficulty = this.registry.get("difficulty") || "easy";
+        const difficulty = data?.difficulty || this.registry.get("difficulty") || "easy";
+
+        // background Music
+        this.bgm = this.sound.add("cleanCatchExplainMusic", {
+            loop: true,
+            volume: 0.4
+        });
+        this.bgm.play();
+
+        // background image
+        if (this.textures.exists("backgroundFullLives")) {
+            this.add.image(W / 2, H / 2, "backgroundFullLives")
+                .setDisplaySize(W, H)
+                .setDepth(0);
+        }
 
         // translucent overlay
-        this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.5);
+        this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.4).setDepth(1);
 
-        // kiko
-        const kiko = this.add.image(W * 0.12, H * 0.75, "KikoBase")
+        // Kiko sprite (starts with Cheer)
+        this.kiko = this.add.sprite(W * 0.12, H * 0.75, "KikoCheer")
             .setOrigin(0.5)
-            .setScale(0.35);
+            .setScale(0.35)
+            .setDepth(2);
 
         // panel
         let panel;
         if (this.textures.exists("DialogPanel")) {
             panel = this.add.image(W / 2, H * 0.75, "DialogPanel")
                 .setOrigin(0.5)
-                .setScale(0.5);
+                .setScale(0.5)
+                .setDepth(2);
         } else {
             panel = this.add.rectangle(W / 2, H * 0.75, Math.min(W * 0.8, 960), 260, 0xffffff, 1)
                 .setStrokeStyle(4, 0x7ec8ff)
-                .setOrigin(0.5);
+                .setOrigin(0.5)
+                .setDepth(2);
         }
 
         const panelW = panel.displayWidth || panel.width || Math.min(W * 0.8, 900);
         const style = {
-            fontSize: "30px",
-            font: "Chewy",
+            fontFamily: "Chewy",
+            fontSize: "45px",
             color: "#000000",
             wordWrap: { width: Math.max(120, Math.floor(panelW * 0.8)) },
             align: "center"
@@ -50,47 +79,59 @@ export default class CleanCatchExplain extends Phaser.Scene {
             `${username}! Are you ready for the Clean Catch game? Let’s play!`,
             `Here’s how it works: Catch the clean water drops and soap bubbles — they’re good for us! 
             But be careful, you have 3 lives. Avoid the germs from spreading! Don’t let them touch your hands.`,
-
             `You have 30 seconds to catch as much clean water and soap as you can! 
             Use your mouse to move my hands — let’s see how many you can catch!`,
             `When you’re ready, press PLAY!`
         ];
 
         let currentLine = 0;
-        const text = this.add.text(panel.x, panel.y, lines[currentLine], style).setOrigin(0.5);
+        const text = this.add.text(panel.x, panel.y, lines[currentLine], style)
+            .setOrigin(0.5)
+            .setDepth(3);
 
-        // buttons
+        // --- Buttons ---
         const nextBtn = this.add.rectangle(W * 0.82, H * 0.9, 160, 60, 0x0077cc)
             .setStrokeStyle(3, 0xffffff)
-            .setInteractive({ useHandCursor: true });
+            .setInteractive({ useHandCursor: true })
+            .setDepth(3);
         const nextText = this.add.text(nextBtn.x, nextBtn.y, "Next", {
-            fontFamily: CONFIG.ui.fontFamily,
-            fontSize: "26px",
-            color: "#ffffff"
-        }).setOrigin(0.5);
+            fontFamily: "Chewy",
+            fontSize: "30px",
+            color: "#ffffff",
+            fontStyle: "bold"
+        }).setOrigin(0.5).setDepth(3);
 
         const skipBtn = this.add.rectangle(W * 0.18, H * 0.9, 160, 60, 0xcc4444)
             .setStrokeStyle(3, 0xffffff)
-            .setInteractive({ useHandCursor: true });
+            .setInteractive({ useHandCursor: true })
+            .setDepth(3);
         const skipText = this.add.text(skipBtn.x, skipBtn.y, "Skip", {
-            fontFamily: CONFIG.ui.fontFamily,
-            fontSize: "26px",
+            fontFamily: "Chewy",
+            fontSize: "30px",
             color: "#ffffff"
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setDepth(3);
 
         const playBtn = this.add.rectangle(W / 2, H * 0.9, 200, 70, 0x28a745)
             .setStrokeStyle(3, 0xffffff)
             .setInteractive({ useHandCursor: true })
-            .setVisible(false);
+            .setVisible(false)
+            .setDepth(3);
         const playText = this.add.text(playBtn.x, playBtn.y, "PLAY", {
-            fontFamily: CONFIG.ui.fontFamily,
-            fontSize: "30px",
+            fontFamily: "Chewy",
+            fontSize: "34px",
             color: "#ffffff"
-        }).setOrigin(0.5)
-            .setVisible(false);
+        }).setOrigin(0.5).setVisible(false).setDepth(3);
 
+        // --- Dialogue switching logic ---
         const nextLine = () => {
             currentLine++;
+
+            // alternate Kiko expression (Cheer ↔ Base)
+            if (currentLine % 2 === 0 && this.textures.exists("KikoCheer"))
+                this.kiko.setTexture("KikoCheer");
+            else if (this.textures.exists("KikoBase"))
+                this.kiko.setTexture("KikoBase");
+
             if (currentLine < lines.length - 1) {
                 text.setText(lines[currentLine]);
             } else {
@@ -103,22 +144,37 @@ export default class CleanCatchExplain extends Phaser.Scene {
                 playText.setVisible(true);
             }
         };
-
         nextBtn.on("pointerdown", nextLine);
 
         // skip straight to CleanCatchScene (preserving difficulty)
         const startGame = () => {
+            this.bgm.stop();
             const playerName = this.registry.get("playerName");
             this.scene.stop("CleanCatchExplain");
-            const diff = data?.difficulty || this.registry.get("difficulty") || "easy";
-            this.scene.start("CleanCatch", { playerName, difficulty: diff });
-
+            this.scene.start("CleanCatch", { playerName, difficulty });
         };
 
         skipBtn.on("pointerdown", startGame);
         playBtn.on("pointerdown", startGame);
-
         this.input.keyboard.on("keydown-SPACE", nextLine);
+
+        // --- UI BUTTONS
+        if (systems?.ui?.topbar) {
+            systems.ui.topbar(this, {
+                onHome: () => {
+                    this.bgm?.stop();
+                    const playerName = this.registry.get("playerName");
+                    this.scene.start("GameScene", { playerName });
+                },
+                onPause: () => {
+                    // optional: mute/unmute explain music
+                    if (this.bgm) this.bgm.setMute(!this.bgm.mute);
+                },
+                x: this.scale.width * 0.15,  // shifted more to the left
+                y: this.scale.height * 0.08,
+            });
+        }
+
     }
 }
 
