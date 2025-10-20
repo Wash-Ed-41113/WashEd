@@ -40,7 +40,10 @@ export default class MenuScene extends Phaser.Scene {
         this.load.image("dialog_skin","assets/images/UI/washed_kikos-day_UI-dialogue-box-v1.png");
         this.load.image("ui_exit","assets/images/UI/washed_kikos-day_UI-Button_EXIT.png");
         this.load.image("kiko_dialog","assets/images/Kiko/WashEd_kiko_sprite_base.png");
-        this.load.image("ui_continue","assets/images/UI/washed_kikos-day_UI-Button_ARROW_Right.png"); // ← NEW
+        this.load.image("ui_continue","assets/images/UI/washed_kikos-day_UI-Button_ARROW_Right.png");
+
+        // BGM
+        this.load.audio("bgm_kiko", "assets/sounds/kikos_day.mp3");
     }
 
     create() {
@@ -78,6 +81,23 @@ export default class MenuScene extends Phaser.Scene {
         };
         this.video.on("loadeddata", resizeVideo);
         resizeVideo();
+
+        // ✅ Start BGM from the very first scene and keep playing across scenes
+        this.sound.pauseOnBlur = false; // optional: don't auto-pause on tab change
+        const startBgm = () => {
+            let bgm = this.sound.get("bgm_kiko");
+            if (!bgm) {
+                bgm = this.sound.add("bgm_kiko", { loop: true, volume: 0.45 });
+            }
+            if (!bgm.isPlaying) bgm.play();
+        };
+        if (this.sound.locked) {
+            // Mobile autoplay unlock: first interaction or WebAudio unlock event
+            this.sound.once(Phaser.Sound.Events.UNLOCKED, startBgm);
+            this.input.once("pointerdown", startBgm);
+        } else {
+            startBgm();
+        }
 
         // START → ask name → ask difficulty → go Playground
         const startFlow = () => {
@@ -168,15 +188,15 @@ export default class MenuScene extends Phaser.Scene {
         const panelH = skinImg.height * s;
 
         // inner layout (same math for both dialogs)
-        const innerPad = Math.round(60 * s);
-        const innerLeft  = panel.x - panelW / 2 + innerPad;
+        const innerPad  = Math.round(60 * s);
+        const innerLeft = panel.x - panelW / 2 + innerPad;
         const innerRight = panel.x + panelW / 2 - innerPad;
         const innerW = innerRight - innerLeft;
 
-        const gutter = Math.round(28 * s);
+        const gutter   = Math.round(28 * s);
         const leftColW = Math.round(innerW * 0.3);
-        const rightX = innerLeft + leftColW + gutter;
-        const rightW = innerW - leftColW - gutter;
+        const rightX   = innerLeft + leftColW + gutter;
+        const rightW   = innerW - leftColW - gutter;
 
         // kiko (left side)
         if (this.textures.exists("kiko_dialog")) {

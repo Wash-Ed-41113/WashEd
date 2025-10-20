@@ -1,3 +1,4 @@
+// src/scenes/CleanCatchScene.js
 // import the shared systems module
 import systems from "../systems.js";
 
@@ -7,7 +8,7 @@ export default class CleanCatchScene extends Phaser.Scene {
         this._runtime = null;
         this._paused = false;
         this._pauseUi = null;
-        this._bgm = null;        //background music
+        this._bgm = null; // background music for this mini game
     }
 
     preload() {
@@ -33,26 +34,33 @@ export default class CleanCatchScene extends Phaser.Scene {
     }
 
     create(data) {
-        // store data (optional)
-        if (data?.difficulty) {
-            this.registry.set("difficulty", data.difficulty);
-        }
-        console.log("[CleanCatchScene] Final difficulty:", this.registry.get("difficulty"));
-
+        // persist basic data
         if (data?.difficulty) this.registry.set("difficulty", data.difficulty);
         if (data?.playerName) this.registry.set("playerName", data.playerName);
+        console.log("[CleanCatchScene] Final difficulty:", this.registry.get("difficulty"));
 
         const { width, height } = this.scale;
 
-        // start music here (only in Clean Catch)
-        if (!this._bgm) {
-            this._bgm = this.sound.add("cleanCatchMusic", {
-                loop: true,
-                volume: 0.5,
-                mute: !!this.registry.get("mute")
-            });
+        // --- STOP main menu bgm if playing ---
+        this.sound.get("bgm_kiko")?.stop();
+
+        // --- START mini game bgm ---
+        const playMiniBgm = () => {
+            if (!this._bgm) {
+                this._bgm = this.sound.add("cleanCatchMusic", {
+                    loop: true,
+                    volume: 0.55,
+                    mute: !!this.registry.get("mute"),
+                });
+            }
+            if (!this._bgm.isPlaying) this._bgm.play();
+        };
+        if (this.sound.locked) {
+            // wait for first user gesture unlock just in case
+            this.sound.once(Phaser.Sound.Events.UNLOCKED, playMiniBgm);
+        } else {
+            playMiniBgm();
         }
-        if (!this._bgm.isPlaying) this._bgm.play();
 
         // DOM canvas host
         const rootEl = document.createElement("div");
@@ -67,7 +75,7 @@ export default class CleanCatchScene extends Phaser.Scene {
         const difficulty = this.registry.get("difficulty") || "easy";
         this._runtime = systems.cleancatcher.create(this, canvas, difficulty);
 
-        // top bar (home/pause)
+        // top bar (home / pause)
         systems.ui.topbar(this, {
             onHome: () => {
                 this._runtime?.destroy?.();
