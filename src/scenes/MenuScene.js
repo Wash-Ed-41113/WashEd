@@ -42,7 +42,6 @@ export default class MenuScene extends Phaser.Scene {
             "kiko_dialog",
             "assets/images/Kiko/WashEd_kiko_sprite_base.png"
         );
-
     }
 
     create() {
@@ -85,15 +84,27 @@ export default class MenuScene extends Phaser.Scene {
         this.video.on("loadeddata", resizeVideo);
         resizeVideo();
 
-        // START
+        // START: 이름 → 난이도 → GameScene
         const goWithName = () => {
             const cached = this.registry.get("playerName");
             if (cached) {
-                this.scene.start("GameScene", { playerName: cached });
+                this.openDifficultyDialog(cached, (difficulty) => {
+                    this.registry.set("difficulty", difficulty);
+                    this.scene.start("GameScene", {
+                        playerName: cached,
+                        preselectedDifficulty: difficulty,
+                    });
+                });
             } else {
                 this.openNameDialog((playerName) => {
                     this.registry.set("playerName", playerName);
-                    this.scene.start("GameScene", { playerName });
+                    this.openDifficultyDialog(playerName, (difficulty) => {
+                        this.registry.set("difficulty", difficulty);
+                        this.scene.start("GameScene", {
+                            playerName,
+                            preselectedDifficulty: difficulty,
+                        });
+                    });
                 });
             }
         };
@@ -127,11 +138,12 @@ export default class MenuScene extends Phaser.Scene {
 
         // skin layout and scale
         const skinImg = this.textures.get("dialog_skin").getSourceImage();
-        const s = Math.min((width * 0.82) / skinImg.width, (height * 0.62) / skinImg.height);
+        const s = Math.min(
+            (width * 0.82) / skinImg.width,
+            (height * 0.62) / skinImg.height
+        );
 
-        const panel = this.add
-            .image(width / 2, height / 2, "dialog_skin")
-            .setScale(s);
+        const panel = this.add.image(width / 2, height / 2, "dialog_skin").setScale(s);
         dialogRoot.add(panel);
 
         const panelW = skinImg.width * s;
@@ -148,10 +160,9 @@ export default class MenuScene extends Phaser.Scene {
         const rightX = innerLeft + leftColW + gutter;
         const rightW = innerW - leftColW - gutter;
 
-        // kiko (left sid)
-        let kikoDialog = null;
+        // kiko (left side)
         if (this.textures.exists("kiko_dialog")) {
-            kikoDialog = this.add
+            const kikoDialog = this.add
                 .image(innerLeft + leftColW / 2, panel.y + panelH * 0.24, "kiko_dialog")
                 .setOrigin(0.5, 1);
             const targetH = panelH * 0.55;
@@ -186,7 +197,7 @@ export default class MenuScene extends Phaser.Scene {
       </div>
     `;
         const form = this.add
-            .dom(rightX+110, panel.y + panelH * 0.01)
+            .dom(rightX + 110, panel.y + panelH * 0.01)
             .createFromHTML(html)
             .setOrigin(0.5);
         dialogRoot.add(form);
@@ -222,7 +233,7 @@ export default class MenuScene extends Phaser.Scene {
         ok.style.fontSize = `${Math.round(50 * s)}px`;
         ok.style.cursor = "pointer";
         ok.style.marginLeft = `${Math.round(250 * s)}px`;
-        ok.style.marginTop  = `${Math.round(80 * s)}px`;
+        ok.style.marginTop = `${Math.round(80 * s)}px`;
 
         // close(X)
         const closeBtn = this.add
@@ -293,6 +304,189 @@ export default class MenuScene extends Phaser.Scene {
 
         closeBtn.on("pointerdown", destroyDialog);
         this.events.once("shutdown", destroyDialog);
+    }
+
+    // ─────────────────────────────────────────────
+    // difficulty popup (name dialog와 동일 포맷) — 제목/버튼 레이어/정렬 수정
+    // ─────────────────────────────────────────────
+    openDifficultyDialog(playerName, onSelect) {
+        const { width, height } = this.scale;
+
+        // root
+        const root = this.add.container(0, 0).setDepth(20);
+
+        // overlay
+        const overlay = this.add
+            .rectangle(0, 0, width, height, 0x000000, 0.35)
+            .setOrigin(0, 0)
+            .setInteractive();
+        root.add(overlay);
+
+        // bubble scale/pos
+        const skinImg = this.textures.get("dialog_skin").getSourceImage();
+        const s = Math.min(
+            (width * 0.82) / skinImg.width,
+            (height * 0.62) / skinImg.height
+        );
+
+        const panel = this.add.image(width / 2, height / 2, "dialog_skin").setScale(s);
+        root.add(panel);
+
+        const panelW = skinImg.width * s;
+        const panelH = skinImg.height * s;
+
+        // inner layout grid
+        const innerPad = Math.round(60 * s);
+        const innerLeft = panel.x - panelW / 2 + innerPad;
+        const innerRight = panel.x + panelW / 2 - innerPad;
+        const innerW = innerRight - innerLeft;
+
+        const gutter = Math.round(28 * s);
+        const leftColW = Math.round(innerW * 0.3);
+        const rightX = innerLeft + leftColW + gutter;
+        const rightW = innerW - leftColW - gutter;
+
+        // Kiko (left)
+        if (this.textures.exists("kiko_dialog")) {
+            const kiko = this.add
+                .image(innerLeft + leftColW / 2, panel.y + panelH * 0.24, "kiko_dialog")
+                .setOrigin(0.5, 1);
+            const targetH = panelH * 0.55;
+            kiko.setScale(targetH / kiko.height);
+            root.add(kiko);
+        }
+
+        // ── Title
+        const uiFont =
+            (typeof CONFIG !== "undefined" && CONFIG.ui?.fontFamily) || "Arial";
+
+        const colCenterX = rightX + rightW / 2;
+        const title = this.add.text(
+            colCenterX,
+            panel.y - panelH * 0.1,
+            "Select your difficulty!",
+            {
+                fontFamily: uiFont,
+                color: "#000",
+                fontStyle: "bold",
+                align: "center",
+                wordWrap: { width: rightW * 0.9 },
+            }
+        )
+            .setOrigin(0.5, 0.5)
+            .setFontSize(Math.max(44, Math.round(46 * s)))
+            .setDepth(5); // 제목을 버튼 위 레이어로
+        root.add(title);
+
+        // ── Buttons (크고 정렬 깔끔하게)
+        const BTN_W = Math.min(rightW * 0.72, 640 * s);
+        const BTN_H = Math.max(70 * s, 60);
+        const GAP = Math.max(26 * s, 18);
+        const FONT_SZ = Math.round(30 * s);
+        const STROKE = Math.max(2, 2 * s);
+
+        // 제목 실제 높이 반영해서 첫 버튼 시작 Y 계산
+        const titleH = title.displayHeight || (title.height ?? 0);
+        const margin = Math.max(18 * s, 14);
+        const startYBase = (title.y + titleH / 2) + margin;
+
+        // 세로 중앙 느낌 유지 위해 3개 버튼 블록 높이로 오프셋
+        const totalH = BTN_H * 3 + GAP * 2;
+        const baseOffset = -totalH / 2;
+
+        const makeBtn = (label, offset, key) => {
+            const y = startYBase + offset;
+            const rect = this.add
+                .rectangle(colCenterX, y, BTN_W, BTN_H, 0x142038, 1)
+                .setOrigin(0.5)
+                .setStrokeStyle(STROKE, 0xffffff)
+                .setInteractive({ useHandCursor: true })
+                .setDepth(4); // 제목 아래
+            const txt = this.add
+                .text(colCenterX, y, label, {
+                    fontFamily: "Arial",
+                    fontSize: FONT_SZ,
+                    color: "#ffffff",
+                    align: "center",
+                    fixedWidth: BTN_W,
+                })
+                .setOrigin(0.5)
+                .setDepth(4);
+
+            rect.on("pointerover", () => rect.setFillStyle(0x1d2b52));
+            rect.on("pointerout", () => rect.setFillStyle(0x142038));
+
+            const choose = () => finalize(key, rect, txt);
+            rect.on("pointerdown", choose);
+            txt.on("pointerdown", choose);
+
+            root.add(rect);
+            root.add(txt);
+            return { rect, txt };
+        };
+
+        const b1 = makeBtn("Easy", baseOffset + BTN_H * 0 + GAP * 0, "easy");
+        const b2 = makeBtn("Normal", baseOffset + BTN_H * 1 + GAP * 1, "normal");
+        const b3 = makeBtn("Hard", baseOffset + BTN_H * 2 + GAP * 2, "hard");
+
+        // close(X)
+        const closeBtn = this.add
+            .image(
+                panel.x + panelW / 2 - Math.round(46 * s),
+                panel.y - panelH / 2 + Math.round(46 * s),
+                "ui_exit"
+            )
+            .setOrigin(0.5)
+            .setScale(0.12)
+            .setInteractive({ useHandCursor: true });
+        root.add(closeBtn);
+
+        const baseScale = 0.12;
+        closeBtn.on("pointerover", () => {
+            this.tweens.add({
+                targets: closeBtn,
+                scale: baseScale * 1.15,
+                duration: 120,
+                ease: "Sine.easeOut",
+            });
+        });
+        closeBtn.on("pointerout", () => {
+            this.tweens.add({
+                targets: closeBtn,
+                scale: baseScale,
+                duration: 120,
+                ease: "Sine.easeOut",
+            });
+        });
+        closeBtn.on("pointerdown", () => destroyDialog());
+
+        // finalize (blink/yoyo) then callback
+        const disableAll = () => {
+            [b1, b2, b3].forEach(({ rect, txt }) => {
+                rect.disableInteractive();
+                txt.disableInteractive();
+            });
+            closeBtn.disableInteractive();
+        };
+        const finalize = (difficultyKey, rect, txt) => {
+            disableAll();
+            this.tweens.add({
+                targets: [rect, txt],
+                alpha: 0.4,
+                yoyo: true,
+                duration: 120,
+                repeat: 1,
+                onComplete: () => {
+                    destroyDialog();
+                    onSelect?.(difficultyKey);
+                },
+            });
+        };
+
+        const destroyDialog = () => {
+            this.tweens.killTweensOf(closeBtn);
+            root.destroy(true);
+        };
     }
 
     // =======================

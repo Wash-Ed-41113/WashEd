@@ -18,6 +18,13 @@ export default class PreloadScene extends Phaser.Scene {
         // load base kiko sprite
         this.load.image("kiko_base", KI.base);
 
+        this.load.image(
+            "playground_bg", "assets/images/background/school-yard.png"
+        );
+
+        this.load.image("ui_arrow_right", "assets/images/UI/washed_kikos-day_UI-Button_ARROW_Right.png");
+
+
         // load shared ui icons used across the game
         this.load.image("ui_pause", UI.pauseBut);
         this.load.image("ui_settings", UI.settingsBut);
@@ -49,9 +56,4 @@ export default class PreloadScene extends Phaser.Scene {
 
         this.scene.start("MenuScene");
     }
-
-
-
-
-
 }
