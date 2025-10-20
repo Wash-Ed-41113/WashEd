@@ -7,7 +7,7 @@ export default class CleanCatchScene extends Phaser.Scene {
         this._runtime = null;
         this._paused = false;
         this._pauseUi = null;
-        this._bgm = null;          // <- music handle
+        this._bgm = null;        //background music
     }
 
     preload() {
@@ -34,6 +34,11 @@ export default class CleanCatchScene extends Phaser.Scene {
 
     create(data) {
         // store data (optional)
+        if (data?.difficulty) {
+            this.registry.set("difficulty", data.difficulty);
+        }
+        console.log("[CleanCatchScene] Final difficulty:", this.registry.get("difficulty"));
+
         if (data?.difficulty) this.registry.set("difficulty", data.difficulty);
         if (data?.playerName) this.registry.set("playerName", data.playerName);
 

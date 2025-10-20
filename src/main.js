@@ -11,7 +11,8 @@ import PlaygroundScene from "./scenes/PlaygroundScene.js";
 import SoapSplashScene from "./scenes/SoapSplashScene.js";
 import CleanCatchScene from "./scenes/CleanCatchScene.js";
 import SoapSplashExplain from "./scenes/SoapSplashExplain.js";
-import HandwashAnimationScene from "./scenes/HandwashAnimationScene.js";
+import CleanCatchExplain from "./scenes/CleanCatchExplain.js";
+
 
 import { DB } from "./db.js";
 DB.init();
@@ -19,6 +20,7 @@ DB.init();
 
 import SchoolBathroomScene from "./scenes/SchoolBathroomScene.js";
 import EndingScene from "./scenes/EndingScene.js";
+
 
 
 
@@ -60,10 +62,10 @@ const config = {
         PlaygroundScene,
         SoapSplashExplain,
         SoapSplashScene,
+        CleanCatchExplain,
         CleanCatchScene,
         SchoolBathroomScene,
-        EndingScene,
-        HandwashAnimationScene
+        EndingScene
     ],
 
     // enable phaser DOM plugin so scenes can create html elements like input fields

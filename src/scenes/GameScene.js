@@ -382,13 +382,7 @@ export default class GameScene extends Phaser.Scene {
             // build three mode buttons with equal spacing
             const GAP = 86;
             makeBtn("Play Soap Splash",  -GAP, () => go("SoapSplash"));
-            makeBtn("Play Clean Catch", 0, () => {
-                soapSplashMusic.play().catch(() => {
-                    console.log("User interaction required before playing music.");
-                });
-                go("CleanCatch");
-            });
-
+            makeBtn("Play Clean Catch", 0, () =>  go("CleanCatchExplain", { difficulty: "hard" }));
             makeBtn("Explore Playground",  GAP, () => go("PlaygroundScene"));
 
             // animate panel open then fade in the content

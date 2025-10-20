@@ -1172,6 +1172,7 @@ const soapsplash = (() => {
 // -----------------------------
 const cleancatcher = {
     create(scene, canvas, difficulty = "easy") {
+        difficulty = String(difficulty).toLowerCase();
         const CC = CONFIG.cleanCatch;
         const ctx = canvas.getContext("2d");
         ctx.imageSmoothingEnabled = true;
@@ -1198,6 +1199,9 @@ const cleancatcher = {
         backgroundOneLife.src = A.backgroundOneLife || "";
         const backgroundNoLife = new Image();
         backgroundNoLife.src = A.backgroundNoLife || "";
+
+        //count for water/soap catched for dialogues
+        let goodCatchCount = 0;
 
 
         const goodMessages = [
@@ -1419,28 +1423,41 @@ const cleancatcher = {
         function drawUI() {
             // SCORE
             ctx.fillStyle = "black";
-            ctx.font = "42px Chewy";
+            ctx.font = "50px Chewy";
             ctx.textAlign = "left";
             const scoreText = score.toString().padStart(2, "0");
             ctx.fillText(scoreText, 85, 95);
 
             // TIMER
             const timerText = formatTime(timeLeft);
-            ctx.font = "42px Chewy";
+            ctx.font = "52px Chewy";
             ctx.fillStyle = "white";
             ctx.textAlign = "center";
-            ctx.fillText(timerText, canvas.width / 2, 95);
+            ctx.fillText(timerText, canvas.width / 2, 105);
 
-
-            // message display (center screen)
+            // message display (dialogues) animated pop up effect
             if (messageTimer > 0 && currentMessage) {
+                const progress = messageTimer / messageDuration; // 1 → 0 as it fades
+                const popupScale = 1 + 0.2 * Math.sin(progress * Math.PI); // pop effect
+                const yOffset = 140 + (1 - progress) * 10; // move slightly upward as it fades
+
+                ctx.save();
+                ctx.translate(canvas.width - 80, canvas.height - yOffset);
+                ctx.scale(popupScale, popupScale);
+
+                ctx.font = "65px Chewy";
                 ctx.fillStyle = "black";
-                ctx.font = "32px Chewy";
-                ctx.textAlign = "center";
-                ctx.fillText(currentMessage, canvas.width / 2, canvas.height / 2 - 100);
+                ctx.textAlign = "right";
+                ctx.shadowColor = "white";
+                ctx.shadowBlur = 10;
+
+                ctx.fillText(currentMessage, 0, 0);
+
+                ctx.restore();
                 messageTimer--;
             }
         }
+
 
 
         // move items down, check collisions, update stats, remove offscreen
@@ -1456,22 +1473,26 @@ const cleancatcher = {
                 )) {
                     if (item.type === "good") {
                         score += 10;
-                        // pick a random positive message
-                        currentMessage = helpers.words.pick(goodMessages);
+                        goodCatchCount++;
+
+                        // Only show a message every 3 good catches
+                        if (goodCatchCount % 3 === 0) {
+                            currentMessage = helpers.words.pick(goodMessages);
+                            messageTimer = messageDuration;
+                        }
+
                     } else {
                         lives -= 1;
-                        // pick a random negative message
                         currentMessage = helpers.words.pick(badMessages);
+                        messageTimer = messageDuration;
                         if (lives <= 0) gameOver = true;
                     }
-
-                    // reset message timer
-                    messageTimer = messageDuration;
 
                     // remove the item from the array
                     items.splice(i, 1);
                     continue;
                 }
+
 
                 // remove items that fall off the screen
                 if (item.y > canvas.height) items.splice(i, 1);
@@ -1489,7 +1510,8 @@ const cleancatcher = {
         };
         const onPointerMove = (e) => {
             const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
+            const scaleX = canvas.width / rect.width;  // adjust for scaling of full screen
+            const mouseX = (e.clientX - rect.left) * scaleX;
             player.x = helpers.clamp(mouseX - player.width / 2, 0, canvas.width - player.width);
         };
         document.addEventListener("keydown", onKeyDown);
