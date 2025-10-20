@@ -1203,6 +1203,21 @@ const cleancatcher = {
         //count for water/soap catched for dialogues
         let goodCatchCount = 0;
 
+        //  Sound Effects Setup
+        let catchGoodSound = null;
+        let catchBadSound = null;
+        let timerBeepSound = null;
+
+        // Initialise Phaser sounds if available
+        if (scene.sound) {
+            catchGoodSound = scene.sound.add("sfx_goodCatch", { volume: 0.5 });
+            catchBadSound = scene.sound.add("sfx_badCatch", { volume: 0.5 });
+            timerBeepSound = scene.sound.add("sfx_beep", { volume: 0.7 });
+        } else {
+            console.warn("[CleanCatch] No Phaser sound system found — skipping sound effects.");
+        }
+
+
 
         const goodMessages = [
             "Nice work!",
@@ -1475,14 +1490,17 @@ const cleancatcher = {
                         score += 10;
                         goodCatchCount++;
 
+                        // Play good catch sound
+                        if (catchGoodSound) catchGoodSound.play();
+
                         // Only show a message every 3 good catches
                         if (goodCatchCount % 3 === 0) {
                             currentMessage = helpers.words.pick(goodMessages);
                             messageTimer = messageDuration;
                         }
-
                     } else {
                         lives -= 1;
+                        if (catchBadSound) catchBadSound.play(); // 🔊 germ caught
                         currentMessage = helpers.words.pick(badMessages);
                         messageTimer = messageDuration;
                         if (lives <= 0) gameOver = true;
@@ -1716,9 +1734,16 @@ const cleancatcher = {
             if (!timerInterval) timerInterval = setInterval(() => {
                 if (!paused && !gameOver) {
                     timeLeft--;
+
+                    // Play beep in last 5 seconds
+                    if (timeLeft <= 5 && timeLeft > 0 && timerBeepSound) {
+                        timerBeepSound.play();
+                    }
+
                     if (timeLeft <= 0) gameOver = true;
                 }
             }, 1000);
+
         }
 
         // stop every loop and clear ids
@@ -1755,6 +1780,10 @@ const cleancatcher = {
             document.removeEventListener("keydown", onKeyDown);
             document.removeEventListener("keyup", onKeyUp);
             canvas.removeEventListener("pointermove", onPointerMove);
+            catchGoodSound?.destroy();
+            catchBadSound?.destroy();
+            timerBeepSound?.destroy();
+
         }
 
         // kick off the game
