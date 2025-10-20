@@ -123,7 +123,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
         // Click routing (blocked until dialog closes)
         // TAP is the FIRST correct step
-        // TAP handler
+        // TAP handler ADD EXPLAIN SCENE HERE
         tap.on("pointerdown", onlyIfNoDialog(() => {
             if (!this._step1Done) {
                 // First time: Tap is correct → show success dialog, then start CleanCatch
