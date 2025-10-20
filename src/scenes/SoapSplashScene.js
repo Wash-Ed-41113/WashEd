@@ -90,6 +90,11 @@ export default class SoapSplashScene extends Phaser.Scene {
         // game sprites
         this.load.image("Germ", CONFIG.assets.soapSplash.germ);
 
+        this.load.image(
+            "ss_end_bg",
+            "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_01_germ-catcher_HIT-zero.png"
+        );
+
         // kiko sprites for toasts (optional; code safely falls back if missing)
         if (CONFIG.assets?.kiko?.jump) this.load.image("KikoJump", CONFIG.assets.kiko.jump);
         if (CONFIG.assets?.kiko?.cheer) this.load.image("KikoCheer", CONFIG.assets.kiko.cheer);

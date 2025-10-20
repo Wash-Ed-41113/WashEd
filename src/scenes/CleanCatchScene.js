@@ -66,7 +66,7 @@ export default class CleanCatchScene extends Phaser.Scene {
         systems.ui.topbar(this, {
             onHome: () => {
                 this._runtime?.destroy?.();
-                if (this._bgm) { this._bgm.stop(); this._bgm.destroy(); this._bgm = null; } // ✅ stop music
+                if (this._bgm) { this._bgm.stop(); this._bgm.destroy(); this._bgm = null; } // stop music
                 const playerName = this.registry.get("playerName");
                 this.scene.start("GameScene", { playerName });
             },
