@@ -132,8 +132,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
                 this._showCorrectDialog(
                     "Good job! That’s the correct way to wash your hands. Now, let’s play Soap Splasher!",
                     () => {
-                        // NOTE: This still starts CleanCatch, as your flow dictates
-                        this._fadeTo("CleanCatch");
+                        this._fadeTo("CleanCatchExplain");
                     }, 3000
                 );
                 return;
