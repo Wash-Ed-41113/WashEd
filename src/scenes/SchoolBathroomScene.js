@@ -15,11 +15,15 @@ const SOAPBOTTLE_PATH = "assets/images/UI/washed_day_UI_LEVEL_01_scene_02_bathro
 const ARROW_RIGHT_KEY = "ui_arrow_right";
 const ARROW_RIGHT_PATH = "assets/images/UI/washed_kikos-day_UI-Button_ARROW_Right.png";
 
+const DIALOG_BALLOON_KEY = "dialog_balloon";
+const DIALOG_BALLOON_PATH = "assets/images/UI/washed_kikos-day_UI-dialogue-box-v2.png";
+
 export default class SchoolBathroomScene extends Phaser.Scene {
     constructor() {
         super("SchoolBathroomScene");
         this.nextSceneKey = null;
         this._dialogRoot = null;
+        this._step1Done = false;
     }
 
     preload() {
@@ -30,15 +34,26 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         if (!this.textures.exists(ARROW_RIGHT_KEY)) this.load.image(ARROW_RIGHT_KEY, ARROW_RIGHT_PATH);
         if (!this.textures.exists("dialog_skin")) this.load.image("dialog_skin", "assets/images/Menu/washed_kikos-day_UI-dialogue-box-v1.png");
         if (!this.textures.exists("kiko_dialog")) this.load.image("kiko_dialog", "assets/images/Kiko/WashEd_kiko_sprite_base.png");
+        if (!this.textures.exists(DIALOG_BALLOON_KEY)) this.load.image(DIALOG_BALLOON_KEY, DIALOG_BALLOON_PATH);
     }
 
-    create() {
+    create(data = {}) {
         const { width, height } = this.scale;
+        const skipIntro = !!data.skipIntro;
+
+        if (skipIntro) {
+            this._step1Done = true;
+        }
 
         const onlyIfNoDialog = (fn) => () => {
-            if (this._dialogRoot) return; // block clicks if dialog still open
+            // If a dialog is already visible, remove it immediately
+            if (this._dialogRoot) {
+                this._dialogRoot.destroy(true);
+                this._dialogRoot = null;
+            }
             fn();
         };
+
 
         // Background
         const bg = this.add.image(width / 2, height / 2, BG_KEY).setOrigin(0.5, 0.5);
@@ -107,9 +122,52 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         makeHover(tap); makeHover(soapBar); makeHover(soapBottle);
 
         // Click routing (blocked until dialog closes)
-        tap.on("pointerdown",        onlyIfNoDialog(() => this._fadeTo("CleanCatch")));
-        soapBar.on("pointerdown",    onlyIfNoDialog(() => this._fadeTo("SoapSplash")));
-        soapBottle.on("pointerdown", onlyIfNoDialog(() => this._fadeTo("SoapSplash")));
+        // TAP is the FIRST correct step
+        // TAP handler
+        tap.on("pointerdown", onlyIfNoDialog(() => {
+            if (!this._step1Done) {
+                // First time: Tap is correct → show success dialog, then start CleanCatch
+                this._step1Done = true;
+
+                this._showCorrectDialog(
+                    "Good job! That’s the correct way to wash your hands. Now, let’s play Soap Splasher!",
+                    () => {
+                        // NOTE: This still starts CleanCatch, as your flow dictates
+                        this._fadeTo("CleanCatch");
+                    }, 3000
+                );
+                return;
+            }
+
+            // After returning from Clean Catch: Tap is WRONG
+            this._showSmallDialog(
+                "Oops, not that one. We need to scrub our hands to get the germs off.\nTry again, click the scrubbing hands!"
+            );
+        }));
+
+
+        // SOAP is WRONG if tap not done yet
+        const handleSoapClick = onlyIfNoDialog(() => {
+            if (!this._step1Done) {
+                // Wrong! Just show feedback (console for now)
+                this._showSmallDialog("Oops, that’s not the first step.\nLet's try again!\nRemember: we always start at the beginning.\nYou can do it!");  // (Later we will show a dialog instead of console.log)
+                return;
+            }
+
+            // Show success dialog then start SoapSplash
+            this._showCorrectDialog(
+                "That's right! Scrubbing our hands together is how we chase away all the germs. " +
+                "\nLet's start scrubbing and make those hands sparkle clean!",
+                () => {
+                    this._fadeTo("SoapSplash");
+                }
+            );
+
+        });
+
+        soapBar.on("pointerdown", handleSoapClick);
+        soapBottle.on("pointerdown", handleSoapClick);
+
 
         // Single fadeout handler — goes only where you clicked
         this.cameras.main.once("camerafadeoutcomplete", () => {
@@ -120,8 +178,9 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             }
         });
 
-        this.cameras.main.fadeIn(300, 0, 0, 0);
-        this._showEntryDialog();
+        if (!skipIntro) {
+            this._showEntryDialog();
+        }
     }
 
     _fadeTo(sceneKey) {
@@ -136,7 +195,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
         const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.4)
             .setOrigin(0, 0)
-            .setInteractive();            // blocks background clicks
+            .setInteractive();
         this._dialogRoot.add(overlay);
 
         const panel = this.add.image(width / 2, height / 2, "dialog_skin").setOrigin(0.5);
@@ -160,7 +219,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
         this._dialogRoot.add(
             this.add.text(panel.x, panel.y, "We're here in the bathroom and it’s time to wash our hands! What should I do first?\nCan you help me choose? Click on the best choice!", {
-                fontFamily: "Arial", fontSize: "24px", color: "#2a4155", align: "center"
+                fontFamily: "Montserrat", fontSize: "24px", color: "#2a4155", align: "center"
             }).setOrigin(0.5)
         );
 
@@ -182,6 +241,98 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         arrow.on("pointerdown", () => {
             this._dialogRoot.destroy(true);
             this._dialogRoot = null;
+        });
+    }
+
+    _showSmallDialog(message, duration = 5000) {
+
+        const onlyIfNoDialog = (fn) => () => {
+            // ✅ Allow correct dialog to appear even if a previous dialog is open
+            if (this._dialogRoot) {
+                // Destroy the old dialog immediately to allow new action
+                this._dialogRoot.destroy(true);
+                this._dialogRoot = null;
+            }
+            fn();
+        };
+
+
+        const { width, height } = this.scale;
+
+        // Block background clicks while this small dialog is up
+        this._dialogRoot = this.add.container(0, 0).setDepth(9999);
+
+        // Very light overlay to catch clicks
+        const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.001)
+            .setOrigin(0, 0)
+        this._dialogRoot.add(overlay);
+
+        // Balloon image
+        const balloon = this.add.image(width / 2 + 180, height * 0.15, DIALOG_BALLOON_KEY)
+            .setOrigin(0.5);
+        const scale = Math.min((width * 0.6) / balloon.width, (height * 0.2) / balloon.height);
+        balloon.setScale(scale);
+        this._dialogRoot.add(balloon);
+
+        // Text
+        const text = this.add.text(balloon.x, balloon.y - 15, message, {
+            fontFamily: "Montserrat",
+            fontSize: "22px",
+            color: "#000000",
+            align: "center",
+            wordWrap: { width: balloon.displayWidth * 0.8 }
+        }).setOrigin(0.5);
+        this._dialogRoot.add(text);
+
+        // Auto close
+        this.time.delayedCall(duration, () => {
+            this._dialogRoot?.destroy(true);
+            this._dialogRoot = null;
+        });
+    }
+
+    _showCorrectDialog(message, onDone, duration = 5000) {
+
+        const onlyIfNoDialog = (fn) => () => {
+            // ✅ Allow correct dialog to appear even if a previous dialog is open
+            if (this._dialogRoot) {
+                // Destroy the old dialog immediately to allow new action
+                this._dialogRoot.destroy(true);
+                this._dialogRoot = null;
+            }
+            fn();
+        };
+
+
+        const { width, height } = this.scale;
+
+        this._dialogRoot = this.add.container(0, 0).setDepth(9999);
+
+        const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.001)
+            .setOrigin(0, 0)
+            .setInteractive();
+        this._dialogRoot.add(overlay);
+
+        const balloon = this.add.image(width / 2 + 180, height * 0.15, DIALOG_BALLOON_KEY)
+            .setOrigin(0.5);
+        const scale = Math.min((width * 0.6) / balloon.width, (height * 0.2) / balloon.height);
+        balloon.setScale(scale);
+        this._dialogRoot.add(balloon);
+
+        const text = this.add.text(balloon.x, balloon.y - 15, message, {
+            fontFamily: "Montserrat",
+            fontSize: "22px",
+            color: "#000000",
+            align: "center",
+            wordWrap: { width: balloon.displayWidth * 0.8 }
+        }).setOrigin(0.5);
+        this._dialogRoot.add(text);
+
+        // use the provided duration
+        this.time.delayedCall(duration, () => {
+            this._dialogRoot?.destroy(true);
+            this._dialogRoot = null;
+            if (onDone) onDone();
         });
     }
 }
