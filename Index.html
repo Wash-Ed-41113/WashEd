@@ -4,30 +4,23 @@
     <meta charset="UTF-8" />
     <title>Wash-Ed • Kiko's Day</title>
 
-    <!-- Google Fonts: Chewy, Montserrat -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Chewy&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
-        :root { --ui-font: "Montserrat", Arial, sans-serif; }
-        html, body { margin: 0; height: 100%; background: #0b1520; font-family: var(--ui-font); }
+        html, body { margin: 0; height: 100%; background: #0b1520; }
         #game { width: 100%; height: 100%; }
-        input, button { font-family: var(--ui-font); }
     </style>
-
-    <script src="lib/phaser-3.90.0.js"></script>
-
-    <script>
-        window.CONFIG = window.CONFIG || {};
-        CONFIG.ui = CONFIG.ui || {};
-        CONFIG.ui.fontFamily = 'Montserrat, Arial, sans-serif';
-    </script>
-
-    <script type="module" src="src/main.js"></script>
 </head>
 <body>
 <div id="game"></div>
+
+<script src="lib/phaser-3.90.0.js"></script>
+
+<script type="module" src="src/main.js"></script>
 </body>
 </html>

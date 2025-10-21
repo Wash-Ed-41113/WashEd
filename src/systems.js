@@ -488,10 +488,15 @@ const soapsplash = (() => {
     function pickWord() { return helpers.words.pick(helpers.words.soapSplashWords()); }
 
     // ---------------- spawn ----------------
+    // ---------------- spawn ----------------
     const spawn = {
         // attempt to spawn one germ in the corner ring with separation and min sink distance
+
         spawnGerm(scene) {
             if (scene.gameOver) return;
+
+            // read config locally to avoid any outer-scope SS issues
+            const SS = CONFIG.soapSplash;
 
             const cap = SS.waveCap ?? SS.maxGerms ?? 5;
             if (scene.germs.length >= cap) return;
@@ -502,9 +507,9 @@ const soapsplash = (() => {
 
             // estimate hit radius of a new germ from texture size and sprite scale so spacing feels right
             const tex = scene.textures.get("Germ");
-            const texW = tex?.getSourceImage()?.width || 64;
+            const texW = tex?.getSourceImage()?.width || 64; // robust fallback
             const scaledW = (SS.germSpriteSize ?? 1) * texW;
-            const newR = SS.germHitRadiusPx ?? Math.round(scaledW * (SS.germHitRadiusFromSprite ?? 0.35));
+            const newR = SS.germHitRadiusPx ?? Math.round(scaledW * 0.35);
 
             let tries = triesMax;
             let pos = null;
@@ -514,6 +519,16 @@ const soapsplash = (() => {
                 const theta = helpers.sampleAngle(scene.angleMinDeg, scene.angleMaxDeg);
                 const r = helpers.sampleRadius(scene.rInner, scene.rOuter);
                 const p = helpers.polarToWorld(scene.sinkPosition, r, theta);
+
+                // --- force spawns to the RIGHT side of the screen ---
+                const minXFrac = SS.spawnRightMinFrac ?? 0.55;        // e.g., rightmost 45% of screen
+                const minX = Math.round(SS.width * minXFrac);
+                if (p.x < minX) continue;
+
+                // (optional) top/bottom gutters
+                const topGutter = SS.spawnTopGutterPx ?? 0;
+                const bottomGutter = SS.spawnBottomGutterPx ?? 0;
+                if (p.y < topGutter || p.y > SS.height - bottomGutter) continue;
 
                 // enforce minimum distance from sink
                 if (minSink > 0) {
@@ -538,9 +553,20 @@ const soapsplash = (() => {
             if (!pos) return;
             const word = pickWord();
             addGerm(scene, pos, word);
-            // ensure there is an active target
+
+            // --- if the germ spawns already visible, select it immediately when nothing is active ---
+            if (!scene.typing?.activeId) {
+                const W = SS.width, H = SS.height;
+                const isOn = (x, y, m = 0) => (x >= -m && y >= -m && x <= W + m && y <= H + m);
+                if (isOn(pos.x, pos.y, 0)) {
+                    typing.activate(scene, scene.germs[scene.germs.length - 1]);
+                }
+            }
+
+            // ensure there is an active target (fallback)
             if (!scene.typing?.activeId) typing.pickNearest(scene);
         },
+
     };
 
     // ---------------- movement ----------------
@@ -569,24 +595,43 @@ const soapsplash = (() => {
                 g.sprite.x += ux * speed;
                 g.sprite.y += uy * speed;
 
+                // --- despawn on ALL edges (prevents invisible active targets) ---
+                if (
+                    g.sprite.x < -margin || g.sprite.y < -margin ||
+                    g.sprite.x > SS.width + margin || g.sprite.y > SS.height + margin
+                ) {
+                    const wasActive = (scene.germs[i]?.id === scene.typing?.activeId);
+                    removeGermByIndex(scene, i);
+                    if (wasActive) { scene.typing.activeId = null; typing.pickNearest(scene); }
+                    continue; // skip the rest for this removed germ
+                }
+
                 // keep attached effects centered
                 if (g._halo) g._halo.setPosition(g.sprite.x, g.sprite.y);
                 if (g._add)  g._add.setPosition(g.sprite.x, g.sprite.y);
 
-                // position labels just under the germ and re render target text
+                // position labels just under the germ and re-render target text
                 g.labelTyped.setPosition(g.sprite.x, g.sprite.y + 14);
                 g.labelRemain.setPosition(g.sprite.x, g.sprite.y + 14);
                 typing.renderTarget(g, scene);
 
-                // if a germ leaves the screen clean it up and retarget typing
-                if (g.sprite.x > SS.width + margin || g.sprite.y > SS.height + margin) {
-                    const wasActive = (scene.germs[i]?.id === scene.typing?.activeId);
-                    removeGermByIndex(scene, i);
-                    if (wasActive) { scene.typing.activeId = null; typing.pickNearest(scene); }
+                // --- when a germ FIRST becomes visible, auto-select it if nothing is active ---
+                if (!g._becameVisible) {
+                    const W = CONFIG.soapSplash.width, H = CONFIG.soapSplash.height;
+                    const isOn = (x, y, m = 0) => (x >= -m && y >= -m && x <= W + m && y <= H + m);
+                    const onNow = isOn(g.sprite.x, g.sprite.y, 0);
+
+                    if (onNow) {
+                        g._becameVisible = true;
+                        if (!scene.typing?.activeId) {
+                            typing.activate(scene, g); // or systems.soapsplash.typing.activate(scene, g)
+                        }
+                    }
                 }
             }
         }
     };
+
 
     // ---------------- rules ----------------
     const rules = {
@@ -850,29 +895,6 @@ const soapsplash = (() => {
             // attach reusable streak/score engine
             scene.streakSys = streakScore.create();
 
-            // HUD shows base, multiplier, and total
-            // add a larger, prominent HUD panel (white with black border)
-            scene.hudPanel = scene.add.rectangle(
-                10, SS.height - 56,          // x, y (anchored bottom-left)
-                SS.width - 20, 48,           // width, height
-                0xffffff, 0.90               // fill color & alpha
-            )
-                .setOrigin(0, 0)
-                .setStrokeStyle(2, 0x000000)   // black outline
-                .setDepth(9);
-
-            scene.typeHud = scene.add.text(
-                20, SS.height - 46,
-                `Score: 0  (base 0 × x0.0)   Streak: 0`,
-                {
-                    fontFamily: SS.fontFamily,
-                    fontSize: "20px",
-                    fontStyle: "700",          // Phaser accepts numeric weight or "bold"
-                    color: "#000000"           // <-- black
-                }
-            ).setDepth(10);
-
-
             // hidden text for measuring caret etc (unchanged)
             scene.typing._measure = scene.add.text(-9999, -9999, "", {
                 fontFamily: SS.fontFamily, fontSize: SS.labelTextSize, color: "#000000"
@@ -890,8 +912,6 @@ const soapsplash = (() => {
 
             scene.input.keyboard.on("keydown", (e) => typing.onKey(e, scene));
         },
-
-
 
         // clear highlights and caret for all germs
         deactivateAll(scene) {
@@ -981,17 +1001,25 @@ const soapsplash = (() => {
             const idx = Math.floor(Math.random() * scene.germs.length);
             typing.activate(scene, scene.germs[idx]);
         },
+
+        // UPDATED: prefer visible germs; if none visible, fall back to all
         pickNearest(scene) {
             if (!scene.germs.length) { scene.typing.activeId = null; return; }
-            const cand = scene.germs.filter(g => helpers.isOnScreen(scene, g.sprite.x, g.sprite.y, 0));
-            if (!cand.length) { scene.typing.activeId = null; return; }
+
             const hit = scene.getSinkHitPoint();
+
+            // Prefer visible germs; if none are visible, fall back to all germs.
+            const visible = scene.germs.filter(g => helpers.isOnScreen(scene, g.sprite.x, g.sprite.y, 0));
+            const pool = visible.length ? visible : scene.germs;
+
             let best = null, bestDist = Infinity;
-            for (const g of cand) {
+            for (const g of pool) {
                 const d = Phaser.Math.Distance.Between(g.sprite.x, g.sprite.y, hit.x, hit.y);
                 if (d < bestDist) { bestDist = d; best = g; }
             }
+
             if (best) typing.activate(scene, best);
+            else scene.typing.activeId = null;
         },
 
         // lay out typed and remaining strings and position caret box
@@ -1051,16 +1079,26 @@ const soapsplash = (() => {
         onKey(e, scene) {
             if (scene.gameOver || scene._paused) return;
             if (!scene.typing.startedAt) scene.typing.startedAt = scene.time.now;
+
+            // if selection somehow disappeared, pick a visible one now
             if (!scene.typing.activeId) typing.pickNearest(scene);
 
-            const g = scene.germs.find(x => x.id === scene.typing.activeId);
-            if (!g) return;
+            let g = scene.germs.find(x => x.id === scene.typing.activeId);
+
+            // guard: active germ might have been removed this frame
+            if (!g) {
+                typing.pickNearest(scene);
+                g = scene.germs.find(x => x.id === scene.typing.activeId);
+                if (!g) return;
+            }
 
             const key = e.key;
             if (key === "Backspace") {
                 if (g.typedIdx > 0) g.typedIdx--;
                 typing.renderTarget(g, scene);
-                typing.updateHud(scene); e.preventDefault(); return;
+                typing.updateHud(scene);
+                e.preventDefault();
+                return;
             }
             if (key.length !== 1) return;
 
@@ -1076,12 +1114,11 @@ const soapsplash = (() => {
                 scene.typing.mistakes++;
                 scene.typing.wordClean = false;
 
-                // NEW: mistakes wipe the clean run & streak immediately
+                // mistakes wipe the clean run & streak immediately
                 scene.streakSys.onMistake();
 
                 // DB hook: log a mistake event
                 telemetry.onMistake(scene);
-
 
                 const C = CONFIG.soapSplash.colors || {};
                 g.labelRemain.setColor(C.errorRemain ?? "#ff4d4d");
@@ -1096,7 +1133,6 @@ const soapsplash = (() => {
                     repeat: 2
                 });
             }
-
 
             typing.updateHud(scene);
         },
@@ -1146,8 +1182,6 @@ const soapsplash = (() => {
             typing.pickNearest(scene);
         },
 
-
-
         // refresh the score and streak hud text
         updateHud(scene) {
             const base = scene.streakSys?.baseScore ?? 0;
@@ -1159,7 +1193,6 @@ const soapsplash = (() => {
                 `Score: ${total}  (base ${base} × x${mult.toFixed(1)})   Streak: ${s}`
             );
         },
-
     };
 
     // expose all namespaces to scenes through systems so they can call systems.soapsplash.whatever
