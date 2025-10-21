@@ -8,7 +8,7 @@ window.CONFIG = {
     width: 1920,
     height: 1080,
 
-    // ui related defaults for fonts buttons topbar and pause overlay
+    // ui related defaults for fonts buttons topbar and pause overlayy
     ui: {
         fontFamily: "Montserrat",        // default font for text
         titleFontSize: 230,         // large font size for title text
