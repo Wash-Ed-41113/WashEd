@@ -20,7 +20,7 @@ export default class EndingScene extends Phaser.Scene {
         });
         this.music.play();
 
-        const playerName = "Riya";
+        const playerName = this.registry.get("playerName") || "Player";
         // Placeholder score data
         const gameScores = [
             { game: "Germ Scrubber", score: 45 },
