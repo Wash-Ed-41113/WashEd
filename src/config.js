@@ -8,7 +8,7 @@ window.CONFIG = {
     width: 1920,
     height: 1080,
 
-    // ui related defaults for fonts buttons topbar and pause overlay
+    // ui related defaults for fonts buttons topbar and pause overlayy
     ui: {
         fontFamily: "Montserrat",        // default font for text
         titleFontSize: 230,         // large font size for title text
@@ -97,6 +97,13 @@ window.CONFIG = {
         },
         menu: {
             frontpage: "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png",
+        },
+
+        endingScreen: {
+            classroom_bg: "assets/images/background/updatedClassroom.png",
+            kiko_cheer: "assets/images/WashEd_kiko_sprite/kiko_cheer.png",
+            confetti: "assets/images/background/confetti.png",
+            endingMusic: "assets/sounds/kikos day.mp3"
         },
     },
 

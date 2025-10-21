@@ -1,18 +1,125 @@
-// src/scenes/EndingScene.js
+// src/scenes/EndingScene.jS
 export default class EndingScene extends Phaser.Scene {
     constructor() { super("EndingScene"); }
-
+    //i added these assets into the config file ...not sure how to change this
     preload() {
-        this.load.image("classroom_bg", "assets/images/background/classroom.png");
+        cc
         this.load.image("kiko_cheer", "assets/images/WashEd_kiko_sprite/kiko_cheer.png");
         this.load.image("confetti", "assets/images/background/confetti.png");
+        this.load.image("dialogPanel", "assets/images/Menu/washed_kikos-day_UI-dialogue-box-v1.png");
+        this.load.image("homeResetButton", "assets/images/UI/washed_kikos-day_UI-Button_HOME.png");
+        this.load.audio ("endingMusic", "assets/sounds/kikos day.mp3");
     }
 
     create() {
         const { width, height } = this.scale;
 
+        this.music = this.sound.add("endingMusic", {
+            loop: true,
+            volume: 0.6 // adjust as needed
+        });
+        this.music.play();
+
+        const playerName = this.registry.get("playerName") || "Player";
+        // Placeholder score data
+        const gameScores = [
+            { game: "Germ Scrubber", score: 45 },
+            { game: "Soap Splasher", score: 75 }
+        ];
+
+// Total score calculation
+        const finalScore = gameScores.reduce((sum, entry) => sum + entry.score, 0);
+
+        // --- Score Tier Helper --- can change the
+        function getScoreTier(score) {
+            if (score >= 500) return "high";
+            if (score >= 250) return "medium";
+            return "low";
+        }
+
+        const tier = getScoreTier(finalScore);
+
+        // --- Dialogue Sets ---
+        const dialogueSets = {
+            high: [
+                `Great work, ${playerName}! Because of you, Kiko is happy, healthy, and ready for more fun.`,
+                `Amazing ${playerName}! You helped Kiko every step of the way. Those germs didn’t stand a chance!`,
+                `Wow ${playerName}! You made Kiko's day super clean and helped him stay healthy. You're a true WASH Hero!`
+            ],
+            medium: [
+                `Awesome ${playerName}! You helped Kiko finish his day with clean hands!`,
+                `Great job ${playerName}! You guided Kiko through the whole day - and look, his hands are clean and safe`,
+                `Nice work ${playerName}! You kept Kiko healthy. Each try makes you stronger!`
+            ],
+            low: [
+                `Thanks for your help, ${playerName}! You finished Kiko’s day and learned how to stay clean and healthy. Next time, you'll be even faster`,
+                `Good effort ${playerName}! You know how to stay clean and safe. Let’s play again and keep practicing!`,
+                `Yay ${playerName}! You finished your adventure with Kiko! Every ty makes you a better WASH Hero - don't give up!`
+            ]
+        };
+
+        const messages = dialogueSets[tier];
+        const selectedMessage = messages[Math.floor(Math.random() * messages.length)];
         // background
         this.add.image(width / 2, height / 2, "classroom_bg").setDisplaySize(width, height);
+
+        // --- Dialogue Panel ---
+        const dialogY = height * 0.97;
+        const dialoguePanel = this.add.image(width * 0.50, dialogY, "dialogPanel")
+            .setOrigin(0.5, 1)
+            .setAlpha(0)
+            .setDepth(25)
+            .setScale(0.5);
+
+        const panelCenterY = dialogY - (dialoguePanel.height * dialoguePanel.scaleY) / 2;
+
+        const text = this.add.text(width * 0.50, panelCenterY, selectedMessage, {
+            fontFamily: "Montserrat",
+            fontSize: "64px",
+            color: "#000000",
+            wordWrap: { width: 870},
+            align: "center"
+        }).setOrigin(0.5).setAlpha(0).setDepth(26);
+
+        this.tweens.add({
+            targets: dialoguePanel,
+            alpha: { from: 0, to: 1 },
+            duration: 600,
+            ease: "Sine.easeInOut"
+        });
+        this.tweens.add({
+            targets: text,
+            alpha: 1,
+            duration: 800,
+            ease: "Sine.easeInOut",
+            delay: 200
+        });
+
+        //leaderboard title
+        this.add.text(width * 0.65, height * 0.17, "SCOREBOARD", {
+            fontFamily: "Chewy",
+            fontSize: "88px",
+            color: "#ffffff"
+        }).setOrigin(0.5).setDepth(21);
+
+        //display scores
+        const leaderboardStartY = height * 0.27;
+        gameScores.forEach((entry, index) => {
+            this.add.text(width * 0.65, leaderboardStartY + index * 50,
+                `${entry.game}: ${entry.score}`, {
+                    fontFamily: "Chewy",
+                    fontSize: "48px",
+                    color: "#ffffff"
+                }).setOrigin(0.5).setDepth(21);
+        });
+        //total score display
+        this.add.text(width * 0.65, leaderboardStartY + gameScores.length * 40 + 80,
+            `My Total: ${finalScore}`, {
+                fontFamily: "Chewy",
+                fontSize: "64px",
+                color: "#ffffff"
+            }).setOrigin(0.5).setDepth(21);
+
 
         // confetti loop param
         this.MAX_LIVE_CONFETTI = 40;
@@ -22,16 +129,16 @@ export default class EndingScene extends Phaser.Scene {
         this.startConfettiLoop();
 
         // Kiko
-        const baseY = height * 0.85;
-        const kiko = this.add.image(width / 2, baseY, "kiko_cheer")
-            .setDisplaySize(450, 450)
+        const baseY = height * 0.9;
+        const widthX = width * 0.15;
+        const kiko = this.add.image(widthX, baseY, "kiko_cheer")
+            .setDisplaySize(650, 650)
             .setOrigin(0.5, 1)
-            .setDepth(10);
+            .setDepth(40);
 
         // scale save
         const baseScaleX = kiko.scaleX;
         const baseScaleY = kiko.scaleY;
-
         const jumpHeight = 34;
         const jumpDuration = 520;
 
@@ -87,61 +194,31 @@ export default class EndingScene extends Phaser.Scene {
                 }
             }
         });
-
-        // text
-        this.add.text(width / 2, height * 0.18, "Well Done!", {
-            fontFamily: "Arial",
-            fontSize: "64px",
-            fontStyle: "bold",
-            color: "#ffffff",
-            stroke: "#000000",
-            strokeThickness: 6
-        }).setOrigin(0.5).setDepth(15);
-
-        this.add.text(width / 2, height * 0.3,
-            "Kiko has learned how to stay healthy by washing hands!",
-            {
-                fontFamily: "Arial",
-                fontSize: "30px",
-                color: "#ffffff",
-                align: "center"
-            }
-        ).setOrigin(0.5).setDepth(15)
-            .setWordWrapWidth(width * 0.8, true);
-
-        // button text
-        if (!this.textures.exists("btn_yellow")) {
-            const btnW = 260, btnH = 64;
-            const gBtn = this.make.graphics({ x: 0, y: 0, add: false });
-            gBtn.fillStyle(0xffcc00, 1);
-            gBtn.fillRoundedRect(0, 0, btnW, btnH, 16);
-            gBtn.lineStyle(3, 0x111111, 1);
-            gBtn.strokeRoundedRect(0, 0, btnW, btnH, 16);
-            gBtn.generateTexture("btn_yellow", btnW, btnH);
-            gBtn.destroy();
-        }
-
-        const btn = this.add.image(width / 2, height * 0.65, "btn_yellow")
+        const baseScale = 0.1;
+        const btn = this.add.image(width * 0.95, height * 0.1, "homeResetButton")
             .setOrigin(0.5)
-            .setDepth(30)
+            .setScale(baseScale)
+            .setDepth(20)
             .setInteractive({ useHandCursor: true });
 
-        // text
-        const btnLabel = this.add.text(btn.x, btn.y, "Back to Menu", {
-            fontFamily: "Arial",
-            fontSize: "28px",
-            color: "#000000"
-        }).setOrigin(0.5).setDepth(31);
-
-        btn.on("pointerover", () => btn.setScale(1.03));
-        btn.on("pointerout",  () => btn.setScale(1.00));
+        btn.on("pointerover", () => btn.setScale(baseScale * 1.03));
+        btn.on("pointerout",  () => btn.setScale(baseScale));
         btn.on("pointerdown", () => {
             btn.disableInteractive();
             this.cameras.main.fadeOut(500, 0, 0, 0);
         });
 
         this.cameras.main.once("camerafadeoutcomplete", () => {
-            this.scene.start("MenuScene");
+            this.tweens.add({
+                targets: this.music,
+                volume: 0,
+                duration: 600,
+                ease: "Sine.easeOut",
+                onComplete: () => {
+                    this.music.stop();
+                    this.scene.start("MenuScene");
+                }
+            });
         });
 
         this.cameras.main.fadeIn(600, 0, 0, 0);
