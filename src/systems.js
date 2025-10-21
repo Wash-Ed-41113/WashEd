@@ -488,15 +488,10 @@ const soapsplash = (() => {
     function pickWord() { return helpers.words.pick(helpers.words.soapSplashWords()); }
 
     // ---------------- spawn ----------------
-    // ---------------- spawn ----------------
     const spawn = {
         // attempt to spawn one germ in the corner ring with separation and min sink distance
-
         spawnGerm(scene) {
             if (scene.gameOver) return;
-
-            // read config locally to avoid any outer-scope SS issues
-            const SS = CONFIG.soapSplash;
 
             const cap = SS.waveCap ?? SS.maxGerms ?? 5;
             if (scene.germs.length >= cap) return;
@@ -507,9 +502,9 @@ const soapsplash = (() => {
 
             // estimate hit radius of a new germ from texture size and sprite scale so spacing feels right
             const tex = scene.textures.get("Germ");
-            const texW = tex?.getSourceImage()?.width || 64; // robust fallback
+            const texW = tex?.getSourceImage()?.width || 64;
             const scaledW = (SS.germSpriteSize ?? 1) * texW;
-            const newR = SS.germHitRadiusPx ?? Math.round(scaledW * 0.35);
+            const newR = SS.germHitRadiusPx ?? Math.round(scaledW * (SS.germHitRadiusFromSprite ?? 0.35));
 
             let tries = triesMax;
             let pos = null;
@@ -519,16 +514,6 @@ const soapsplash = (() => {
                 const theta = helpers.sampleAngle(scene.angleMinDeg, scene.angleMaxDeg);
                 const r = helpers.sampleRadius(scene.rInner, scene.rOuter);
                 const p = helpers.polarToWorld(scene.sinkPosition, r, theta);
-
-                // --- force spawns to the RIGHT side of the screen ---
-                const minXFrac = SS.spawnRightMinFrac ?? 0.55;        // e.g., rightmost 45% of screen
-                const minX = Math.round(SS.width * minXFrac);
-                if (p.x < minX) continue;
-
-                // (optional) top/bottom gutters
-                const topGutter = SS.spawnTopGutterPx ?? 0;
-                const bottomGutter = SS.spawnBottomGutterPx ?? 0;
-                if (p.y < topGutter || p.y > SS.height - bottomGutter) continue;
 
                 // enforce minimum distance from sink
                 if (minSink > 0) {
@@ -553,20 +538,9 @@ const soapsplash = (() => {
             if (!pos) return;
             const word = pickWord();
             addGerm(scene, pos, word);
-
-            // --- if the germ spawns already visible, select it immediately when nothing is active ---
-            if (!scene.typing?.activeId) {
-                const W = SS.width, H = SS.height;
-                const isOn = (x, y, m = 0) => (x >= -m && y >= -m && x <= W + m && y <= H + m);
-                if (isOn(pos.x, pos.y, 0)) {
-                    typing.activate(scene, scene.germs[scene.germs.length - 1]);
-                }
-            }
-
-            // ensure there is an active target (fallback)
+            // ensure there is an active target
             if (!scene.typing?.activeId) typing.pickNearest(scene);
         },
-
     };
 
     // ---------------- movement ----------------
@@ -595,43 +569,24 @@ const soapsplash = (() => {
                 g.sprite.x += ux * speed;
                 g.sprite.y += uy * speed;
 
-                // --- despawn on ALL edges (prevents invisible active targets) ---
-                if (
-                    g.sprite.x < -margin || g.sprite.y < -margin ||
-                    g.sprite.x > SS.width + margin || g.sprite.y > SS.height + margin
-                ) {
-                    const wasActive = (scene.germs[i]?.id === scene.typing?.activeId);
-                    removeGermByIndex(scene, i);
-                    if (wasActive) { scene.typing.activeId = null; typing.pickNearest(scene); }
-                    continue; // skip the rest for this removed germ
-                }
-
                 // keep attached effects centered
                 if (g._halo) g._halo.setPosition(g.sprite.x, g.sprite.y);
                 if (g._add)  g._add.setPosition(g.sprite.x, g.sprite.y);
 
-                // position labels just under the germ and re-render target text
+                // position labels just under the germ and re render target text
                 g.labelTyped.setPosition(g.sprite.x, g.sprite.y + 14);
                 g.labelRemain.setPosition(g.sprite.x, g.sprite.y + 14);
                 typing.renderTarget(g, scene);
 
-                // --- when a germ FIRST becomes visible, auto-select it if nothing is active ---
-                if (!g._becameVisible) {
-                    const W = CONFIG.soapSplash.width, H = CONFIG.soapSplash.height;
-                    const isOn = (x, y, m = 0) => (x >= -m && y >= -m && x <= W + m && y <= H + m);
-                    const onNow = isOn(g.sprite.x, g.sprite.y, 0);
-
-                    if (onNow) {
-                        g._becameVisible = true;
-                        if (!scene.typing?.activeId) {
-                            typing.activate(scene, g); // or systems.soapsplash.typing.activate(scene, g)
-                        }
-                    }
+                // if a germ leaves the screen clean it up and retarget typing
+                if (g.sprite.x > SS.width + margin || g.sprite.y > SS.height + margin) {
+                    const wasActive = (scene.germs[i]?.id === scene.typing?.activeId);
+                    removeGermByIndex(scene, i);
+                    if (wasActive) { scene.typing.activeId = null; typing.pickNearest(scene); }
                 }
             }
         }
     };
-
 
     // ---------------- rules ----------------
     const rules = {
@@ -895,6 +850,29 @@ const soapsplash = (() => {
             // attach reusable streak/score engine
             scene.streakSys = streakScore.create();
 
+            // HUD shows base, multiplier, and total
+            // add a larger, prominent HUD panel (white with black border)
+            scene.hudPanel = scene.add.rectangle(
+                10, SS.height - 56,          // x, y (anchored bottom-left)
+                SS.width - 20, 48,           // width, height
+                0xffffff, 0.90               // fill color & alpha
+            )
+                .setOrigin(0, 0)
+                .setStrokeStyle(2, 0x000000)   // black outline
+                .setDepth(9);
+
+            scene.typeHud = scene.add.text(
+                20, SS.height - 46,
+                `Score: 0  (base 0 × x0.0)   Streak: 0`,
+                {
+                    fontFamily: SS.fontFamily,
+                    fontSize: "20px",
+                    fontStyle: "700",          // Phaser accepts numeric weight or "bold"
+                    color: "#000000"           // <-- black
+                }
+            ).setDepth(10);
+
+
             // hidden text for measuring caret etc (unchanged)
             scene.typing._measure = scene.add.text(-9999, -9999, "", {
                 fontFamily: SS.fontFamily, fontSize: SS.labelTextSize, color: "#000000"
@@ -912,6 +890,8 @@ const soapsplash = (() => {
 
             scene.input.keyboard.on("keydown", (e) => typing.onKey(e, scene));
         },
+
+
 
         // clear highlights and caret for all germs
         deactivateAll(scene) {
@@ -1001,25 +981,17 @@ const soapsplash = (() => {
             const idx = Math.floor(Math.random() * scene.germs.length);
             typing.activate(scene, scene.germs[idx]);
         },
-
-        // UPDATED: prefer visible germs; if none visible, fall back to all
         pickNearest(scene) {
             if (!scene.germs.length) { scene.typing.activeId = null; return; }
-
+            const cand = scene.germs.filter(g => helpers.isOnScreen(scene, g.sprite.x, g.sprite.y, 0));
+            if (!cand.length) { scene.typing.activeId = null; return; }
             const hit = scene.getSinkHitPoint();
-
-            // Prefer visible germs; if none are visible, fall back to all germs.
-            const visible = scene.germs.filter(g => helpers.isOnScreen(scene, g.sprite.x, g.sprite.y, 0));
-            const pool = visible.length ? visible : scene.germs;
-
             let best = null, bestDist = Infinity;
-            for (const g of pool) {
+            for (const g of cand) {
                 const d = Phaser.Math.Distance.Between(g.sprite.x, g.sprite.y, hit.x, hit.y);
                 if (d < bestDist) { bestDist = d; best = g; }
             }
-
             if (best) typing.activate(scene, best);
-            else scene.typing.activeId = null;
         },
 
         // lay out typed and remaining strings and position caret box
@@ -1079,26 +1051,16 @@ const soapsplash = (() => {
         onKey(e, scene) {
             if (scene.gameOver || scene._paused) return;
             if (!scene.typing.startedAt) scene.typing.startedAt = scene.time.now;
-
-            // if selection somehow disappeared, pick a visible one now
             if (!scene.typing.activeId) typing.pickNearest(scene);
 
-            let g = scene.germs.find(x => x.id === scene.typing.activeId);
-
-            // guard: active germ might have been removed this frame
-            if (!g) {
-                typing.pickNearest(scene);
-                g = scene.germs.find(x => x.id === scene.typing.activeId);
-                if (!g) return;
-            }
+            const g = scene.germs.find(x => x.id === scene.typing.activeId);
+            if (!g) return;
 
             const key = e.key;
             if (key === "Backspace") {
                 if (g.typedIdx > 0) g.typedIdx--;
                 typing.renderTarget(g, scene);
-                typing.updateHud(scene);
-                e.preventDefault();
-                return;
+                typing.updateHud(scene); e.preventDefault(); return;
             }
             if (key.length !== 1) return;
 
@@ -1114,11 +1076,12 @@ const soapsplash = (() => {
                 scene.typing.mistakes++;
                 scene.typing.wordClean = false;
 
-                // mistakes wipe the clean run & streak immediately
+                // NEW: mistakes wipe the clean run & streak immediately
                 scene.streakSys.onMistake();
 
                 // DB hook: log a mistake event
                 telemetry.onMistake(scene);
+
 
                 const C = CONFIG.soapSplash.colors || {};
                 g.labelRemain.setColor(C.errorRemain ?? "#ff4d4d");
@@ -1133,6 +1096,7 @@ const soapsplash = (() => {
                     repeat: 2
                 });
             }
+
 
             typing.updateHud(scene);
         },
@@ -1182,6 +1146,7 @@ const soapsplash = (() => {
             typing.pickNearest(scene);
         },
 
+
         // refresh the score and streak hud text
         updateHud(scene) {
             const base = scene.streakSys?.baseScore ?? 0;
@@ -1193,6 +1158,7 @@ const soapsplash = (() => {
                 `Score: ${total}  (base ${base} × x${mult.toFixed(1)})   Streak: ${s}`
             );
         },
+
     };
 
     // expose all namespaces to scenes through systems so they can call systems.soapsplash.whatever
@@ -1352,8 +1318,8 @@ const cleancatcher = {
             spawnRate = 700;
             baseSpeed = 3;
             goodProb = 0.4;
-        }//jsnjs
-        // hard uses same as easy, but no images drawn11
+        }
+        // hard uses same as easy, but no images drawn
 
         // spawn either water or germ with a label and speed
         function spawnItem() {
@@ -1640,50 +1606,33 @@ const cleancatcher = {
             if (gameOver) {
                 if (!endDialogShown) {
                     endDialogShown = true;
-                    stopLoops(); // freeze the canvas
+                    stopLoops();                        // freeze gameplay loops
 
-                    // hide the DOM canvas so Phaser display is visible
+                    // hide the drawing canvas so the Phaser overlay is fully visible
                     canvas.style.display = "none";
                     canvas.style.pointerEvents = "none";
 
                     const { width, height } = scene.scale;
 
-                    // Set Game Over background using no life image
-                    if (backgroundNoLife.complete && backgroundNoLife.naturalWidth > 0) {
-                        // create a Phaser texture from the existing image
-                        const textureKey = "bgNoLife";
-                        if (!scene.textures.exists(textureKey)) {
-                            const tempCanvas = scene.textures.createCanvas(textureKey, backgroundNoLife.width, backgroundNoLife.height);
-                            const ctx = tempCanvas.getContext();
-                            ctx.drawImage(backgroundNoLife, 0, 0);
-                            tempCanvas.refresh();
-                        }
-
-                        scene.add
-                            .image(0, 0, textureKey)
+                    // optional: background behind the dialog (so it doesn't look black)
+                    if (scene.textures.exists("cc_sink_bg")) {
+                        scene.add.image(0, 0, "cc_sink_bg")
                             .setOrigin(0, 0)
                             .setDisplaySize(width, height)
-                            .setDepth(9996);
-                    } else if (scene.textures.exists("cc_sink_bg")) {
-                        // fallback if no image found
-                        scene.add
-                            .image(0, 0, "cc_sink_bg")
-                            .setOrigin(0, 0)
-                            .setDisplaySize(width, height)
-                            .setDepth(9996);
+                            .setDepth(9997);
                     }
 
-                    // dialog root (everything above background)
+                    // root container for everything in the dialog
                     const dialogRoot = scene.add.container(0, 0).setDepth(9999);
 
-                    // dim mask
+                    // dim overlay (clickable)
                     const overlay = scene.add
                         .rectangle(0, 0, width, height, 0x000000, 0.35)
                         .setOrigin(0, 0)
                         .setInteractive();
                     dialogRoot.add(overlay);
 
-                    // panel (use MenuScene skin)
+                    // panel skin (or simple rectangle fallback)
                     const hasSkin = scene.textures.exists("dialog_skin");
                     const skinImg = hasSkin
                         ? scene.textures.get("dialog_skin").getSourceImage()
@@ -1702,52 +1651,111 @@ const cleancatcher = {
                     const panelW = (panel.displayWidth || skinImg.width * s);
                     const panelH = (panel.displayHeight || skinImg.height * s);
 
-                    // Kiko character image beside panel
+                    // Kiko! (left column inside panel)
                     if (scene.textures.exists("kiko_dialog")) {
-                        const kiko = scene.add.image(0, 0, "kiko_dialog").setOrigin(0.5, 1);
-                        const targetH = panelH * 0.60;
-                        kiko.setScale(targetH / kiko.height);
+                        // ---- tweak these three values to position/size Kiko ----
+                        const KIKO_X = 175;                     // pixels from left edge of screen
+                        const KIKO_BOTTOMY = panel.y + panelH / 2.88;    // bottom aligned with panel bottom
+                        const KIKO_HEIGHT  = Math.min(panelH * 2, 450);  // on-screen height in pixels
+                        // --------------------------------------------------------
 
-                        const gap = Math.round(panelW * 0.08);
-                        kiko.setPosition(panel.x - panelW / 2 - gap, panel.y + panelH / 2);
-                        dialogRoot.add(kiko);
+                        const kiko = scene.add.image(KIKO_X, KIKO_BOTTOMY, "kiko_dialog")
+                            .setOrigin(0.5, 1);                         // anchor at bottom-center
+
+                        // scale by desired on-screen height
+                        kiko.setScale(KIKO_HEIGHT / kiko.height);
+
+                        dialogRoot.add(kiko);                         // keep it in the dialog container
                     }
 
-                    // Title + Score inside panel
-                    const uiFont = (CONFIG.ui && CONFIG.ui.fontFamily) || "Chewy";
+                    const uiFont = "Chewy";
+                    const uiFont_1 = "Montserrat"
 
-                    const title = scene.add
-                        .text(panel.x, panel.y - panelH * 0.22, "Game Over!", {
-                            fontFamily: uiFont,
-                            color: "#000000",
-                        })
-                        .setOrigin(0.5);
-                    title.setFontSize(Math.max(28, Math.round(44 * s)));
-                    title.setFontStyle("bold");
+                    // Title
+                    const title = scene.add.text(panel.x, panel.y - panelH * 0.28, "GAME OVER!", {
+                        fontFamily: uiFont,
+                        color: "#000000",
+                    }).setOrigin(0.5);
+                    title.setFontSize(Math.max(45, Math.round(44 * s)));
+                    // title.setFontStyle("bold");
                     dialogRoot.add(title);
 
-                    const scoreText = scene.add
-                        .text(panel.x, panel.y, `Score: ${score}`, {
-                            fontFamily: uiFont,
-                            color: "#2a4155",
-                        })
-                        .setOrigin(0.5);
-                    scoreText.setFontSize(Math.max(20, Math.round(28 * s)));
+                    // Score
+                    const scoreText = scene.add.text(panel.x, panel.y - panelH * 0.09, `Score: ${score}`, {
+                        fontFamily: uiFont_1,
+                        color: "#2a4155",
+                    }).setOrigin(0.5);
+                    scoreText.setFontSize(Math.max(35, Math.round(30 * s)));
                     dialogRoot.add(scoreText);
 
-                    // Click anywhere to return to main menu
-                    const goNext = () => {
+                    /* === NEW: result message + green button === */
+
+// pick a message based on score
+                    const msgsGood = [
+                        "Wow! You caught so much clean water — Great job!",
+                        "You’re a Soap Splasher champion — Keep it up!",
+                        "Yay! Look at that score — you did amazing!"
+                    ];
+                    const msgsTry = [
+                        "Oh no, that was challenging. But don’t worry you can try again and do even better!",
+                        "Next time, I know you’ll catch more clean water and soap bubbles!",
+                        "Not your top score… but remember to keep trying your best. Let’s go!"
+                    ];
+                    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+                    const resultMsg = (score >= 80) ? pick(msgsGood) : pick(msgsTry);
+
+// message under the score (inside the big dialog panel)
+                    const msgText = scene.add.text(panel.x, panel.y + panelH * 0.10, resultMsg, {
+                        fontFamily: uiFont_1,
+                        color: "#2a4155",
+                        align: "center",
+                        wordWrap: { width: panelW * 0.90 }
+                    }).setOrigin(0.5);
+                    msgText.setFontSize(Math.max(30, Math.round(22 * s)));
+                    dialogRoot.add(msgText);
+
+// green "Continue" button → back to bathroom
+                    const BTN_W = Math.min(panelW * 0.38, 320);
+                    const BTN_H = 64;
+                    const btnY  = panel.y + panelH * 0.28;
+
+                    const btn = scene.add.rectangle(panel.x, btnY, BTN_W, BTN_H, 0x2ecc71, 1)
+                        .setOrigin(0.5)
+                        .setStrokeStyle(3, 0x1b8f52)
+                        .setInteractive({ useHandCursor: true });
+                    dialogRoot.add(btn);
+
+                    const btnLabel = scene.add.text(panel.x, btnY, "Continue", {
+                        fontFamily: uiFont,
+                        color: "#ffffff",
+                        fontStyle: "bold"
+                    }).setOrigin(0.5);
+                    btnLabel.setFontSize(Math.max(26, Math.round(26 * s)));
+                    dialogRoot.add(btnLabel);
+
+// hover/pulse
+                    scene.tweens.add({
+                        targets: btn,
+                        scaleX: { from: 1.0, to: 1.03 },
+                        scaleY: { from: 1.0, to: 1.03 },
+                        duration: 900,
+                        ease: "Sine.inOut",
+                        yoyo: true,
+                        repeat: -1
+                    });
+
+// click → back to bathroom scene
+                    const goBack = () => {
                         dialogRoot.destroy(true);
-                        const playerName = scene.registry.get("playerName");
-                        scene.scene.start("GameScene", { playerName });
+                        scene.scene.start("SchoolBathroomScene", { skipIntro: true }); // <-- pass flag
                     };
-                    overlay.on("pointerdown", goNext);
+                    btn.on("pointerup", goBack);
+                    btnLabel.setInteractive({ useHandCursor: true }).on("pointerup", goBack);
+
+
                 }
                 return;
             }
-
-
-
 
             drawPlayer();
             drawItems();
@@ -1756,7 +1764,6 @@ const cleancatcher = {
 
             rafId = requestAnimationFrame(frame);
         }
-
         // start all periodic loops animation item spawning movement and timer countdown
         function startLoops() {
             if (rafId) cancelAnimationFrame(rafId);
