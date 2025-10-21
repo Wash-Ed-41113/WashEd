@@ -1147,7 +1147,6 @@ const soapsplash = (() => {
         },
 
 
-
         // refresh the score and streak hud text
         updateHud(scene) {
             const base = scene.streakSys?.baseScore ?? 0;
