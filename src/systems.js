@@ -1606,50 +1606,33 @@ const cleancatcher = {
             if (gameOver) {
                 if (!endDialogShown) {
                     endDialogShown = true;
-                    stopLoops(); // freeze the canvas
+                    stopLoops();                        // freeze gameplay loops
 
-                    // hide the DOM canvas so Phaser display is visible
+                    // hide the drawing canvas so the Phaser overlay is fully visible
                     canvas.style.display = "none";
                     canvas.style.pointerEvents = "none";
 
                     const { width, height } = scene.scale;
 
-                    // Set Game Over background using no life image
-                    if (backgroundNoLife.complete && backgroundNoLife.naturalWidth > 0) {
-                        // create a Phaser texture from the existing image
-                        const textureKey = "bgNoLife";
-                        if (!scene.textures.exists(textureKey)) {
-                            const tempCanvas = scene.textures.createCanvas(textureKey, backgroundNoLife.width, backgroundNoLife.height);
-                            const ctx = tempCanvas.getContext();
-                            ctx.drawImage(backgroundNoLife, 0, 0);
-                            tempCanvas.refresh();
-                        }
-
-                        scene.add
-                            .image(0, 0, textureKey)
+                    // optional: background behind the dialog (so it doesn't look black)
+                    if (scene.textures.exists("cc_sink_bg")) {
+                        scene.add.image(0, 0, "cc_sink_bg")
                             .setOrigin(0, 0)
                             .setDisplaySize(width, height)
-                            .setDepth(9996);
-                    } else if (scene.textures.exists("cc_sink_bg")) {
-                        // fallback if no image found
-                        scene.add
-                            .image(0, 0, "cc_sink_bg")
-                            .setOrigin(0, 0)
-                            .setDisplaySize(width, height)
-                            .setDepth(9996);
+                            .setDepth(9997);
                     }
 
-                    // dialog root (everything above background)
+                    // root container for everything in the dialog
                     const dialogRoot = scene.add.container(0, 0).setDepth(9999);
 
-                    // dim mask
+                    // dim overlay (clickable)
                     const overlay = scene.add
                         .rectangle(0, 0, width, height, 0x000000, 0.35)
                         .setOrigin(0, 0)
                         .setInteractive();
                     dialogRoot.add(overlay);
 
-                    // panel (use MenuScene skin)
+                    // panel skin (or simple rectangle fallback)
                     const hasSkin = scene.textures.exists("dialog_skin");
                     const skinImg = hasSkin
                         ? scene.textures.get("dialog_skin").getSourceImage()
@@ -1668,52 +1651,111 @@ const cleancatcher = {
                     const panelW = (panel.displayWidth || skinImg.width * s);
                     const panelH = (panel.displayHeight || skinImg.height * s);
 
-                    // Kiko character image beside panel
+                    // Kiko! (left column inside panel)
                     if (scene.textures.exists("kiko_dialog")) {
-                        const kiko = scene.add.image(0, 0, "kiko_dialog").setOrigin(0.5, 1);
-                        const targetH = panelH * 0.60;
-                        kiko.setScale(targetH / kiko.height);
+                        // ---- tweak these three values to position/size Kiko ----
+                        const KIKO_X = 175;                     // pixels from left edge of screen
+                        const KIKO_BOTTOMY = panel.y + panelH / 2.88;    // bottom aligned with panel bottom
+                        const KIKO_HEIGHT  = Math.min(panelH * 2, 450);  // on-screen height in pixels
+                        // --------------------------------------------------------
 
-                        const gap = Math.round(panelW * 0.08);
-                        kiko.setPosition(panel.x - panelW / 2 - gap, panel.y + panelH / 2);
-                        dialogRoot.add(kiko);
+                        const kiko = scene.add.image(KIKO_X, KIKO_BOTTOMY, "kiko_dialog")
+                            .setOrigin(0.5, 1);                         // anchor at bottom-center
+
+                        // scale by desired on-screen height
+                        kiko.setScale(KIKO_HEIGHT / kiko.height);
+
+                        dialogRoot.add(kiko);                         // keep it in the dialog container
                     }
 
-                    // Title + Score inside panel
-                    const uiFont = (CONFIG.ui && CONFIG.ui.fontFamily) || "Chewy";
+                    const uiFont = "Chewy";
+                    const uiFont_1 = "Montserrat"
 
-                    const title = scene.add
-                        .text(panel.x, panel.y - panelH * 0.22, "Game Over!", {
-                            fontFamily: uiFont,
-                            color: "#000000",
-                        })
-                        .setOrigin(0.5);
-                    title.setFontSize(Math.max(28, Math.round(44 * s)));
-                    title.setFontStyle("bold");
+                    // Title
+                    const title = scene.add.text(panel.x, panel.y - panelH * 0.28, "GAME OVER!", {
+                        fontFamily: uiFont,
+                        color: "#000000",
+                    }).setOrigin(0.5);
+                    title.setFontSize(Math.max(45, Math.round(44 * s)));
+                    // title.setFontStyle("bold");
                     dialogRoot.add(title);
 
-                    const scoreText = scene.add
-                        .text(panel.x, panel.y, `Score: ${score}`, {
-                            fontFamily: uiFont,
-                            color: "#2a4155",
-                        })
-                        .setOrigin(0.5);
-                    scoreText.setFontSize(Math.max(20, Math.round(28 * s)));
+                    // Score
+                    const scoreText = scene.add.text(panel.x, panel.y - panelH * 0.09, `Score: ${score}`, {
+                        fontFamily: uiFont_1,
+                        color: "#2a4155",
+                    }).setOrigin(0.5);
+                    scoreText.setFontSize(Math.max(35, Math.round(30 * s)));
                     dialogRoot.add(scoreText);
 
-                    // Click anywhere to return to main menu
-                    const goNext = () => {
+                    /* === NEW: result message + green button === */
+
+// pick a message based on score
+                    const msgsGood = [
+                        "Wow! You caught so much clean water — Great job!",
+                        "You’re a Soap Splasher champion — Keep it up!",
+                        "Yay! Look at that score — you did amazing!"
+                    ];
+                    const msgsTry = [
+                        "Oh no, that was challenging. But don’t worry you can try again and do even better!",
+                        "Next time, I know you’ll catch more clean water and soap bubbles!",
+                        "Not your top score… but remember to keep trying your best. Let’s go!"
+                    ];
+                    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+                    const resultMsg = (score >= 80) ? pick(msgsGood) : pick(msgsTry);
+
+// message under the score (inside the big dialog panel)
+                    const msgText = scene.add.text(panel.x, panel.y + panelH * 0.10, resultMsg, {
+                        fontFamily: uiFont_1,
+                        color: "#2a4155",
+                        align: "center",
+                        wordWrap: { width: panelW * 0.90 }
+                    }).setOrigin(0.5);
+                    msgText.setFontSize(Math.max(30, Math.round(22 * s)));
+                    dialogRoot.add(msgText);
+
+// green "Continue" button → back to bathroom
+                    const BTN_W = Math.min(panelW * 0.38, 320);
+                    const BTN_H = 64;
+                    const btnY  = panel.y + panelH * 0.28;
+
+                    const btn = scene.add.rectangle(panel.x, btnY, BTN_W, BTN_H, 0x2ecc71, 1)
+                        .setOrigin(0.5)
+                        .setStrokeStyle(3, 0x1b8f52)
+                        .setInteractive({ useHandCursor: true });
+                    dialogRoot.add(btn);
+
+                    const btnLabel = scene.add.text(panel.x, btnY, "Continue", {
+                        fontFamily: uiFont,
+                        color: "#ffffff",
+                        fontStyle: "bold"
+                    }).setOrigin(0.5);
+                    btnLabel.setFontSize(Math.max(26, Math.round(26 * s)));
+                    dialogRoot.add(btnLabel);
+
+// hover/pulse
+                    scene.tweens.add({
+                        targets: btn,
+                        scaleX: { from: 1.0, to: 1.03 },
+                        scaleY: { from: 1.0, to: 1.03 },
+                        duration: 900,
+                        ease: "Sine.inOut",
+                        yoyo: true,
+                        repeat: -1
+                    });
+
+// click → back to bathroom scene
+                    const goBack = () => {
                         dialogRoot.destroy(true);
-                        const playerName = scene.registry.get("playerName");
-                        scene.scene.start("GameScene", { playerName });
+                        scene.scene.start("SchoolBathroomScene", { skipIntro: true }); // <-- pass flag
                     };
-                    overlay.on("pointerdown", goNext);
+                    btn.on("pointerup", goBack);
+                    btnLabel.setInteractive({ useHandCursor: true }).on("pointerup", goBack);
+
+
                 }
                 return;
             }
-
-
-
 
             drawPlayer();
             drawItems();
@@ -1722,7 +1764,6 @@ const cleancatcher = {
 
             rafId = requestAnimationFrame(frame);
         }
-
         // start all periodic loops animation item spawning movement and timer countdown
         function startLoops() {
             if (rafId) cancelAnimationFrame(rafId);
