@@ -37,8 +37,8 @@ export default class HandwashAnimationScene extends Phaser.Scene {
 
             // add the green NEXT arrow on top-right area
             const arrow = this.add.image(
-                width * 0.86,             // position can be tweaked
-                height * 0.80,
+                width * 0.78,             // position can be tweaked
+                height * 0.50,
                 ARROW_RIGHT_KEY
             )
                 .setOrigin(0.5)
@@ -48,16 +48,16 @@ export default class HandwashAnimationScene extends Phaser.Scene {
             const arrowMax = Math.min(width, height) * 0.12;
             arrow.setScale(arrowMax / Math.max(arrow.width, arrow.height));
 
-            // pulse a bit
-            this.tweens.add({
-                targets: arrow,
-                scaleX: { from: arrow.scaleX, to: arrow.scaleX * 1.06 },
-                scaleY: { from: arrow.scaleY, to: arrow.scaleY * 1.06 },
-                duration: 900,
-                ease: "Sine.inOut",
-                yoyo: true,
-                repeat: -1
-            });
+            // // pulse a bit
+            // this.tweens.add({
+            //     targets: arrow,
+            //     scaleX: { from: arrow.scaleX, to: arrow.scaleX * 1.06 },
+            //     scaleY: { from: arrow.scaleY, to: arrow.scaleY * 1.06 },
+            //     duration: 900,
+            //     ease: "Sine.inOut",
+            //     yoyo: true,
+            //     repeat: -1
+            // });
 
             // clicking NEXT returns to the bathroom (skip the intro bubble)
             arrow.on("pointerdown", () => {
