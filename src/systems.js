@@ -1353,7 +1353,7 @@ const cleancatcher = {
             baseSpeed = 3;
             goodProb = 0.4;
         }
-        // hard uses same as easy, but no images drawn1
+        // hard uses same as easy, but no images drawn11
 
         // spawn either water or germ with a label and speed
         function spawnItem() {
