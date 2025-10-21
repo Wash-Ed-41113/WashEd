@@ -1,58 +1,79 @@
+// src/scenes/CleanCatchExplain.js
 import systems from "../systems.js";
 
 export default class CleanCatchExplain extends Phaser.Scene {
     constructor() {
         super("CleanCatchExplain");
+        this.bgm = null; // explain-scene BGM handle
     }
 
     preload() {
-        const explain = CONFIG.assets.kiko;
+        const explain = CONFIG.assets.kiko || {};
         const A = CONFIG.assets.cleanCatch || {};
+        const ui = (CONFIG.assets.ui || {});
 
-        // Kiko art
-        this.load.image("KikoBase", explain.base);
-        this.load.image("KikoCheer", explain.cheer);
-        this.load.image("DialogPanel", CONFIG.assets.ui.dialogPanel);
+        // Kiko art (load only if not already in cache)
+        if (!this.textures.exists("KikoBase"))  this.load.image("KikoBase",  explain.base);
+        if (!this.textures.exists("KikoCheer")) this.load.image("KikoCheer", explain.cheer);
 
-        // Background image
-        this.load.image("backgroundFullLives", A.background || "assets/images/CleanCatcher/1.jpg");
+        // Dialog panel (optional custom UI)
+        if (!this.textures.exists("DialogPanel") && ui.dialogPanel) {
+            this.load.image("DialogPanel", ui.dialogPanel);
+        }
 
-        // Background music
+        // Background image for explain scene
+        if (!this.textures.exists("backgroundFullLives")) {
+            this.load.image("backgroundFullLives", A.background || "assets/images/CleanCatcher/1.jpg");
+        }
+
+        // Explain-scene BGM (this is the track we want to continue into the game)
         if (!this.cache.audio.exists("cleanCatchExplainMusic")) {
             this.load.audio("cleanCatchExplainMusic", "assets/sounds/soap splasher.mp3");
         }
     }
 
     create(data) {
-        console.log("[Explain] Difficulty received:", data?.difficulty);
         const { width: W, height: H } = this.scale;
         const username = this.registry.get("playerName") || "friend";
         const difficulty = data?.difficulty || this.registry.get("difficulty") || "easy";
 
-        // background Music
+        // Stop any main/menu BGM (e.g., kikos_day) if still running
+        this.sound.get("bgm_kiko")?.stop();
+        this.sound.get("kikos_day")?.stop();
+
+        // Start/keep the explain BGM (do NOT stop/destroy this when moving to the game)
         this.bgm = this.sound.add("cleanCatchExplainMusic", {
             loop: true,
-            volume: 0.4
+            volume: 0.4,
+            mute: !!this.registry.get("mute"),
         });
-        this.bgm.play();
 
-        // background image
+        const startExplainBgm = () => {
+            if (!this.bgm.isPlaying) this.bgm.play();
+        };
+        if (this.sound.locked) {
+            this.sound.once(Phaser.Sound.Events.UNLOCKED, startExplainBgm);
+        } else {
+            startExplainBgm();
+        }
+
+        // Background image
         if (this.textures.exists("backgroundFullLives")) {
             this.add.image(W / 2, H / 2, "backgroundFullLives")
                 .setDisplaySize(W, H)
                 .setDepth(0);
         }
 
-        // translucent overlay
+        // Translucent overlay
         this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.4).setDepth(1);
 
-        // Kiko sprite (starts with Cheer)
+        // Kiko sprite (start with Cheer)
         this.kiko = this.add.sprite(W * 0.12, H * 0.75, "KikoCheer")
             .setOrigin(0.5)
             .setScale(0.35)
             .setDepth(2);
 
-        // panel
+        // Dialog panel (fallback to a simple rectangle if texture is missing)
         let panel;
         if (this.textures.exists("DialogPanel")) {
             panel = this.add.image(W / 2, H * 0.75, "DialogPanel")
@@ -72,7 +93,7 @@ export default class CleanCatchExplain extends Phaser.Scene {
             fontSize: "45px",
             color: "#000000",
             wordWrap: { width: Math.max(120, Math.floor(panelW * 0.8)) },
-            align: "center"
+            align: "center",
         };
 
         const lines = [
@@ -89,7 +110,7 @@ export default class CleanCatchExplain extends Phaser.Scene {
             .setOrigin(0.5)
             .setDepth(3);
 
-        // --- Buttons ---
+        // Buttons
         const nextBtn = this.add.rectangle(W * 0.82, H * 0.9, 160, 60, 0x0077cc)
             .setStrokeStyle(3, 0xffffff)
             .setInteractive({ useHandCursor: true })
@@ -98,7 +119,7 @@ export default class CleanCatchExplain extends Phaser.Scene {
             fontFamily: "Chewy",
             fontSize: "30px",
             color: "#ffffff",
-            fontStyle: "bold"
+            fontStyle: "bold",
         }).setOrigin(0.5).setDepth(3);
 
         const skipBtn = this.add.rectangle(W * 0.18, H * 0.9, 160, 60, 0xcc4444)
@@ -108,7 +129,7 @@ export default class CleanCatchExplain extends Phaser.Scene {
         const skipText = this.add.text(skipBtn.x, skipBtn.y, "Skip", {
             fontFamily: "Chewy",
             fontSize: "30px",
-            color: "#ffffff"
+            color: "#ffffff",
         }).setOrigin(0.5).setDepth(3);
 
         const playBtn = this.add.rectangle(W / 2, H * 0.9, 200, 70, 0x28a745)
@@ -119,18 +140,19 @@ export default class CleanCatchExplain extends Phaser.Scene {
         const playText = this.add.text(playBtn.x, playBtn.y, "PLAY", {
             fontFamily: "Chewy",
             fontSize: "34px",
-            color: "#ffffff"
+            color: "#ffffff",
         }).setOrigin(0.5).setVisible(false).setDepth(3);
 
-        // --- Dialogue switching logic ---
+        // Dialogue switching logic
         const nextLine = () => {
             currentLine++;
 
-            // alternate Kiko expression (Cheer ↔ Base)
-            if (currentLine % 2 === 0 && this.textures.exists("KikoCheer"))
+            // Toggle expression (Cheer <-> Base)
+            if (currentLine % 2 === 0 && this.textures.exists("KikoCheer")) {
                 this.kiko.setTexture("KikoCheer");
-            else if (this.textures.exists("KikoBase"))
+            } else if (this.textures.exists("KikoBase")) {
                 this.kiko.setTexture("KikoBase");
+            }
 
             if (currentLine < lines.length - 1) {
                 text.setText(lines[currentLine]);
@@ -145,37 +167,38 @@ export default class CleanCatchExplain extends Phaser.Scene {
             }
         };
         nextBtn.on("pointerdown", nextLine);
+        this.input.keyboard.on("keydown-SPACE", nextLine);
 
-        // skip straight to CleanCatchScene (preserving difficulty)
+        // Start game WITHOUT stopping/destroying the explain BGM
         const startGame = () => {
-            this.bgm.stop();
+            // Keep explain BGM running to continue seamlessly in the next scene
             const playerName = this.registry.get("playerName");
             this.scene.stop("CleanCatchExplain");
             this.scene.start("CleanCatch", { playerName, difficulty });
         };
-
         skipBtn.on("pointerdown", startGame);
         playBtn.on("pointerdown", startGame);
-        this.input.keyboard.on("keydown-SPACE", nextLine);
 
-        // --- UI BUTTONS
+        // Topbar UI
         if (systems?.ui?.topbar) {
             systems.ui.topbar(this, {
                 onHome: () => {
+                    // Intentionally stop BGM when returning home
                     this.bgm?.stop();
+                    this.bgm?.destroy();
                     const playerName = this.registry.get("playerName");
                     this.scene.start("GameScene", { playerName });
                 },
                 onPause: () => {
-                    // optional: mute/unmute explain music
+                    // Toggle mute only
                     if (this.bgm) this.bgm.setMute(!this.bgm.mute);
                 },
-                x: this.scale.width * 0.15,  // shifted more to the left
+                x: this.scale.width * 0.15,
                 y: this.scale.height * 0.08,
             });
         }
 
+        // IMPORTANT: Do NOT stop/destroy BGM on SHUTDOWN — we want it to continue into the game.
+        // So no SHUTDOWN handler here touching this.bgm.
     }
 }
-
-
