@@ -25,7 +25,7 @@ export default class CleanCatchScene extends Phaser.Scene {
             const A = (CONFIG.assets && CONFIG.assets.cleanCatch) || {};
             this.load.image(
                 "cc_sink_bg",
-                A.background || "assets/images/CleanCatcher/washed_kikos-day_LEVEL_01_scene_04_action_01_soap-splasher_start.png"
+                A.background || "assets/images/CleanCatcher/1.jpg"
             );
         }
 
