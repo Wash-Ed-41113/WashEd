@@ -1,7 +1,3 @@
-// this file defines the typing game scene for soap splash
-// the scene manages germs spawning movement breaches timer ui and pause state
-// comments are in simple language with no punctuation and only code names use caps
-
 // src/scenes/SoapSplashScene.js
 import systems from "../systems.js";
 import { DB } from "../db.js";
@@ -10,13 +6,13 @@ export default class SoapSplashScene extends Phaser.Scene {
     constructor() {
         super("SoapSplash");
 
-        // core state
+        // core state1
         this.germs = [];
         this.lastSpawn = 0;
         this.germSeq = 0;
         this.breaches = 0;
         this.gameOver = false;
-        this.gameStartAt = null;
+        this.gameStartAt = null; //kn
 
         // ui / pause
         this._paused = false;
@@ -44,18 +40,52 @@ export default class SoapSplashScene extends Phaser.Scene {
         // kiko toasts trackers
         this._lastSadAtBreaches = 0;
         this._lastEncouragementAt = 0;
+
+        // bg music handle
+        this._bgm = null;
     }
+
+    // --- BG MUSIC HELPERS ---
+    _ensureBGMusic(autoplay = true) {
+        if (!this.sound) return;
+
+        // reuse existing sound if present
+        this._bgm = this.sound.get("BG_Music") || this.sound.add("BG_Music", {
+            loop: true,
+            volume: 0.45
+        });
+
+        const savedMute = this.registry.get("mute") === true;
+        this._bgm.setMute(!!savedMute);
+
+        if (autoplay && !this._bgm.isPlaying && !this._bgm.isPaused) {
+            this._bgm.play();
+        }
+    }
+    _pauseBGMusic()  { if (this._bgm?.isPlaying) this._bgm.pause(); }
+    _resumeBGMusic() { if (this._bgm?.isPaused)  this._bgm.resume(); }
+    _stopBGMusic()   { if (this._bgm) { this._bgm.stop(); this._bgm.destroy(); this._bgm = null; } }
 
     togglePause() {
         if (this._paused) {
             this._paused = false;
             this._pauseUi?.destroy();
             this._pauseUi = null;
+
+            // resume bgm when resuming gameplay
+            this._resumeBGMusic();
+
         } else {
             this._paused = true;
+
+            // pause bgm when opening pause overlay
+            this._pauseBGMusic();
+
             this._pauseUi = systems.ui.pauseOverlay(this, {
                 onResume: () => this.togglePause(),
                 onHome: () => {
+                    // stop music when leaving to main menu
+                    this._stopBGMusic();
                     this.finalizeRound?.("Paused → Main Menu");
                     const playerName = this.registry.get("playerName");
                     this.scene.start("GameScene", { playerName });
@@ -90,10 +120,8 @@ export default class SoapSplashScene extends Phaser.Scene {
         // game sprites
         this.load.image("Germ", CONFIG.assets.soapSplash.germ);
 
-        this.load.image(
-            "ss_end_bg",
-            "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_01_germ-catcher_HIT-zero.png"
-        );
+        // Background music
+        this.load.audio("BG_Music", CONFIG.assets.soapSplash.backgroundAud);
 
         // kiko sprites for toasts (optional; code safely falls back if missing)
         if (CONFIG.assets?.kiko?.jump) this.load.image("KikoJump", CONFIG.assets.kiko.jump);
@@ -156,6 +184,9 @@ export default class SoapSplashScene extends Phaser.Scene {
         const savedMute = this.registry.get("mute") === true;
         if (this.sound) this.sound.mute = savedMute;
 
+        // ensure bgm starts and loops (will continue under Explain overlay)
+        this._ensureBGMusic(true);
+
         // sink position & radius
         const sinkCenter = {
             x: SS.width * SS.sinkHitRel.x,
@@ -174,7 +205,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
 
         // background fallback
-        const firstKey = this._bgKeys[0] || null;
+        const firstKey = this._bgKeys[0];
         this.bgSprite = firstKey
             ? this.add.sprite(SS.width / 2, SS.height / 2, firstKey).setDepth(0).setDisplaySize(SS.width, SS.height)
             : this.add.rectangle(0, 0, SS.width, SS.height, 0x1b2a3a, 1).setOrigin(0, 0).setDepth(0);
@@ -184,7 +215,6 @@ export default class SoapSplashScene extends Phaser.Scene {
             const W = SS.width, H = SS.height;
             const key = "SS_BG_VIDEO";
 
-            // Videos live in this.cache.video, not this.textures
             if (this.cache.video.exists(key)) {
                 const targetW = W * 0.18;
 
@@ -194,14 +224,12 @@ export default class SoapSplashScene extends Phaser.Scene {
                     .setLoop(true)
                     .setMute(true);
 
-                // Play the video (muted → autoplay works)
                 this.bgVideo.play(true);
 
-                // Once the video has dimensions, rescale it properly
                 const setScale = () => {
                     const vw = this.bgVideo.video?.videoWidth || 640;
                     const scale = targetW / vw;
-                    this.bgVideo.setScale(scale);
+                    this.bgVideo.setScale(scale * 1.4);
                 };
 
                 if (this.bgVideo.video?.readyState >= 2) setScale();
@@ -213,7 +241,6 @@ export default class SoapSplashScene extends Phaser.Scene {
                 console.warn("[SoapSplash] SS_BG_VIDEO not found in cache.video");
             }
         }
-
 
         // corner-ring spawner geometry (for systems.soapsplash.spawn)
         if (SS.useSpawner) {
@@ -242,12 +269,14 @@ export default class SoapSplashScene extends Phaser.Scene {
         this._lastEncouragementAt = 0;
 
         // DB round
-        const difficulty = this.registry.get("difficulty") || "normal";
+        const difficulty = this.registry.get("difficulty");
         this.roundId = DB.beginRound(window.__SESSION_ID__, "SoapSplash", String(difficulty));
 
         // topbar
         this.topbar = systems.ui.topbar(this, {
             onHome: () => {
+                // stop music when leaving to main menu
+                this._stopBGMusic();
                 this.finalizeRound?.("Home button");
                 const playerName = this.registry.get("playerName");
                 this.scene.start("GameScene", { playerName });
@@ -266,13 +295,11 @@ export default class SoapSplashScene extends Phaser.Scene {
         console.log("[SoapSplash] launching Explain overlay");
         if (this.scene.getIndex("SoapSplashExplain") !== -1) {
             this.scene.launch("SoapSplashExplain", { parentKey: "SoapSplash" });
-            this.scene.bringToTop("SoapSplashExplain"); // <-- ensures Explain is visible
-            this.scene.pause("SoapSplash");             // <-- explicitly name it
+            this.scene.bringToTop("SoapSplashExplain");
+            this.scene.pause("SoapSplash"); // music keeps playing
         }
 
-
-
-        // background stage swapper
+        // background stage swapper2
         this.setSoapSplashBackground = (breaches) => {
             const i = Math.min(breaches, this._bgKeys.length - 1);
             const k = this._bgKeys[i] || this._bgKeys[0];
@@ -284,7 +311,16 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         // finalize on shutdown
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            // safety: ensure music is stopped if the scene is killed
+            this._stopBGMusic();
             if (!this.gameOver) this.finalizeRound("Scene shutdown");
+        });
+
+        // (optional) dev mute toggle with "M"
+        this.input.keyboard?.on("keydown-M", () => {
+            const newMute = !this._bgm?.mute;
+            this._bgm?.setMute(newMute);
+            this.registry.set("mute", newMute);
         });
     }
 
@@ -292,6 +328,9 @@ export default class SoapSplashScene extends Phaser.Scene {
         if (this.gameOver) return;
         this.gameOver = true;
         if (!this.roundId) return;
+
+        // stop music when round ends
+        this._stopBGMusic();
 
         DB.finalizeRound(this.roundId, {
             score: overrides.score ?? this.streakSys?.totalScore ?? this.typing?.score ?? 0,
@@ -305,12 +344,21 @@ export default class SoapSplashScene extends Phaser.Scene {
 
     // ---- encouragement toast (bottom-right) ----
     showKikoEncouragement(messageOverride = null) {
+        const wants = '40px "Chewy"';
+        if (document.fonts?.check && !document.fonts.check(wants)) {
+            document.fonts.load(wants).then(() => {
+                if (this.scene && this.scene.systems && this.scene.isActive()) {
+                    this.showKikoEncouragement(messageOverride);
+                }
+            });
+            return;
+        }
+
         const { width: W, height: H } = this.scale;
 
         if (this._encourageGroup) {
             const kids = this._encourageGroup.list || [];
-            this.tweens.add({
-                targets: kids, alpha: 0, y: '+=16', duration: 100,
+            this.tweens.add({ targets: kids, alpha: 0, y: '+=16', duration: 100,
                 onComplete: () => this._encourageGroup?.destroy(true)
             });
             this._encourageGroup = null;
@@ -328,11 +376,14 @@ export default class SoapSplashScene extends Phaser.Scene {
         this._encourageGroup = g;
 
         const text = this.add.text(0, 0, msg, {
-            fontFamily: 'Chewy, Arial, sans-serif',
-            fontSize: '42px',
-            color: '#ffffff',
+            fontFamily: '"Chewy"',
+            fontSize: '40px',
+            color: '#000000',
             align: 'right'
-        }).setOrigin(1, 1).setShadow(0, 3, '#00000090', 6, true, true).setAlpha(0);
+        })
+            .setOrigin(1, 1)
+            .setShadow(0, 3, 'rgba(246,231,231,0.56)', 8, true, true)
+            .setAlpha(0);
 
         let kiko = null;
         let kikoKey = null;
@@ -368,10 +419,20 @@ export default class SoapSplashScene extends Phaser.Scene {
         });
     }
 
-    // ---- sad toast (bottom-left) ----
+    // ---- sad toast (bottom-right, Chewy only, matches encouragement) ----
     showKikoSad(messageOverride = null) {
         if (this._sadCooldownUntil && this.time.now < this._sadCooldownUntil) return;
         this._sadCooldownUntil = this.time.now + 400;
+
+        const wants = '40px "Chewy"';
+        if (document.fonts?.check && !document.fonts.check(wants)) {
+            document.fonts.load(wants).then(() => {
+                if (this.scene && this.scene.systems && this.scene.isActive()) {
+                    this.showKikoSad(messageOverride);
+                }
+            });
+            return;
+        }
 
         const { width: W, height: H } = this.scale;
 
@@ -392,46 +453,37 @@ export default class SoapSplashScene extends Phaser.Scene {
         ];
         const msg = messageOverride || msgs[Math.floor(Math.random() * msgs.length)];
 
-        const g = this.add.container(0, 0).setDepth(501);
+        const g = this.add.container(0, 0).setDepth(500);
         this._sadGroup = g;
 
         const text = this.add.text(0, 0, msg, {
-            fontFamily: 'Chewy, Arial, sans-serif',
-            fontSize: '36px',
-            color: '#ffffff',
-            align: 'left',
+            fontFamily: '"Chewy"',
+            fontSize: '40px',
+            color: '#000000',
+            align: 'right',
             wordWrap: { width: Math.min(560, W * 0.7) }
-        }).setOrigin(0, 1).setShadow(0, 3, '#00000090', 6, true, true).setAlpha(0);
+        })
+            .setOrigin(1, 1)
+            .setShadow(0, 3, 'rgba(246,231,231,0.56)', 8, true, true)
+            .setAlpha(0);
 
-        let kiko = null;
-        let kikoKey = null;
-        if (this.textures.exists("KikoSad")) kikoKey = "KikoSad";
-        else if (this.textures.exists("KikoJump")) kikoKey = "KikoJump";
-        else if (this.textures.exists("KikoCheer")) kikoKey = "KikoCheer";
-        if (kikoKey) {
-            kiko = this.add.image(0, 0, kikoKey).setOrigin(0, 1).setScale(0.18).setAngle(-4).setAlpha(0).setScrollFactor(0);
-        }
+        g.add([text]);
 
-        g.add(kiko ? [kiko, text] : [text]);
-
-        const margin = 22;
-        const baseX = margin;
+        const margin = 20;
+        const baseX = W - margin;
         const baseY = H - margin;
 
-        if (kiko) { kiko.setPosition(baseX, baseY); text.setPosition(baseX + 140, baseY - 6); }
-        else { text.setPosition(baseX, baseY); }
+        text.setPosition(baseX, baseY);
 
-        const items = kiko ? [kiko, text] : [text];
-        items.forEach(it => it.setY(it.y + 14));
-        this.tweens.add({ targets: items, y: '-=14', alpha: 1, duration: 220, ease: 'Back.Out' });
+        this.tweens.add({ targets: [text], y: '-=12', alpha: 1, duration: 200, ease: 'Back.Out' });
 
-        if (kiko) {
-            this.tweens.add({ targets: kiko, y: '-=5', duration: 420, yoyo: true, repeat: 2, ease: 'Sine.inOut' });
-        }
-
-        this.time.delayedCall(1800, () => {
+        this.time.delayedCall(1600, () => {
             this.tweens.add({
-                targets: items, y: '+=12', alpha: 0, duration: 240, ease: 'Cubic.In',
+                targets: [text],
+                y: '+=12',
+                alpha: 0,
+                duration: 250,
+                ease: 'Cubic.In',
                 onComplete: () => {
                     g.destroy(true);
                     if (this._sadGroup === g) this._sadGroup = null;
@@ -478,20 +530,27 @@ export default class SoapSplashScene extends Phaser.Scene {
         systems.soapsplash.rules.checkBreaches(this);
         systems.soapsplash.timer.updateHUD(this, this.time.now);
 
-        // optional blur mask refresh
-        this.redrawSpotBlurMask?.();
-
         // toasts:
-        // 1) Sad once per new breach
         if (this.breaches > this._lastSadAtBreaches) {
             this._lastSadAtBreaches = this.breaches;
             this.showKikoSad();
         }
-        // 2) Encouragement when streak increases (>= 1)
         const curStreak = this.streakSys?.streak ?? this.typing?.streak ?? 0;
         if (curStreak > (this._lastEncouragementAt ?? 0) && curStreak >= 1) {
             this._lastEncouragementAt = curStreak;
             this.showKikoEncouragement();
+        }
+
+        if (this.germs.length) {
+            const active = this.germs.find(g => g.id === this.typing?.activeId);
+
+            const W = CONFIG.soapSplash.width, H = CONFIG.soapSplash.height;
+            const isOn = (x, y, m = 0) => (x >= -m && y >= -m && x <= W + m && y <= H + m);
+
+            const activeVisible = active && isOn(active.sprite.x, active.sprite.y, 0);
+            if (!active || !activeVisible) {
+                systems.soapsplash.typing.pickNearest(this);
+            }
         }
     }
 }
