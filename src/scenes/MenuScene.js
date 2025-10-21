@@ -3,6 +3,14 @@
 
 // Use the same target fractions for both dialogs
 const DLG = { W_FRAC: 0.80, H_FRAC: 0.60 }; // 80% of viewport width, 60% of height
+const UI_FONT_FALLBACK = "Montserrat, Arial, sans-serif";
+
+const getUIFont = () =>
+    (typeof CONFIG !== "undefined" &&
+        CONFIG.ui &&
+        typeof CONFIG.ui.fontFamily === "string" &&
+        CONFIG.ui.fontFamily) ||
+    UI_FONT_FALLBACK;
 
 export default class MenuScene extends Phaser.Scene {
     constructor() {
@@ -82,8 +90,10 @@ export default class MenuScene extends Phaser.Scene {
         this.video.on("loadeddata", resizeVideo);
         resizeVideo();
 
-        // ✅ Start BGM from the very first scene and keep playing across scenes
-        this.sound.pauseOnBlur = false; // optional: don't auto-pause on tab change
+        // ► Start BGM immediately (and persist across scenes until a minigame stops it)
+        this.sound.pauseOnBlur = false;
+        this.sound.mute = this.registry.get("mute") === true;
+
         const startBgm = () => {
             let bgm = this.sound.get("bgm_kiko");
             if (!bgm) {
@@ -92,7 +102,6 @@ export default class MenuScene extends Phaser.Scene {
             if (!bgm.isPlaying) bgm.play();
         };
         if (this.sound.locked) {
-            // Mobile autoplay unlock: first interaction or WebAudio unlock event
             this.sound.once(Phaser.Sound.Events.UNLOCKED, startBgm);
             this.input.once("pointerdown", startBgm);
         } else {
@@ -209,12 +218,8 @@ export default class MenuScene extends Phaser.Scene {
         }
 
         // title
-        const uiFont =
-            (typeof CONFIG !== "undefined" &&
-                CONFIG.ui &&
-                typeof CONFIG.ui.fontFamily === "string" &&
-                CONFIG.ui.fontFamily) ||
-            "Arial";
+
+        const uiFont = getUIFont();
 
         const title = this.add
             .text(rightX, panel.y - panelH * 0.12, "Hey, I’m Kiko. What’s your name?", {
@@ -229,8 +234,8 @@ export default class MenuScene extends Phaser.Scene {
 
         // DOM form (we only use the input; the DOM button will be hidden)
         const html = `
-      <div id="wrap">
-        <input id="nameInput" type="text" placeholder="Type your name..." />
+      <div id="wrap" style="font-family:${uiFont}">
+        <input id="nameInput" type="text" placeholder="Type your name..." style="font-family:${uiFont}" />
         <button id="okBtn">Continue</button>
       </div>
     `;
@@ -395,12 +400,7 @@ export default class MenuScene extends Phaser.Scene {
         const right = panel.x + panelW / 2 - innerPad;
         const innerW = right - left;
 
-        const uiFont =
-            (typeof CONFIG !== "undefined" &&
-                CONFIG.ui &&
-                typeof CONFIG.ui.fontFamily === "string" &&
-                CONFIG.ui.fontFamily) ||
-            "Arial";
+        const uiFont = getUIFont();
 
         // title (centered)
         const title = this.add
@@ -631,8 +631,7 @@ export default class MenuScene extends Phaser.Scene {
                 .setAlpha(0.25);
             const label = this.add
                 .text(BTN_X, BTN_Y, "START", {
-                    fontFamily:
-                        (typeof CONFIG !== "undefined" && CONFIG.ui?.fontFamily) || "Arial",
+                    fontFamily: getUIFont(),
                     color: "#ffffff",
                     fontStyle: "bold",
                 })
