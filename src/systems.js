@@ -1352,7 +1352,7 @@ const cleancatcher = {
             spawnRate = 700;
             baseSpeed = 3;
             goodProb = 0.4;
-        }
+        }//jsnjs
         // hard uses same as easy, but no images drawn11
 
         // spawn either water or germ with a label and speed
