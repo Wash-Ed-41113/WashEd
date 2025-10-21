@@ -89,9 +89,10 @@ window.CONFIG = {
         },
 
         endingScreen: {
-            classroom_bg: "assets/images/background/classroom.png",
+            classroom_bg: "assets/images/background/updatedClassroom.png",
             kiko_cheer: "assets/images/WashEd_kiko_sprite/kiko_cheer.png",
-            confetti: "assets/images/background/confetti.png"
+            confetti: "assets/images/background/confetti.png",
+            endingMusic: "assets/sounds/kikos day.mp3"
         },
     },
 

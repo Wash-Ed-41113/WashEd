@@ -3,7 +3,7 @@ export default class EndingScene extends Phaser.Scene {
     constructor() { super("EndingScene"); }
     //i added these assets into the config file ...not sure how to change this
     preload() {
-        this.load.image("classroom_bg", "assets/images/background/updatedClassroom.png");
+        cc
         this.load.image("kiko_cheer", "assets/images/WashEd_kiko_sprite/kiko_cheer.png");
         this.load.image("confetti", "assets/images/background/confetti.png");
         this.load.image("dialogPanel", "assets/images/Menu/washed_kikos-day_UI-dialogue-box-v1.png");
