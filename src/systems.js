@@ -661,30 +661,154 @@ const soapsplash = (() => {
             const remaining = Math.max(0, (SS.gameDurationMin * 60 * 1000) - (now - scene.gameStartAt));
             scene.timerHud.setText(`Time: ${helpers.mmss(remaining)}`);
         },
-        // end round clean up germs show summary and allow tap to restart
         endGame(scene, reason = SS.reason || "Game over") {
             if (scene.gameOver) return;
             scene.gameOver = true;
 
+            // Remove all germs
             for (let i = scene.germs.length - 1; i >= 0; i--) { removeGermByIndex(scene, i); }
 
-            const { score = 0, bestStreak = 0 } = (scene.typing || {});
+            // Finalize timer + score
+            const score = scene.streakSys?.totalScore ?? scene.typing?.score ?? 0;
+            const bestStreak = scene.streakSys?.bestStreak ?? scene.typing?.bestStreak ?? 0;
             scene.timerHud?.setText("Time: 00:00");
             scene.endEvent?.remove(false);
 
-            // write summary to the DB via scene helper (SoapSplashScene provides finalizeRound)
             if (typeof scene.finalizeRound === "function") {
                 scene.finalizeRound(reason);
             }
 
-            const overlay = scene.add.text(
-                SS.width / 2, SS.height / 2,
-                `Game Over – ${reason}\nScore: ${score}\nBest Streak: ${bestStreak}\nBreaches: ${scene.breaches}/${SS.maxBreaches}\n\nTap to restart`,
-                { fontFamily: SS.fontFamily, fontSize: "28px", color: "#fff", align: "center" }
-            ).setOrigin(0.5).setDepth(20);
+            // --- Dialog (same style as Clean Catch) ---
+            const { width, height } = scene.scale;
 
-            scene.input.once("pointerdown", () => { overlay.destroy(); scene.scene.restart(); });
+            // Optional background image behind dialog
+            if (scene.textures.exists("ss_end_bg")) {
+                scene.add.image(0, 0, "ss_end_bg")
+                    .setOrigin(0, 0)
+                    .setDisplaySize(width, height)
+                    .setDepth(9997);
+            }
+
+            const dialogRoot = scene.add.container(0, 0).setDepth(9999);
+
+            // Dim overlay (clickable, but not needed to intercept)
+            const overlay = scene.add.rectangle(0, 0, width, height, 0x000000, 0.35)
+                .setOrigin(0, 0)
+                .setInteractive();
+            dialogRoot.add(overlay);
+
+            // Panel (image skin or fallback rectangle)
+            const hasSkin = scene.textures.exists("dialog_skin");
+            const skinImg = hasSkin
+                ? scene.textures.get("dialog_skin").getSourceImage()
+                : { width: 1200, height: 800 };
+
+            const baseS = Math.min((width * 0.82) / skinImg.width, (height * 0.62) / skinImg.height);
+            const s = baseS * 0.9;
+
+            const panel = hasSkin
+                ? scene.add.image(width / 2, height / 2, "dialog_skin").setScale(s)
+                : scene.add
+                    .rectangle(width / 2, height / 2,
+                        Math.min(width * 0.75, 740),
+                        Math.min(height * 0.55, 460),
+                        0xffffff, 1)
+                    .setStrokeStyle(4, 0x9edcff);
+            dialogRoot.add(panel);
+
+            const panelW = (panel.displayWidth || skinImg.width * s);
+            const panelH = (panel.displayHeight || skinImg.height * s);
+
+            // Kiko on the left
+            if (scene.textures.exists("kiko_dialog")) {
+                const KIKO_X = 175;
+                const KIKO_BOTTOMY = panel.y + panelH / 2.88;
+                const KIKO_HEIGHT = Math.min(panelH * 2, 450);
+                const kiko = scene.add.image(KIKO_X, KIKO_BOTTOMY, "kiko_dialog")
+                    .setOrigin(0.5, 1)
+                    .setScale(KIKO_HEIGHT / scene.textures.get("kiko_dialog").getSourceImage().height);
+                dialogRoot.add(kiko);
+            }
+
+            const uiFont = "Chewy";
+            const uiFontBody = "Montserrat";
+
+            // Title
+            const title = scene.add.text(panel.x, panel.y - panelH * 0.28, "GAME OVER!", {
+                fontFamily: uiFont,
+                color: "#000000"
+            }).setOrigin(0.5);
+            title.setFontSize(Math.max(45, Math.round(44 * s)));
+            dialogRoot.add(title);
+
+            // Score + Best Streak
+            const scoreText = scene.add.text(panel.x, panel.y - panelH * 0.09,
+                `Score: ${score}\nBest Streak: ${bestStreak}`, {
+                    fontFamily: uiFontBody,
+                    color: "#2a4155",
+                    align: "center"
+                }).setOrigin(0.5);
+            scoreText.setFontSize(Math.max(30, Math.round(26 * s)));
+            dialogRoot.add(scoreText);
+
+            // Pick result message by score
+            const hiMsgs = [
+                "Wow! You typed so many words correctly — the germs don’t stand a chance!",
+                "You are a champion!"
+            ];
+            const loMsgs = [
+                "The germs were hard to scrub off this time. But with more practice, you’ll be even stronger!",
+                "Next time, you’ll win!"
+            ];
+            const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+            const resultMsg = (score >= 80) ? pick(hiMsgs) : pick(loMsgs);
+
+            const msgText = scene.add.text(panel.x, panel.y + panelH * 0.10, resultMsg, {
+                fontFamily: uiFontBody,
+                color: "#2a4155",
+                align: "center",
+                wordWrap: { width: panelW * 0.90 }
+            }).setOrigin(0.5);
+            msgText.setFontSize(Math.max(30, Math.round(22 * s)));
+            dialogRoot.add(msgText);
+
+            // Continue button → back to Bathroom (skipIntro so soap step is active)
+            const BTN_W = Math.min(panelW * 0.38, 320);
+            const BTN_H = 64;
+            const btnY = panel.y + panelH * 0.28;
+
+            const btn = scene.add.rectangle(panel.x, btnY, BTN_W, BTN_H, 0x2ecc71, 1)
+                .setOrigin(0.5)
+                .setStrokeStyle(3, 0x1b8f52)
+                .setInteractive({ useHandCursor: true });
+            dialogRoot.add(btn);
+
+            const btnLabel = scene.add.text(panel.x, btnY, "Continue", {
+                fontFamily: uiFont,
+                color: "#ffffff",
+                fontStyle: "bold"
+            }).setOrigin(0.5);
+            btnLabel.setFontSize(Math.max(26, Math.round(26 * s)));
+            dialogRoot.add(btnLabel);
+
+            scene.tweens.add({
+                targets: btn,
+                scaleX: { from: 1.0, to: 1.03 },
+                scaleY: { from: 1.0, to: 1.03 },
+                duration: 900,
+                ease: "Sine.inOut",
+                yoyo: true,
+                repeat: -1
+            });
+
+            const goBack = () => {
+                dialogRoot.destroy(true);
+                scene.scene.start("HandwashAnimationScene", { skipIntro: true });
+            };
+            btn.on("pointerup", goBack);
+            btnLabel.setInteractive({ useHandCursor: true }).on("pointerup", goBack);
         },
+
     };
 
     function showStreakPopup(scene, value, x, y) {
@@ -1023,7 +1147,6 @@ const soapsplash = (() => {
         },
 
 
-
         // refresh the score and streak hud text
         updateHud(scene) {
             const base = scene.streakSys?.baseScore ?? 0;
@@ -1047,7 +1170,8 @@ const soapsplash = (() => {
 // returns an object with destroy and setPaused so the scene can control it
 // -----------------------------
 const cleancatcher = {
-    create(canvas) {
+    create(scene, canvas, difficulty = "easy") {
+        difficulty = String(difficulty).toLowerCase();
         const CC = CONFIG.cleanCatch;
         const ctx = canvas.getContext("2d");
         ctx.imageSmoothingEnabled = true;
@@ -1066,6 +1190,33 @@ const cleancatcher = {
         waterImg.src = A.waterDroplet || "";
         const soapImg = new Image();
         soapImg.src = A.soap || "";
+        const backgroundFullLives = new Image();
+        backgroundFullLives.src = A.backgroundFullLives || "";
+        const backgroundTwoLives = new Image();
+        backgroundTwoLives.src = A.backgroundTwoLives || "";
+        const backgroundOneLife = new Image();
+        backgroundOneLife.src = A.backgroundOneLife || "";
+        const backgroundNoLife = new Image();
+        backgroundNoLife.src = A.backgroundNoLife || "";
+
+        //count for water/soap catched for dialogues
+        let goodCatchCount = 0;
+
+        //  Sound Effects Setup
+        let catchGoodSound = null;
+        let catchBadSound = null;
+        let timerBeepSound = null;
+
+        // Initialise Phaser sounds if available
+        if (scene.sound) {
+            catchGoodSound = scene.sound.add("sfx_goodCatch", { volume: 0.5 });
+            catchBadSound = scene.sound.add("sfx_badCatch", { volume: 0.5 });
+            timerBeepSound = scene.sound.add("sfx_beep", { volume: 0.7 });
+        } else {
+            console.warn("[CleanCatch] No Phaser sound system found — skipping sound effects.");
+        }
+
+
 
         const goodMessages = [
             "Nice work!",
@@ -1084,9 +1235,10 @@ const cleancatcher = {
             "Watch out for those germs!"
         ];
 
-// current message to display and timer
+        // current message to display and timer
         let currentMessage = "";       // the text to show
         let messageTimer = 0;          // countdown for how long to display
+        let endDialogShown = false;
         const messageDuration = 60;    // frames (about 1 sec at 60fps)
 
 
@@ -1134,7 +1286,7 @@ const cleancatcher = {
         const playerImg = new Image();
         playerImg.src = (A.player || "");
 
-        let pSize = sizeFrom(playerImg, P, 290);
+        let pSize = sizeFrom(playerImg, P, 450);
         const player = {
             x: (canvas.width - pSize.w) / 2,
             y: canvas.height - (P.bottom ?? 30) - pSize.h,
@@ -1145,7 +1297,7 @@ const cleancatcher = {
 
         // when the player image finishes loading recompute size and keep player inside bounds
         playerImg.onload = () => {
-            pSize = sizeFrom(playerImg, P, 180);
+            pSize = sizeFrom(playerImg, P, 300);
             const baseline = canvas.height - (P.bottom ?? 30);
             player.width = pSize.w;
             player.height = pSize.h;
@@ -1157,9 +1309,21 @@ const cleancatcher = {
         let items = [];
         let score = 0, lives = 3, timeLeft = 30, gameOver = false;
 
+
+        // difficulty adjustments
+        let spawnRate = 1000;
+        let baseSpeed = 2;
+        let goodProb = 0.6;
+        if (difficulty === "normal") {
+            spawnRate = 700;
+            baseSpeed = 3;
+            goodProb = 0.4;
+        }
+        // hard uses same as easy, but no images drawn
+
         // spawn either water or germ with a label and speed
         function spawnItem() {
-            const isGood = Math.random() > 0.4; // good or bad
+            const isGood = Math.random() < goodProb;
             const word = isGood ? helpers.words.pick(goodWords) : helpers.words.pick(badWords);
 
             let w, h, img;
@@ -1169,13 +1333,13 @@ const cleancatcher = {
                 img = Math.random() > 0.5 ? waterImg : soapImg;
 
                 if (img === soapImg) {
-                    // soap very small
-                    const gSize = sizeFrom(img, { width: 50, height: 50 });
+                    // soap
+                    const gSize = sizeFrom(img, { width: 85, height: 85 });
                     w = gSize.w;
                     h = gSize.h;
                 } else {
-                    // water smaller than germs
-                    const gSize = sizeFrom(img, { width: 50, height: 50 });
+                    // water
+                    const gSize = sizeFrom(img, { width: 95, height: 95 });
                     w = gSize.w;
                     h = gSize.h;
                 }
@@ -1183,7 +1347,7 @@ const cleancatcher = {
             } else {
                 // germs normal size
                 img = germImg;
-                const gSize = sizeFrom(germImg, CC.germ || {}, 56);
+                const gSize = sizeFrom(germImg, CC.germ || {}, 125);
                 w = gSize.w;
                 h = gSize.h;
             }
@@ -1196,7 +1360,7 @@ const cleancatcher = {
                 type: isGood ? "good" : "bad",
                 word,
                 img,
-                speed: 2 + Math.random() * 2
+                speed: baseSpeed + Math.random() * baseSpeed
             });
         }
 
@@ -1223,37 +1387,43 @@ const cleancatcher = {
                     img = germImg;
                 }
 
-                if (img && img.complete && img.naturalWidth) {
-                    ctx.drawImage(img, item.x, item.y, item.width, item.height);
-                } else {
-                    // fallback shapes
-                    if (item.type === "good") {
-                        ctx.fillStyle = "aqua";
-                        ctx.beginPath();
-                        ctx.moveTo(item.x + item.width / 2, item.y);
-                        ctx.bezierCurveTo(
-                            item.x + item.width * 1.0, item.y + item.height * 0.8,
-                            item.x + item.width * 0.8, item.y + item.height,
-                            item.x + item.width / 2, item.y + item.height
-                        );
-                        ctx.bezierCurveTo(
-                            item.x + item.width * 0.2, item.y + item.height,
-                            item.x, item.y + item.height * 0.8,
-                            item.x + item.width / 2, item.y
-                        );
-                        ctx.closePath();
-                        ctx.fill();
+                if (difficulty !== "hard") {
+                    if (img && img.complete && img.naturalWidth) {
+                        ctx.drawImage(img, item.x, item.y, item.width, item.height);
                     } else {
-                        ctx.fillStyle = "red";
-                        ctx.fillRect(item.x, item.y, item.width, item.height);
+                        // fallback shapes
+                        if (item.type === "good") {
+                            ctx.fillStyle = "aqua";
+                            ctx.beginPath();
+                            ctx.moveTo(item.x + item.width / 2, item.y);
+                            ctx.bezierCurveTo(
+                                item.x + item.width * 1.0, item.y + item.height * 0.8,
+                                item.x + item.width * 0.8, item.y + item.height,
+                                item.x + item.width / 2, item.y + item.height
+                            );
+                            ctx.bezierCurveTo(
+                                item.x + item.width * 0.2, item.y + item.height,
+                                item.x, item.y + item.height * 0.8,
+                                item.x + item.width / 2, item.y
+                            );
+                            ctx.closePath();
+                            ctx.fill();
+                        } else {
+                            ctx.fillStyle = "red";
+                            ctx.fillRect(item.x, item.y, item.width, item.height);
+                        }
                     }
                 }
 
-                // Draw word below the image
+                // Draw word below the image (or centered if hard)
                 ctx.fillStyle = "black";
-                ctx.font = "24px Chewy";
+                ctx.font = "50px Chewy";
                 ctx.textAlign = "center";
-                ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
+                if (difficulty === "hard") {
+                    ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height / 2 + 8);
+                } else {
+                    ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
+                }
             }
         }
 
@@ -1261,58 +1431,47 @@ const cleancatcher = {
         function formatTime(seconds) {
             const m = Math.floor(seconds / 60).toString().padStart(2, "0");
             const s = (seconds % 60).toString().padStart(2, "0");
-            return `${m}:${s}`;}
+            return `${s}`;}
 
-        // draw score, lives and time
+        // draw score and timer
         function drawUI() {
+            // SCORE
             ctx.fillStyle = "black";
-            ctx.font = "18px Chewy";
-            ctx.fillText("Score: " + score, 10, 20);
+            ctx.font = "50px Chewy";
+            ctx.textAlign = "left";
+            const scoreText = score.toString().padStart(2, "0");
+            ctx.fillText(scoreText, 85, 95);
 
+            // TIMER
+            const timerText = formatTime(timeLeft);
+            ctx.font = "52px Chewy";
+            ctx.fillStyle = "white";
+            ctx.textAlign = "center";
+            ctx.fillText(timerText, canvas.width / 2, 105);
+
+            // message display (dialogues) animated pop up effect
             if (messageTimer > 0 && currentMessage) {
+                const progress = messageTimer / messageDuration; // 1 → 0 as it fades
+                const popupScale = 1 + 0.2 * Math.sin(progress * Math.PI); // pop effect
+                const yOffset = 140 + (1 - progress) * 10; // move slightly upward as it fades
+
+                ctx.save();
+                ctx.translate(canvas.width - 80, canvas.height - yOffset);
+                ctx.scale(popupScale, popupScale);
+
+                ctx.font = "65px Chewy";
                 ctx.fillStyle = "black";
-                ctx.font = "30px Montserrat";
-                ctx.textAlign = "center";
-                ctx.fillText(currentMessage, canvas.width / 2, canvas.height / 2 - 100);
+                ctx.textAlign = "right";
+                ctx.shadowColor = "white";
+                ctx.shadowBlur = 10;
+
+                ctx.fillText(currentMessage, 0, 0);
+
+                ctx.restore();
                 messageTimer--;
             }
+        }
 
-            // draw hearts
-            const heartSize = 50;
-            for (let i = 0; i < lives; i++) {
-                ctx.beginPath();
-                const x = 10 + i * (heartSize + 5);
-                const y = 40;
-                ctx.moveTo(x + heartSize / 2, y + heartSize / 5);
-                ctx.bezierCurveTo(x + heartSize / 2, y, x, y, x, y + heartSize / 3);
-                ctx.bezierCurveTo(x, y + heartSize * 2 / 3, x + heartSize / 2, y + heartSize, x + heartSize / 2, y + heartSize);
-                ctx.bezierCurveTo(x + heartSize / 2, y + heartSize, x + heartSize, y + heartSize * 2 / 3, x + heartSize, y + heartSize / 3);
-                ctx.bezierCurveTo(x + heartSize, y, x + heartSize / 2, y, x + heartSize / 2, y + heartSize / 5);
-                ctx.fillStyle = "red";
-                ctx.fill();
-            }
-
-            // centered timer with white background
-            const timerText = formatTime(timeLeft);
-            ctx.font = "40px Chewy";
-            const textWidth = ctx.measureText(timerText).width;
-            const padding = 10;
-            const boxX = (canvas.width - textWidth) / 2 - padding;
-            const boxY = 10;
-            const boxWidth = textWidth + padding * 2;
-            const boxHeight = 50;
-
-            ctx.fillStyle = "white";
-            ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-
-            ctx.fillStyle = "black";
-            ctx.fillText(timerText, canvas.width / 2 - textWidth / 2, 45);
-            }
-
-            // time display
-            ctx.fillStyle = "black";
-            ctx.font = "40px Chewy";
-            ctx.fillText(formatTime(timeLeft), canvas.width - 120, 40);
 
 
         // move items down, check collisions, update stats, remove offscreen
@@ -1328,22 +1487,29 @@ const cleancatcher = {
                 )) {
                     if (item.type === "good") {
                         score += 10;
-                        // pick a random positive message
-                        currentMessage = helpers.words.pick(goodMessages);
+                        goodCatchCount++;
+
+                        // Play good catch sound
+                        if (catchGoodSound) catchGoodSound.play();
+
+                        // Only show a message every 3 good catches
+                        if (goodCatchCount % 3 === 0) {
+                            currentMessage = helpers.words.pick(goodMessages);
+                            messageTimer = messageDuration;
+                        }
                     } else {
                         lives -= 1;
-                        // pick a random negative message
+                        if (catchBadSound) catchBadSound.play(); // 🔊 germ caught
                         currentMessage = helpers.words.pick(badMessages);
+                        messageTimer = messageDuration;
                         if (lives <= 0) gameOver = true;
                     }
-
-                    // reset message timer
-                    messageTimer = messageDuration;
 
                     // remove the item from the array
                     items.splice(i, 1);
                     continue;
                 }
+
 
                 // remove items that fall off the screen
                 if (item.y > canvas.height) items.splice(i, 1);
@@ -1361,7 +1527,8 @@ const cleancatcher = {
         };
         const onPointerMove = (e) => {
             const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
+            const scaleX = canvas.width / rect.width;  // adjust for scaling of full screen
+            const mouseX = (e.clientX - rect.left) * scaleX;
             player.x = helpers.clamp(mouseX - player.width / 2, 0, canvas.width - player.width);
         };
         document.addEventListener("keydown", onKeyDown);
@@ -1377,24 +1544,216 @@ const cleancatcher = {
         let paused = false;
         let rafId = null, moveInterval = null, spawnInterval = null, timerInterval = null;
 
-        // animation frame loop draws background player items ui and updates items
+
+        // animation frame loop draws background, player, items, UI, and updates items
         function frame() {
             if (paused) return;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if (background.complete && background.naturalWidth) {
-                ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+            // choose background based on current lives
+            let targetBackground;
+            if (lives >= 3 && backgroundFullLives.complete && backgroundFullLives.naturalWidth > 0) {
+                targetBackground = backgroundFullLives;
+            } else if (lives === 2 && backgroundTwoLives.complete && backgroundTwoLives.naturalWidth > 0) {
+                targetBackground = backgroundTwoLives;
+            } else if (lives === 1 && backgroundOneLife.complete && backgroundOneLife.naturalWidth > 0) {
+                targetBackground = backgroundOneLife;
             } else {
-                ctx.fillStyle = "#add8e6";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                targetBackground = backgroundFullLives; // fallback
+            }
+
+            // smooth fade transition between backgrounds
+            if (!frame.lastBackground) frame.lastBackground = targetBackground;
+            if (frame.lastBackground !== targetBackground) {
+                if (!frame.fadeStart) frame.fadeStart = performance.now();
+            }
+
+            const fadeDuration = 500; // ms
+            let alpha = 1.0;
+            if (frame.fadeStart) {
+                const elapsed = performance.now() - frame.fadeStart;
+                alpha = Math.min(elapsed / fadeDuration, 1.0);
+
+                // draw previous background fading out
+                if (frame.lastBackground && frame.lastBackground.naturalWidth) {
+                    ctx.globalAlpha = 1 - alpha;
+                    ctx.drawImage(frame.lastBackground, 0, 0, canvas.width, canvas.height);
+                }
+
+                // draw new background fading in
+                if (targetBackground && targetBackground.naturalWidth) {
+                    ctx.globalAlpha = alpha;
+                    ctx.drawImage(targetBackground, 0, 0, canvas.width, canvas.height);
+                }
+                ctx.globalAlpha = 1.0;
+
+                // transition finished
+                if (alpha >= 1.0) {
+                    frame.lastBackground = targetBackground;
+                    frame.fadeStart = null;
+                }
+            } else {
+                // draw static background normally
+                if (targetBackground && targetBackground.naturalWidth) {
+                    ctx.drawImage(targetBackground, 0, 0, canvas.width, canvas.height);
+                } else {
+                    ctx.fillStyle = "#add8e6";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
             }
 
             if (gameOver) {
-                ctx.fillStyle = "black";
-                ctx.font = "40px Chewy";
-                ctx.fillText("Game Over!", canvas.width / 2 - 80, canvas.height / 2);
-                ctx.fillText("Score: " + score, canvas.width / 2 - 60, canvas.height / 2 + 40);
+                if (!endDialogShown) {
+                    endDialogShown = true;
+                    stopLoops();                        // freeze gameplay loops
+
+                    // hide the drawing canvas so the Phaser overlay is fully visible
+                    canvas.style.display = "none";
+                    canvas.style.pointerEvents = "none";
+
+                    const { width, height } = scene.scale;
+
+                    // optional: background behind the dialog (so it doesn't look black)
+                    if (scene.textures.exists("cc_sink_bg")) {
+                        scene.add.image(0, 0, "cc_sink_bg")
+                            .setOrigin(0, 0)
+                            .setDisplaySize(width, height)
+                            .setDepth(9997);
+                    }
+
+                    // root container for everything in the dialog
+                    const dialogRoot = scene.add.container(0, 0).setDepth(9999);
+
+                    // dim overlay (clickable)
+                    const overlay = scene.add
+                        .rectangle(0, 0, width, height, 0x000000, 0.35)
+                        .setOrigin(0, 0)
+                        .setInteractive();
+                    dialogRoot.add(overlay);
+
+                    // panel skin (or simple rectangle fallback)
+                    const hasSkin = scene.textures.exists("dialog_skin");
+                    const skinImg = hasSkin
+                        ? scene.textures.get("dialog_skin").getSourceImage()
+                        : { width: 1200, height: 800 };
+
+                    const baseS = Math.min((width * 0.82) / skinImg.width, (height * 0.62) / skinImg.height);
+                    const s = baseS * 0.9;
+
+                    const panel = hasSkin
+                        ? scene.add.image(width / 2, height / 2, "dialog_skin").setScale(s)
+                        : scene.add
+                            .rectangle(width / 2, height / 2, Math.min(width * 0.75, 740), Math.min(height * 0.55, 460), 0xffffff, 1)
+                            .setStrokeStyle(4, 0x9edcff);
+                    dialogRoot.add(panel);
+
+                    const panelW = (panel.displayWidth || skinImg.width * s);
+                    const panelH = (panel.displayHeight || skinImg.height * s);
+
+                    // Kiko! (left column inside panel)
+                    if (scene.textures.exists("kiko_dialog")) {
+                        // ---- tweak these three values to position/size Kiko ----
+                        const KIKO_X = 175;                     // pixels from left edge of screen
+                        const KIKO_BOTTOMY = panel.y + panelH / 2.88;    // bottom aligned with panel bottom
+                        const KIKO_HEIGHT  = Math.min(panelH * 2, 450);  // on-screen height in pixels
+                        // --------------------------------------------------------
+
+                        const kiko = scene.add.image(KIKO_X, KIKO_BOTTOMY, "kiko_dialog")
+                            .setOrigin(0.5, 1);                         // anchor at bottom-center
+
+                        // scale by desired on-screen height
+                        kiko.setScale(KIKO_HEIGHT / kiko.height);
+
+                        dialogRoot.add(kiko);                         // keep it in the dialog container
+                    }
+
+                    const uiFont = "Chewy";
+                    const uiFont_1 = "Montserrat"
+
+                    // Title
+                    const title = scene.add.text(panel.x, panel.y - panelH * 0.28, "GAME OVER!", {
+                        fontFamily: uiFont,
+                        color: "#000000",
+                    }).setOrigin(0.5);
+                    title.setFontSize(Math.max(45, Math.round(44 * s)));
+                    // title.setFontStyle("bold");
+                    dialogRoot.add(title);
+
+                    // Score
+                    const scoreText = scene.add.text(panel.x, panel.y - panelH * 0.09, `Score: ${score}`, {
+                        fontFamily: uiFont_1,
+                        color: "#2a4155",
+                    }).setOrigin(0.5);
+                    scoreText.setFontSize(Math.max(35, Math.round(30 * s)));
+                    dialogRoot.add(scoreText);
+
+                    /* === NEW: result message + green button === */
+
+// pick a message based on score
+                    const msgsGood = [
+                        "Wow! You caught so much clean water — Great job!",
+                        "You’re a Soap Splasher champion — Keep it up!",
+                        "Yay! Look at that score — you did amazing!"
+                    ];
+                    const msgsTry = [
+                        "Oh no, that was challenging. But don’t worry you can try again and do even better!",
+                        "Next time, I know you’ll catch more clean water and soap bubbles!",
+                        "Not your top score… but remember to keep trying your best. Let’s go!"
+                    ];
+                    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+                    const resultMsg = (score >= 80) ? pick(msgsGood) : pick(msgsTry);
+
+// message under the score (inside the big dialog panel)
+                    const msgText = scene.add.text(panel.x, panel.y + panelH * 0.10, resultMsg, {
+                        fontFamily: uiFont_1,
+                        color: "#2a4155",
+                        align: "center",
+                        wordWrap: { width: panelW * 0.90 }
+                    }).setOrigin(0.5);
+                    msgText.setFontSize(Math.max(30, Math.round(22 * s)));
+                    dialogRoot.add(msgText);
+
+// green "Continue" button → back to bathroom
+                    const BTN_W = Math.min(panelW * 0.38, 320);
+                    const BTN_H = 64;
+                    const btnY  = panel.y + panelH * 0.28;
+
+                    const btn = scene.add.rectangle(panel.x, btnY, BTN_W, BTN_H, 0x2ecc71, 1)
+                        .setOrigin(0.5)
+                        .setStrokeStyle(3, 0x1b8f52)
+                        .setInteractive({ useHandCursor: true });
+                    dialogRoot.add(btn);
+
+                    const btnLabel = scene.add.text(panel.x, btnY, "Continue", {
+                        fontFamily: uiFont,
+                        color: "#ffffff",
+                        fontStyle: "bold"
+                    }).setOrigin(0.5);
+                    btnLabel.setFontSize(Math.max(26, Math.round(26 * s)));
+                    dialogRoot.add(btnLabel);
+
+// hover/pulse
+                    scene.tweens.add({
+                        targets: btn,
+                        scaleX: { from: 1.0, to: 1.03 },
+                        scaleY: { from: 1.0, to: 1.03 },
+                        duration: 900,
+                        ease: "Sine.inOut",
+                        yoyo: true,
+                        repeat: -1
+                    });
+
+// click → back to bathroom scene
+                    const goBack = () => {
+                        dialogRoot.destroy(true);
+                        scene.scene.start("SchoolBathroomScene", { skipIntro: true }); // <-- pass flag
+                    };
+                    btn.on("pointerup", goBack);
+                    btnLabel.setInteractive({ useHandCursor: true }).on("pointerup", goBack);
+
+
+                }
                 return;
             }
 
@@ -1405,20 +1764,26 @@ const cleancatcher = {
 
             rafId = requestAnimationFrame(frame);
         }
-
         // start all periodic loops animation item spawning movement and timer countdown
         function startLoops() {
             if (rafId) cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(frame);
 
             if (!moveInterval) moveInterval = setInterval(movePlayer, 16);
-            if (!spawnInterval) spawnInterval = setInterval(spawnItem, 1000);
+            if (!spawnInterval) spawnInterval = setInterval(spawnItem, spawnRate);
             if (!timerInterval) timerInterval = setInterval(() => {
                 if (!paused && !gameOver) {
                     timeLeft--;
+
+                    // Play beep in last 5 seconds
+                    if (timeLeft <= 5 && timeLeft > 0 && timerBeepSound) {
+                        timerBeepSound.play();
+                    }
+
                     if (timeLeft <= 0) gameOver = true;
                 }
             }, 1000);
+
         }
 
         // stop every loop and clear ids
@@ -1455,6 +1820,10 @@ const cleancatcher = {
             document.removeEventListener("keydown", onKeyDown);
             document.removeEventListener("keyup", onKeyUp);
             canvas.removeEventListener("pointermove", onPointerMove);
+            catchGoodSound?.destroy();
+            catchBadSound?.destroy();
+            timerBeepSound?.destroy();
+
         }
 
         // kick off the game

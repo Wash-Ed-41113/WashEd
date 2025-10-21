@@ -1,92 +1,337 @@
 // SchoolBathroomScene.js
-// Scene after Kiko enters the school, background is wash-station.png
 
 const BG_KEY = "washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png";
 const BG_PATH = "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png";
 
+const TAP_KEY = "washed_day_UI_LEVEL_01_scene_02_bathroom__Tap.png";
+const TAP_PATH = "assets/images/UI/washed_day_UI_LEVEL_01_scene_02_bathroom__Tap.png";
+
+const SOAPBAR_KEY = "washed_day_UI_LEVEL_01_scene_02_bathroom__Soap-bar.png";
+const SOAPBAR_PATH = "assets/images/UI/washed_day_UI_LEVEL_01_scene_02_bathroom__Soap-bar.png";
+
+const SOAPBOTTLE_KEY = "washed_day_UI_LEVEL_01_scene_02_bathroom__Soap-bottle.png";
+const SOAPBOTTLE_PATH = "assets/images/UI/washed_day_UI_LEVEL_01_scene_02_bathroom__Soap-bottle.png";
+
+const ARROW_RIGHT_KEY = "ui_arrow_right";
+const ARROW_RIGHT_PATH = "assets/images/UI/washed_kikos-day_UI-Button_ARROW_Right.png";
+
+const DIALOG_BALLOON_KEY = "dialog_balloon";
+const DIALOG_BALLOON_PATH = "assets/images/UI/washed_kikos-day_UI-dialogue-box-v2.png";
+
 export default class SchoolBathroomScene extends Phaser.Scene {
     constructor() {
         super("SchoolBathroomScene");
+        this.nextSceneKey = null;
+        this._dialogRoot = null;
+        this._step1Done = false;
     }
 
     preload() {
-        if (!this.textures.exists(BG_KEY)) {
-            this.load.image(BG_KEY, BG_PATH);
+        if (!this.textures.exists(BG_KEY)) this.load.image(BG_KEY, BG_PATH);
+        if (!this.textures.exists(TAP_KEY)) this.load.image(TAP_KEY, TAP_PATH);
+        if (!this.textures.exists(SOAPBAR_KEY)) this.load.image(SOAPBAR_KEY, SOAPBAR_PATH);
+        if (!this.textures.exists(SOAPBOTTLE_KEY)) this.load.image(SOAPBOTTLE_KEY, SOAPBOTTLE_PATH);
+        if (!this.textures.exists(ARROW_RIGHT_KEY)) this.load.image(ARROW_RIGHT_KEY, ARROW_RIGHT_PATH);
+        if (!this.textures.exists("dialog_skin")) this.load.image("dialog_skin", "assets/images/Menu/washed_kikos-day_UI-dialogue-box-v1.png");
+        if (!this.textures.exists("kiko_dialog")) this.load.image("kiko_dialog", "assets/images/Kiko/WashEd_kiko_sprite_base.png");
+        if (!this.textures.exists(DIALOG_BALLOON_KEY)) this.load.image(DIALOG_BALLOON_KEY, DIALOG_BALLOON_PATH);
+    }
+
+    create(data = {}) {
+        const { width, height } = this.scale;
+        const skipIntro = !!data.skipIntro;
+
+        if (skipIntro) {
+            this._step1Done = true;
+        }
+
+        const onlyIfNoDialog = (fn) => () => {
+            // If a dialog is already visible, remove it immediately
+            if (this._dialogRoot) {
+                this._dialogRoot.destroy(true);
+                this._dialogRoot = null;
+            }
+            fn();
+        };
+
+
+        // Background
+        const bg = this.add.image(width / 2, height / 2, BG_KEY).setOrigin(0.5, 0.5);
+        bg.setScale(Math.max(width / bg.width, height / bg.height));
+
+        // Layout
+        const pos = {
+            tap:        { x: width * 0.35, y: height * 0.73, h: height * 0.51 },
+            soapBar:    { x: width * 0.75, y: height * 0.85, h: height * 0.35 },
+            soapBottle: { x: width * 0.18, y: height * 0.80, h: height * 0.34 },
+        };
+
+        const fitH = (img, targetH) => img.setScale(targetH / img.height);
+
+        // Tap → CleanCatch
+        const tap = this.add.image(pos.tap.x, pos.tap.y, TAP_KEY)
+            .setOrigin(0.5)
+            .setDepth(5)
+            .setInteractive({ useHandCursor: true });
+        fitH(tap, pos.tap.h);
+
+        // Soap bar → SoapSplash
+        const soapBar = this.add.image(pos.soapBar.x, pos.soapBar.y, SOAPBAR_KEY)
+            .setOrigin(0.5)
+            .setDepth(5)
+            .setInteractive({ useHandCursor: true });
+        fitH(soapBar, pos.soapBar.h);
+
+        // Soap bottle → SoapSplash
+        const soapBottle = this.add.image(pos.soapBottle.x, pos.soapBottle.y, SOAPBOTTLE_KEY)
+            .setOrigin(0.5)
+            .setDepth(5)
+            .setInteractive({ useHandCursor: true });
+        fitH(soapBottle, pos.soapBottle.h);
+
+        // Hover pulse
+        const makeHover = (img, factor = 1.06, dur = 120) => {
+            const baseX = img.scaleX;
+            const baseY = img.scaleY;
+            img.setData("baseScaleX", baseX);
+            img.setData("baseScaleY", baseY);
+
+            img.on("pointerover", () => {
+                this.tweens.killTweensOf(img);
+                this.tweens.add({
+                    targets: img,
+                    scaleX: baseX * factor,
+                    scaleY: baseY * factor,
+                    duration: dur,
+                    ease: "Sine.easeOut"
+                });
+            });
+
+            img.on("pointerout", () => {
+                this.tweens.killTweensOf(img);
+                this.tweens.add({
+                    targets: img,
+                    scaleX: baseX,
+                    scaleY: baseY,
+                    duration: dur,
+                    ease: "Sine.easeOut"
+                });
+            });
+        };
+
+        makeHover(tap); makeHover(soapBar); makeHover(soapBottle);
+
+        // Click routing (blocked until dialog closes)
+        // TAP is the FIRST correct step
+        // TAP handler ADD EXPLAIN SCENE HERE
+        tap.on("pointerdown", onlyIfNoDialog(() => {
+            if (!this._step1Done) {
+                // First time: Tap is correct → show success dialog, then start CleanCatch
+                this._step1Done = true;
+
+                this._showCorrectDialog(
+                    "Good job! That’s the correct way to wash your hands. Now, let’s play Soap Splasher!",
+                    () => {
+                        this._fadeTo("CleanCatchExplain");
+                    }, 3000
+                );
+                return;
+            }
+
+            // After returning from Clean Catch: Tap is WRONG
+            this._showSmallDialog(
+                "Oops, not that one. We need to scrub our hands to get the germs off.\nTry again, click the scrubbing hands!"
+            );
+        }));
+
+
+        // SOAP is WRONG if tap not done yet
+        const handleSoapClick = onlyIfNoDialog(() => {
+            if (!this._step1Done) {
+                // Wrong! Just show feedback (console for now)
+                this._showSmallDialog("Oops, that’s not the first step.\nLet's try again!\nRemember: we always start at the beginning.\nYou can do it!");  // (Later we will show a dialog instead of console.log)
+                return;
+            }
+
+            // Show success dialog then start SoapSplash
+            this._showCorrectDialog(
+                "That's right! Scrubbing our hands together is how we chase away all the germs. " +
+                "\nLet's start scrubbing and make those hands sparkle clean!",
+                () => {
+                    this._fadeTo("SoapSplash");
+                }
+            );
+
+        });
+
+        soapBar.on("pointerdown", handleSoapClick);
+        soapBottle.on("pointerdown", handleSoapClick);
+
+
+        // Single fadeout handler — goes only where you clicked
+        this.cameras.main.once("camerafadeoutcomplete", () => {
+            if (this.nextSceneKey) {
+                this.scene.start(this.nextSceneKey);
+            } else {
+                this.cameras.main.fadeIn(300, 0, 0, 0); // safety
+            }
+        });
+
+        if (!skipIntro) {
+            this._showEntryDialog();
         }
     }
 
-    create() {
+    _fadeTo(sceneKey) {
+        this.nextSceneKey = sceneKey; // must match your scene keys
+        this.cameras.main.fadeOut(300, 0, 0, 0);
+    }
+
+    _showEntryDialog() {
         const { width, height } = this.scale;
 
-        // background
-        const bg = this.add.image(width / 2, height / 2, BG_KEY)
-            .setOrigin(0.5, 0.5);
-        bg.setScale(Math.max(width / bg.width, height / bg.height));
+        this._dialogRoot = this.add.container(0, 0).setDepth(9999);
 
-        // // (Optional) add Kiko inside the bathroom scene
-        // const kiko = this.add.image(width * 0.5, height * 0.85, "kiko_base")
-        //     .setDisplaySize(500, 500)
-        //     .setOrigin(0.5, 1);
-        //
-        // // idle bounce
-        // this.tweens.add({
-        //     targets: kiko,
-        //     y: kiko.y - 10,
-        //     duration: 1200,
-        //     yoyo: true,
-        //     repeat: -1,
-        //     ease: "Sine.easeInOut",
-        // });
+        const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.4)
+            .setOrigin(0, 0)
+            .setInteractive();
+        this._dialogRoot.add(overlay);
 
-        // text
-        this.add.text(width / 2, height * 0.15, "Kiko is washing hands...", {
-            font: "36px Arial",
-            color: "#ffffff",
-            stroke: "#000000",
-            strokeThickness: 4
-        })
-            .setOrigin(0.5)
-            .setInteractive({ useHandCursor: true });
+        const panel = this.add.image(width / 2, height / 2, "dialog_skin").setOrigin(0.5);
+        const s = Math.min((width * 0.8) / panel.width, (height * 0.5) / panel.height);
+        panel.setScale(s);
+        this._dialogRoot.add(panel);
 
-        // button to go ending scene
-        const endingBtn = this.add.text(width / 2, height * 0.8, "Go to Ending", {
-            font: "32px Arial",
-            backgroundColor: "#ffcc00",
-            color: "#000",
-            padding: { x: 20, y: 10 },
-            borderRadius: 20
-        })
-            .setOrigin(0.5)
-            .setInteractive({ useHandCursor: true });
+        const panelW = panel.displayWidth;
+        const panelH = panel.displayHeight;
 
-        //button hover effect
-        endingBtn.on("pointerover", () => {
-            endingBtn.setStyle({ backgroundColor: "#ffee33" });
+        const kiko = this.add.image(panel.x - panelW / 2 - 200, panel.y + panelH * 0.45, "kiko_dialog")
+            .setOrigin(0.5, 1);
+        kiko.setScale((panelH * 0.90) / kiko.height);
+        this._dialogRoot.add(kiko);
+
+        this._dialogRoot.add(
+            this.add.text(panel.x, panel.y - panelH * 0.25, "Let's Wash!", {
+                fontFamily: "Chewy", fontSize: "42px", color: "#000000"
+            }).setOrigin(0.5)
+        );
+
+        this._dialogRoot.add(
+            this.add.text(panel.x, panel.y, "We're here in the bathroom and it’s time to wash our hands! What should I do first?\nCan you help me choose? Click on the best choice!", {
+                fontFamily: "Montserrat", fontSize: "24px", color: "#2a4155", align: "center"
+            }).setOrigin(0.5)
+        );
+
+        // Green arrow (only closer)
+        const arrowSize = Math.min(panelH * 0.22, 140);
+        const arrow = this.add.image(
+            panel.x + panelW * 0.35,
+            panel.y + panelH * 0.25,
+            ARROW_RIGHT_KEY
+        ).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        const scaleTo = arrowSize / Math.max(arrow.width, arrow.height);
+        arrow.setScale(scaleTo);
+
+        // IMPORTANT: Add arrow INTO the dialog container (so it appears above overlay)
+        this._dialogRoot.add(arrow);
+
+        // Close the dialog ONLY when arrow is clicked
+        arrow.on("pointerdown", () => {
+            this._dialogRoot.destroy(true);
+            this._dialogRoot = null;
         });
+    }
 
-        endingBtn.on("pointerout", () => {
-            endingBtn.setStyle({ backgroundColor: "#ffcc00" });
-        });
+    _showSmallDialog(message, duration = 5000) {
 
-        // go to ending when click the button
-        endingBtn.on("pointerdown", () => {
-            // this.sound.play("ui_click", { volume: 0.6 }); // 사운드 사용 시
-            endingBtn.disableInteractive();
-            this.tweens.add({
-                targets: endingBtn,
-                scale: 0.96,
-                duration: 100,
-                yoyo: true
-            });
-            // face out
-            this.cameras.main.fadeOut(700, 0, 0, 0);
-        });
+        const onlyIfNoDialog = (fn) => () => {
+            // Allow correct dialog to appear even if a previous dialog is open
+            if (this._dialogRoot) {
+                // Destroy the old dialog immediately to allow new action
+                this._dialogRoot.destroy(true);
+                this._dialogRoot = null;
+            }
+            fn();
+        };
 
-        // fade out and entering ending scene
-        this.cameras.main.once("camerafadeoutcomplete", () => {
-            this.scene.start("EndingScene");
+
+        const { width, height } = this.scale;
+
+        // Block background clicks while this small dialog is up
+        this._dialogRoot = this.add.container(0, 0).setDepth(9999);
+
+        // Very light overlay to catch clicks
+        const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.001)
+            .setOrigin(0, 0)
+        this._dialogRoot.add(overlay);
+
+        // Balloon image
+        const balloon = this.add.image(width / 2 + 180, height * 0.15, DIALOG_BALLOON_KEY)
+            .setOrigin(0.5);
+        const scale = Math.min((width * 0.6) / balloon.width, (height * 0.2) / balloon.height);
+        balloon.setScale(scale);
+        this._dialogRoot.add(balloon);
+
+        // Text
+        const text = this.add.text(balloon.x, balloon.y - 15, message, {
+            fontFamily: "Montserrat",
+            fontSize: "22px",
+            color: "#000000",
+            align: "center",
+            wordWrap: { width: balloon.displayWidth * 0.8 }
+        }).setOrigin(0.5);
+        this._dialogRoot.add(text);
+
+        // Auto close
+        this.time.delayedCall(duration, () => {
+            this._dialogRoot?.destroy(true);
+            this._dialogRoot = null;
         });
-        // fade in effect
-        this.cameras.main.fadeIn(600, 0, 0, 0);
+    }
+
+    _showCorrectDialog(message, onDone, duration = 5000) {
+
+        const onlyIfNoDialog = (fn) => () => {
+            // Allow correct dialog to appear even if a previous dialog is open
+            if (this._dialogRoot) {
+                // Destroy the old dialog immediately to allow new action
+                this._dialogRoot.destroy(true);
+                this._dialogRoot = null;
+            }
+            fn();
+        };
+
+
+        const { width, height } = this.scale;
+
+        this._dialogRoot = this.add.container(0, 0).setDepth(9999);
+
+        const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.001)
+            .setOrigin(0, 0)
+            .setInteractive();
+        this._dialogRoot.add(overlay);
+
+        const balloon = this.add.image(width / 2 + 180, height * 0.15, DIALOG_BALLOON_KEY)
+            .setOrigin(0.5);
+        const scale = Math.min((width * 0.6) / balloon.width, (height * 0.2) / balloon.height);
+        balloon.setScale(scale);
+        this._dialogRoot.add(balloon);
+
+        const text = this.add.text(balloon.x, balloon.y - 15, message, {
+            fontFamily: "Montserrat",
+            fontSize: "22px",
+            color: "#000000",
+            align: "center",
+            wordWrap: { width: balloon.displayWidth * 0.8 }
+        }).setOrigin(0.5);
+        this._dialogRoot.add(text);
+
+        // use the provided duration
+        this.time.delayedCall(duration, () => {
+            this._dialogRoot?.destroy(true);
+            this._dialogRoot = null;
+            if (onDone) onDone();
+        });
     }
 }
