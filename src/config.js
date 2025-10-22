@@ -80,7 +80,7 @@ window.CONFIG = {
                 "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_05_germ-scrubber_HIT-five.png"
             ],
             backgroundVid: "assets/images/SopaSplash/hands_alpha.webm",
-            backgroundAud: "assets/sounds/germ scrubber.mp3",
+            backgroundAud: "assets/sounds/germ_scrubber.mp3",
 
         },
         cleanCatch: {
