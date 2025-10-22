@@ -4,12 +4,14 @@ export default class SoapSplashExplain extends Phaser.Scene {
         super("SoapSplashExplain");
     }
 
+    //  dsbjsb
     preload() {
         const explain = CONFIG.assets.kiko;
 
         this.load.image("KikoBase", explain.base);
         this.load.image("KikoCheer", explain.cheer);
         this.load.image("DialogPanel", CONFIG.assets.ui.dialogPanel);
+        this.load.image("UI_Next", CONFIG.assets.ui.next);
 
     }
 
@@ -42,7 +44,7 @@ export default class SoapSplashExplain extends Phaser.Scene {
         const panelW = panel.displayWidth || panel.width || Math.min(W * 0.8, 900);
         const style = {
             fontFamily: CONFIG.ui.fontFamily,
-            fontSize: "24px",
+            fontSize: "64px",
             color: "#000000",
             wordWrap: { width: Math.max(120, Math.floor(panelW * 0.8)) },
             align: "center"
@@ -50,7 +52,8 @@ export default class SoapSplashExplain extends Phaser.Scene {
 
         const lines = [
             `Okay, ${username}, it’s time for the Germ Scrubber showdown!`,
-            `The germs are coming and we need your help to stop them. You have 1 minute to type the clean words to make germs go away.`,
+            `The germs are coming and we need your help to stop them.`,
+            `You have 1 minute to type the clean words to make germs go away.`,
             `Each clean word helps you scrub better with soap so the germs disappear!`,
             `You have 3 lives. If you miss one, the germs reach the sink and you lose a life.`,
             `Let’s fight the germs together!`
@@ -59,18 +62,44 @@ export default class SoapSplashExplain extends Phaser.Scene {
         let currentLine = 0;
         const text = this.add.text(panel.x, panel.y, lines[currentLine], style)
             .setOrigin(0.5)
-            .setDepth(panel.depth + 1);
+            .setDepth((panel.depth || 0) + 1);
 
-        const nextBtn = this.add.rectangle(W * 0.85, H * 0.9, 160, 60, 0x0077cc)
-            .setStrokeStyle(3, 0xffffff)
-            .setInteractive({ useHandCursor: true });
+        // --- NEXT button (image from config, fallback to rectangle+text) ---
+        let nextBtn, nextText = null;
+        const nx = W * 0.88;
+        const ny = H * 0.9;
 
-        const nextText = this.add.text(nextBtn.x, nextBtn.y, "Next", {
-            fontFamily: CONFIG.ui.fontFamily,
-            fontSize: "26px",
-            color: "#ffffff",
-            fontStyle: "bold"
-        }).setOrigin(0.5);
+        if (this.textures.exists("UI_Next")) {
+            nextBtn = this.add.image(nx, ny, "UI_Next")
+                .setOrigin(0.5)
+                .setDepth((panel.depth || 0) + 2)
+                .setInteractive({ useHandCursor: true, pixelPerfect: true });
+
+            // scale to a pleasant on-screen height while preserving aspect
+            const targetH = Math.min(120, H * 0.12);
+            const s = targetH / (nextBtn.height || 1);
+            nextBtn.setScale(s);
+
+            // hover/press feedback
+            nextBtn.on("pointerover", () => nextBtn.setScale(s * 1.05));
+            nextBtn.on("pointerout",  () => nextBtn.setScale(s));
+            nextBtn.on("pointerdown", () => { nextBtn.setScale(s * 0.97); nextLine(); });
+            nextBtn.on("pointerup",   () => nextBtn.setScale(s * 1.05));
+        } else {
+            // Fallback: rectangle + "Next" label
+            nextBtn = this.add.rectangle(nx, ny, 160, 60, 0x0077cc)
+                .setStrokeStyle(3, 0xffffff)
+                .setOrigin(0.5)
+                .setDepth((panel.depth || 0) + 2)
+                .setInteractive({ useHandCursor: true });
+            nextText = this.add.text(nx, ny, "Next", {
+                fontFamily: CONFIG.ui.fontFamily,
+                fontSize: "26px",
+                color: "#ffffff",
+                fontStyle: "bold"
+            }).setOrigin(0.5).setDepth((panel.depth || 0) + 3);
+            nextBtn.on("pointerdown", () => nextLine());
+        }
 
         const nextLine = () => {
             currentLine++;
@@ -80,12 +109,15 @@ export default class SoapSplashExplain extends Phaser.Scene {
             if (currentLine < lines.length) {
                 text.setText(lines[currentLine]);
             } else {
+                const fadeTargets = [this.kiko, text, panel, nextBtn];
+                if (nextText) fadeTargets.push(nextText);
+
                 this.tweens.add({
-                    targets: [this.kiko, text, nextBtn, nextText, panel],
+                    targets: fadeTargets,
                     alpha: 0,
                     duration: 600,
                     onComplete: () => {
-                        console.log("[Explain] finished → resuming SoapSplash");
+                        // console.log("[Explain] finished → resuming SoapSplash");
                         this.scene.stop();
                         this.scene.resume("SoapSplash");
                     }
@@ -93,9 +125,10 @@ export default class SoapSplashExplain extends Phaser.Scene {
             }
         };
 
-        nextBtn.on("pointerdown", nextLine);
+        // keyboard shortcut
         this.input.keyboard.on("keydown-SPACE", nextLine);
     }
+
 
 
 }

@@ -8,9 +8,9 @@ window.CONFIG = {
     width: 1920,
     height: 1080,
 
-    // ui related defaults for fonts buttons topbar and pause overlay
+    // ui related defaults for fonts buttons topbar and pause overlayy
     ui: {
-        fontFamily: "Arial",        // default font for text
+        fontFamily: "Montserrat",        // default font for text
         titleFontSize: 230,         // large font size for title text
 
         button: {
@@ -50,7 +50,9 @@ window.CONFIG = {
     assets: {
         kiko: {
             base: "assets/images/Kiko/WashEd_kiko_sprite_base.png",
-            cheer: "assets/images/Kiko/WashEd_kiko_sprite_thumbs-up.png"
+            cheer: "assets/images/Kiko/WashEd_kiko_sprite_thumbs-up.png",
+            jump: "assets/images/Kiko/WashEd_kiko_sprite_jump.png",
+            sad: "assets/images/Kiko/WashEd_kiko_sprite_sad.png",
         },
         backgrounds: {
             frontpage: "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png",
@@ -63,6 +65,7 @@ window.CONFIG = {
             homeBut: "assets/images/UI/washed_kikos-day_UI-Button_HOME.png",
             startBut: "assets/images/UI/washed_kikos-day_UI-Button_Main_START.png",
             dialogPanel: "assets/images/UI/washed_kikos-day_UI-dialogue-box-v1.png",
+            next: "assets/images/UI/washed_kikos-day_UI-Button_ARROW_Right.png",
         },
         soapSplash: {
             sink: "assets/images/soap/sink.png", // sink sprite
@@ -77,6 +80,8 @@ window.CONFIG = {
                 "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_05_germ-scrubber_HIT-five.png"
             ],
             backgroundVid: "assets/images/SopaSplash/hands_alpha.webm",
+            backgroundAud: "assets/sounds/germ_scrubber.mp3",
+
         },
         cleanCatch: {
             germ: "assets/images/Germs/washed_kikos-day_LEVEL_01_scene_05_germ-catcher_GERM_01.png",
@@ -87,11 +92,20 @@ window.CONFIG = {
             backgroundTwoLives: "assets/images/CleanCatcher/2.jpg",
             backgroundOneLife: "assets/images/CleanCatcher/3.jpg",
             backgroundNoLife: "assets/images/CleanCatcher/4.jpg",
+            backgroundAud: "assets/images/CleanCatcher/5.jpg",
+
 
 
         },
         menu: {
             frontpage: "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png",
+        },
+
+        endingScreen: {
+            classroom_bg: "assets/images/background/updatedClassroom.png",
+            kiko_cheer: "assets/images/WashEd_kiko_sprite/kiko_cheer.png",
+            confetti: "assets/images/background/confetti.png",
+            endingMusic: "assets/sounds/kikos day.mp3"
         },
     },
 
@@ -120,8 +134,8 @@ window.CONFIG = {
         germSpeedRand: 20,
         germHitRadiusPx: 50,
 
-        fontFamily: "Arial",
-        labelTextSize: "30px",
+        fontFamily: "Montserrat",
+        labelTextSize: "40px",
         verticalSpaceLabel: 60,
         germSpriteSize: 0.15,
 
@@ -217,7 +231,7 @@ window.CONFIG = {
         germ:   { height: 64, maxPixels: 128 },
         water:  { width: 64, height: 28 },
         words: { good: [],
-                  bad: []
+            bad: []
         }
     },
 

@@ -246,7 +246,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
     _showSmallDialog(message, duration = 5000) {
 
         const onlyIfNoDialog = (fn) => () => {
-            // ✅ Allow correct dialog to appear even if a previous dialog is open
+            // Allow correct dialog to appear even if a previous dialog is open
             if (this._dialogRoot) {
                 // Destroy the old dialog immediately to allow new action
                 this._dialogRoot.destroy(true);
@@ -293,7 +293,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
     _showCorrectDialog(message, onDone, duration = 5000) {
 
         const onlyIfNoDialog = (fn) => () => {
-            // ✅ Allow correct dialog to appear even if a previous dialog is open
+            // Allow correct dialog to appear even if a previous dialog is open
             if (this._dialogRoot) {
                 // Destroy the old dialog immediately to allow new action
                 this._dialogRoot.destroy(true);
