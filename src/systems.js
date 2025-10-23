@@ -1490,7 +1490,7 @@ const cleancatcher = {
                 ctx.globalAlpha = alpha;
                 ctx.scale(bounce, bounce);
 
-                // Kiko sprite — ~0.23 scale equivalent (~250–280 px tall)
+                // Kiko sprite — ~0.23 scale equivalent (~250–280 px tall)>
                 const img = t.mood === "sad" ? kikoSad : kikoCheer;
                 if (img && img.complete && img.naturalWidth > 0) {
                     const baseH = 280;                       // target visual height
