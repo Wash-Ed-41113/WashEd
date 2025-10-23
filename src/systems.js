@@ -1470,7 +1470,7 @@ const cleancatcher = {
             ctx.textAlign = "center";
             ctx.fillText(timerText, canvas.width / 2, 105);
 
-            //NEW bottom-right toast dialogue
+            //NEW kiko dialogue - change this for changing size
             for (let i = activeToasts.length - 1; i >= 0; i--) {
                 const t = activeToasts[i];
                 const age = performance.now() - t.createdAt;
