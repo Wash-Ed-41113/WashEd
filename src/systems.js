@@ -485,7 +485,13 @@ const soapsplash = (() => {
     }
 
     // pick a word for a new germ
-    function pickWord() { return helpers.words.pick(helpers.words.soapSplashWords()); }
+    // pick a word for a new germ (uses scene's sequential bag if available)
+    function pickWord(scene) {
+        const fn = CONFIG?.soapSplash?.nextWordFn;
+        if (typeof fn === "function") return fn();                  // ← sequential, no repeats until cycle
+        return Phaser.Utils.Array.GetRandom(CONFIG.soapSplash.words || []); // ← legacy fallback
+    }
+
 
     // ---------------- spawn ----------------
     const spawn = {
@@ -536,8 +542,9 @@ const soapsplash = (() => {
             }
 
             if (!pos) return;
-            const word = pickWord();
+            const word = pickWord(scene);
             addGerm(scene, pos, word);
+
             // ensure there is an active target
             if (!scene.typing?.activeId) typing.pickNearest(scene);
         },
