@@ -120,48 +120,37 @@ export default class SoapSplashScene extends Phaser.Scene {
     create() {
         const SS = CONFIG.soapSplash;
 
-        // ── Difficulty mapping: easy/normal|medium/hard → 1..3 ─────────────────────────
-        const raw = this.registry.get("difficulty"); // may be "easy" | "normal" | number
-        const toLevel = (v) => {
-            if (typeof v === "number") return Phaser.Math.Clamp(Math.round(v), 1, 3);
-            const map = { easy: 1, normal: 2, medium: 2, hard: 3 };
-            const n = map[String(v ?? "").toLowerCase()];
-            return (n ?? 2); // default to "normal" if unset
-        };
-        const levelNum = toLevel(raw);
-
-        // Pin globally so systems.soapsplash.pickWord() knows current level
+        // ── Difficulty: normalise to 1..3 and expose ─────────────────────────────
+        const raw = this.registry.get("difficulty"); // may be "easy"/"normal"/"hard" or 1/2/3
+        const map = { easy: 1, normal: 2, medium: 2, hard: 3 };
+        const levelNum = (typeof raw === "number")
+            ? Phaser.Math.Clamp(Math.round(raw), 1, 3)
+            : (map[String(raw ?? "").toLowerCase()] ?? 2);
         SS.activeDifficulty = levelNum;
 
-        // ── Get grouped words from JSON preload ────────────────────────────────────────
-        // Prefer CONFIG.soapSplash.wordsByDifficulty = {1:[],2:[],3:[]}
-        // Fallback: CONFIG.soapSplash.words might already be {1:[],2:[],3:[]}
+        // ── Word buckets from WordBank loader ────────────────────────────────────
+        // Prefer: SS.wordsByDifficulty = {1:[],2:[],3:[]}
+        // Fallback: SS.words as an object {1:[],2:[],3:[]}, or flat array (legacy)
         const grouped =
             (SS.wordsByDifficulty && typeof SS.wordsByDifficulty === "object")
                 ? SS.wordsByDifficulty
                 : (SS.words && !Array.isArray(SS.words) ? SS.words : { 1: [], 2: [], 3: [] });
 
-        // Pool for this level; if somehow empty, try a flat-array fallback (legacy)
         let pool = Array.isArray(grouped?.[levelNum]) ? grouped[levelNum].slice() : [];
         if (pool.length === 0 && Array.isArray(SS.words)) {
-            // if someone only filled a flat list, still use it to avoid "wash" spam
+            // legacy flat array fallback so the game never stalls
             pool = SS.words.slice();
         }
 
-        // Deduplicate + store per-level list so any legacy code sees correct pool
-        SS.words = pool;
-
-        // ── Build unique, shuffled bag (non-repeating) ─────────────────────────────────
-        const unique = [...new Set(pool)];
-        this._wordBag   = Phaser.Utils.Array.Shuffle(unique);
+        // Deduplicate and prepare a shuffled bag for low repetition
+        SS.words = pool; // keep for any legacy helpers that read SS.words directly
+        const unique = [...new Set(pool.filter(Boolean).map(String))];
+        this._wordBag = Phaser.Utils.Array.Shuffle(unique);
         this._wordIndex = 0;
 
         // Primary supplier used by systems.soapsplash.pickWord()
-        SS.nextWordFn = () => {
-            if (!this._wordBag || this._wordBag.length === 0) {
-                // last-resort fallback
-                return "wash";
-            }
+        CONFIG.soapSplash.nextWordFn = () => {
+            if (!this._wordBag || this._wordBag.length === 0) return "wash";
             const w = this._wordBag[this._wordIndex++];
             if (this._wordIndex >= this._wordBag.length) {
                 this._wordBag = Phaser.Utils.Array.Shuffle(this._wordBag);
@@ -172,7 +161,7 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         console.log(`[SoapSplash] level=${levelNum} | words=${pool.length}`);
 
-        // ── Tuning by level (unchanged below this line) ────────────────────────────────
+        // ── Tuning by level (unchanged below this line) ──────────────────────────
         switch (levelNum) {
             case 1:
                 SS.spawnEveryMs = 1600;
@@ -604,6 +593,8 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         const base = SS.spawnIntervalMs ?? 1200;
         const jitter = SS.spawnJitterMs ?? 0;
+
+
         const cap = SS.waveCap ?? SS.maxGerms ?? 5;
 
         // start a new wave if none active and field is clear

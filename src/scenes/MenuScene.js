@@ -387,6 +387,10 @@ export default class MenuScene extends Phaser.Scene {
             (height * DLG.H_FRAC) / skinImg.height
         );
 
+        // Map button value -> numeric difficulty
+        const lvlMap = { easy: 1, normal: 2, hard: 3 };
+
+
         const panel = this.add.image(width / 2, height / 2, "dialog_skin").setScale(s);
         dialogRoot.add(panel);
 
@@ -480,8 +484,12 @@ export default class MenuScene extends Phaser.Scene {
                     yoyo: true,
                     ease: "Quad.easeOut",
                     onComplete: () => {
+                        // MINIMAL CHANGE: convert string -> numeric, store, pass number
+                        const raw = b.value ?? "normal";
+                        const lvl = lvlMap[String(raw).toLowerCase()] ?? 2;
+                        this.registry.set("difficulty", lvl);
                         destroyDialog();
-                        onPick?.(b.value); // startFlow -> goToPlaygroundSmooth
+                        onPick?.(lvl); // startFlow -> goToPlaygroundSmooth with numeric 1/2/3
                     },
                 });
             });
