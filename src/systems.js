@@ -1463,7 +1463,7 @@ const cleancatcher = {
             const scoreText = score.toString().padStart(2, "0");
             ctx.fillText(scoreText, 85, 95);
 
-            // TIMER
+            // TIMERs
             const timerText = formatTime(timeLeft);
             ctx.font = "52px Chewy";
             ctx.fillStyle = "white";
