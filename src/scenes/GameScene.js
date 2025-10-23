@@ -158,7 +158,7 @@ export default class GameScene extends Phaser.Scene {
         // text label for the next button
         const nextLabel = this.add
             .text(nextBtn.x, nextBtn.y, "Next ", {
-                fontFamily: "Arial", fontSize: "22px", color: "#ffffff",
+                fontFamily: CONFIG.ui.fontFamily, fontSize: "22px", color: "#ffffff",
             })
             .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(7);
 
@@ -249,7 +249,7 @@ export default class GameScene extends Phaser.Scene {
 
             // title text which fades in as the panel opens
             const title = this.add.text(0, 24, "Select your difficulty!", {
-                fontFamily: "Arial", fontSize: "44px", color: "#000000",
+                fontFamily: CONFIG.ui.fontFamily, fontSize: "44px", color: "#000000",
             }).setOrigin(0.5, 0).setAlpha(0.0);
 
             // track selected difficulty
@@ -262,7 +262,7 @@ export default class GameScene extends Phaser.Scene {
                     .setInteractive({ useHandCursor: true }).setAlpha(0.0);
 
                 const txt = this.add.text(0, y, label, {
-                    fontFamily: "Arial", fontSize: "26px", color: "#ffffff",
+                    fontFamily: CONFIG.ui.fontFamily, fontSize: "26px", color: "#ffffff",
                 }).setOrigin(0.5).setAlpha(0.0);
 
                 // hover feedback for button
@@ -385,7 +385,7 @@ export default class GameScene extends Phaser.Scene {
                     .setInteractive({ useHandCursor: true });
 
                 const txt = this.add.text(0, y, label, {
-                    fontFamily: CONFIG?.ui?.fontFamily || "Arial",
+                    fontFamily: CONFIG.ui.fontFamily || "Arial",
                     fontSize: "26px",
                     color: "#fff",
                     align: "center",

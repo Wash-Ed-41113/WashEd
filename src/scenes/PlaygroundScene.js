@@ -61,8 +61,8 @@ class SpeechBubble extends Phaser.GameObjects.Container {
         this.bg.setScale(this.maxWidth / nativeW);
 
         this.label = scene.add.text(0, 0, "", {
-            fontFamily: (window.CONFIG?.ui?.fontFamily) || "Arial",
-            fontSize: (opts.fontSize ?? 28),
+            fontFamily: (window.CONFIG?.ui?.fontFamily),
+            fontSize: (34),
             color: "#073B4C",
             wordWrap: { width: this.maxWidth - this.padding * 2 },
             align: "left",
@@ -178,15 +178,10 @@ export default class PlaygroundScene extends Phaser.Scene {
         });
 
         // Stationary speech bubble: pinned once above Kiko's head
-        this.speech = new SpeechBubble(this, kiko, { maxWidth: 680, fontSize: 30, gap: -10 });
-
+        this.speech = new SpeechBubble(this, kiko, { maxWidth: 700, fontSize: 30, gap: -10 });
         // Intro line – waits for user tap (no auto-advance)
         const name = (this.registry.get("playerName") || "friend");
         this.speech.say(`Hello, ${name}! My name is Kiko.\nLook! Let's make sandcastle!\nTap the sand!`);
-
-        // --- typewriter tuning ---
-        const TYPE_BASE_MS   = (CONFIG?.ui?.typeSpeedMs ?? 85);   // default 85 ms/char (raise to slow more)
-        const PUNCT_PAUSE_MS = { ",": 140, ".": 280, "!": 280, "?": 280, "…": 320, ";": 160, ":": 160 };
 
 
 

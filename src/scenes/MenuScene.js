@@ -9,12 +9,7 @@ import { DB } from "../db.js";
 const DLG = { W_FRAC: 0.80, H_FRAC: 0.60 }; // 80% of viewport width, 60% of height
 const UI_FONT_FALLBACK = "Montserrat, Arial, sans-serif";
 
-const getUIFont = () =>
-    (typeof CONFIG !== "undefined" &&
-        CONFIG.ui &&
-        typeof CONFIG.ui.fontFamily === "string" &&
-        CONFIG.ui.fontFamily) ||
-    UI_FONT_FALLBACK;
+const getUIFont = () => CONFIG.ui?.fontFamily || "Montserrat";
 
 export default class MenuScene extends Phaser.Scene {
     constructor() {
@@ -232,7 +227,7 @@ export default class MenuScene extends Phaser.Scene {
             })
             .setOrigin(0, 0.5);
         title.setFontSize(Math.max(40, Math.round(40 * s)));
-        title.setFontStyle("bold");
+        // title.setFontStyle("bold");
         title.setWordWrapWidth(rightW, true);
         dialogRoot.add(title);
 
@@ -461,7 +456,7 @@ export default class MenuScene extends Phaser.Scene {
                 .setInteractive({ useHandCursor: true });
             img.setDepth(1);
             const lab = this.add.text(bx[i], rowY, b.label, {
-                fontFamily: uiFont, color: "#073B4C", fontStyle: "bold",
+                fontFamily: uiFont, color: "#073B4C",
             }).setOrigin(0.5, 0.55);
             lab.setFontSize(Math.round(btnH * 0.35));
             lab.setDepth(2);
@@ -637,7 +632,7 @@ export default class MenuScene extends Phaser.Scene {
                 .text(BTN_X, BTN_Y, "START", {
                     fontFamily: getUIFont(),
                     color: "#ffffff",
-                    fontStyle: "bold",
+                    // fontStyle: "bold",
                 })
                 .setOrigin(0.5)
                 .setDepth(3);
