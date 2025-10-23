@@ -53,50 +53,6 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.countdownText     = null;
     }
 
-    // ─── Word bag & difficulty helpers ────────────────────────────────────────────
-    _normalizeDiff(value) {
-        // accepts: 1/2/3 or "easy"/"normal|medium"/"hard" or null/undefined
-        if (value == null) return 2; // treat missing as "normal"
-        if (typeof value === "number") return Phaser.Math.Clamp(Math.round(value), 1, 3);
-        const map = { easy: 1, normal: 2, medium: 2, hard: 3 };
-        return map[String(value).toLowerCase()] ?? 2;
-    }
-
-    _pickWordsForLevel(level) {
-        // JSON can be like:
-        // { word:"soap", type:"Good", difficulty: 1 }
-        // { word:"bubbles", type:"Good", level:"easy" }
-        // { word:"rinse", type:"Good", tier: "hard" }
-        const WB = Array.isArray(CONFIG.words) ? CONFIG.words : [];
-
-        const getDiff = (w) =>
-            this._normalizeDiff(w.difficulty ?? w.level ?? w.tier ?? null);
-
-        const pool = WB.filter(w => w && w.word && w.type === "Good" && getDiff(w) === level)
-            .map(w => String(w.word));
-
-        // Fallback: if that level has no words, use all Good words (keeps game playable)
-        if (!pool.length) {
-            return WB.filter(w => w && w.word && w.type === "Good").map(w => String(w.word));
-        }
-        return pool;
-    }
-
-    _buildWordBag(words) {
-        // fresh shuffled bag with no immediate repeats until bag cycles
-        const bag = Phaser.Utils.Array.Shuffle([...new Set(words.map(w => w.trim()).filter(Boolean))]);
-        // ensure at least something
-        return bag.length ? bag : ["wash","soap","foam","scrub"];
-    }
-
-    _nextWordFromBag() {
-        if (!this._wordBag || !this._wordBag.length) this._wordBag = this._buildWordBag(CONFIG?.soapSplash?.words ?? []);
-        const w = this._wordBag[this._wordIndex % this._wordBag.length];
-        this._wordIndex = (this._wordIndex + 1) >>> 0;
-        return w;
-    }
-
-
     // pause must freeze timers/tweens and bg video
     togglePause() {
         if (this._paused) {
@@ -164,57 +120,59 @@ export default class SoapSplashScene extends Phaser.Scene {
     create() {
         const SS = CONFIG.soapSplash;
 
-        // ─── helpers local to create ─────────────────────────────────────────────
-        const normalizeDiff = (value) => {
-            if (value == null) return 2; // treat missing as "normal"
-            if (typeof value === "number") return Phaser.Math.Clamp(Math.round(value), 1, 3);
+        // ── Difficulty mapping: easy/normal|medium/hard → 1..3 ─────────────────────────
+        const raw = this.registry.get("difficulty"); // may be "easy" | "normal" | number
+        const toLevel = (v) => {
+            if (typeof v === "number") return Phaser.Math.Clamp(Math.round(v), 1, 3);
             const map = { easy: 1, normal: 2, medium: 2, hard: 3 };
-            return map[String(value).toLowerCase()] ?? 2;
+            const n = map[String(v ?? "").toLowerCase()];
+            return (n ?? 2); // default to "normal" if unset
         };
+        const levelNum = toLevel(raw);
 
-        const pickWordsForLevel = (lvl) => {
-            const WB = Array.isArray(CONFIG.words) ? CONFIG.words : [];
-            const getDiff = (w) => normalizeDiff(w.difficulty ?? w.level ?? w.tier ?? null);
+        // Pin globally so systems.soapsplash.pickWord() knows current level
+        SS.activeDifficulty = levelNum;
 
-            const pool = WB
-                .filter(w => w && w.word && w.type === "Good" && getDiff(w) === lvl)
-                .map(w => String(w.word));
+        // ── Get grouped words from JSON preload ────────────────────────────────────────
+        // Prefer CONFIG.soapSplash.wordsByDifficulty = {1:[],2:[],3:[]}
+        // Fallback: CONFIG.soapSplash.words might already be {1:[],2:[],3:[]}
+        const grouped =
+            (SS.wordsByDifficulty && typeof SS.wordsByDifficulty === "object")
+                ? SS.wordsByDifficulty
+                : (SS.words && !Array.isArray(SS.words) ? SS.words : { 1: [], 2: [], 3: [] });
 
-            // fallback to all Good words if none match this level
-            if (!pool.length) {
-                return WB.filter(w => w && w.word && w.type === "Good").map(w => String(w.word));
-            }
-            return pool;
-        };
+        // Pool for this level; if somehow empty, try a flat-array fallback (legacy)
+        let pool = Array.isArray(grouped?.[levelNum]) ? grouped[levelNum].slice() : [];
+        if (pool.length === 0 && Array.isArray(SS.words)) {
+            // if someone only filled a flat list, still use it to avoid "wash" spam
+            pool = SS.words.slice();
+        }
 
-        const buildWordBag = (words) => {
-            const unique = [...new Set(words.map(w => String(w).trim()).filter(Boolean))];
-            const shuffled = Phaser.Utils.Array.Shuffle(unique);
-            return shuffled.length ? shuffled : ["wash", "soap", "foam", "scrub"];
-        };
+        // Deduplicate + store per-level list so any legacy code sees correct pool
+        SS.words = pool;
 
-        // ─── DIFFICULTY & WORDS ──────────────────────────────────────────────────
-        const levelNum = Phaser.Math.Clamp(Number(this.registry.get("difficulty") || 2), 1, 3);
-
-        const wordsForLevel = pickWordsForLevel(levelNum);
-        SS.words = wordsForLevel; // keep legacy path
-
-        // per-round shuffled bag with no repeats until cycle
-        this._wordBag   = buildWordBag(wordsForLevel);
+        // ── Build unique, shuffled bag (non-repeating) ─────────────────────────────────
+        const unique = [...new Set(pool)];
+        this._wordBag   = Phaser.Utils.Array.Shuffle(unique);
         this._wordIndex = 0;
 
-        // expose sequential supplier for spawner (use in systems.js)
+        // Primary supplier used by systems.soapsplash.pickWord()
         SS.nextWordFn = () => {
-            if (!this._wordBag || !this._wordBag.length) {
-                this._wordBag = buildWordBag(wordsForLevel);
+            if (!this._wordBag || this._wordBag.length === 0) {
+                // last-resort fallback
+                return "wash";
+            }
+            const w = this._wordBag[this._wordIndex++];
+            if (this._wordIndex >= this._wordBag.length) {
+                this._wordBag = Phaser.Utils.Array.Shuffle(this._wordBag);
                 this._wordIndex = 0;
             }
-            const w = this._wordBag[this._wordIndex % this._wordBag.length];
-            this._wordIndex = (this._wordIndex + 1) >>> 0;
             return w;
         };
 
-        // tuning by level
+        console.log(`[SoapSplash] level=${levelNum} | words=${pool.length}`);
+
+        // ── Tuning by level (unchanged below this line) ────────────────────────────────
         switch (levelNum) {
             case 1:
                 SS.spawnEveryMs = 1600;
@@ -242,6 +200,9 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         // (optional) align underlying systems timer to 100s
         if (SS) SS.timerMs = 100000;
+
+        // … keep the rest of your existing create() exactly as-is …
+
 
         // audio
         const savedMute = this.registry.get("mute") === true;
@@ -446,7 +407,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         })
             .setOrigin(1, 1)
             .setStroke("#000000", 6)
-            .setShadow(0, 3, "#00000090", 6, true, true)
+            // .setShadow(0, 3, "#00000090", 6, true, true)
             .setAlpha(0);
 
         g.add(label);

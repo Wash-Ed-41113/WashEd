@@ -484,13 +484,37 @@ const soapsplash = (() => {
         scene.germs.splice(i, 1);
     }
 
-    // pick a word for a new germ
-    // pick a word for a new germ (uses scene's sequential bag if available)
+    // pick a word for a new germ (strict-aware, but with fallback)
     function pickWord(scene) {
+        // primary: scene-provided strict supplier
         const fn = CONFIG?.soapSplash?.nextWordFn;
-        if (typeof fn === "function") return fn();                  // ← sequential, no repeats until cycle
-        return Phaser.Utils.Array.GetRandom(CONFIG.soapSplash.words || []); // ← legacy fallback
+        let w = (typeof fn === "function") ? fn() : null;
+
+        // fallback A: what's currently in SS.words (the list your scene set)
+        if (!w || typeof w !== "string" || !w.length) {
+            const list = SS.words || [];
+            if (Array.isArray(list) && list.length) {
+                w = list[Math.floor(Math.random() * list.length)];
+            }
+        }
+
+        // fallback B: helpers list (in case SS.words is not an array)
+        if (!w || typeof w !== "string" || !w.length) {
+            const list = helpers.words.soapSplashWords();
+            if (Array.isArray(list) && list.length) {
+                w = list[Math.floor(Math.random() * list.length)];
+            }
+        }
+
+        // fallback C: tiny safe default
+        if (!w || typeof w !== "string" || !w.length) {
+            w = "wash";
+        }
+
+        return w;
     }
+
+
 
 
     // ---------------- spawn ----------------
@@ -503,31 +527,57 @@ const soapsplash = (() => {
             if (scene.germs.length >= cap) return;
 
             const triesMax = SS.maxSpawnAttempts ?? 24;
-            const sep = SS.minSpawnSeparationPx ?? 0;
-            const minSink = SS.minSinkDistancePx ?? 0;
+            const sep      = SS.minSpawnSeparationPx ?? 0;
+            const minSink  = SS.minSinkDistancePx ?? 0;
 
-            // estimate hit radius of a new germ from texture size and sprite scale so spacing feels right
-            const tex = scene.textures.get("Germ");
-            const texW = tex?.getSourceImage()?.width || 64;
+            // ---- Ensure we have sane geometry even if useSpawner wasn't initialized ----
+            // If rOuter is 0, build a default corner-band around the top-right corner.
+            let rInner = scene.rInner, rOuter = scene.rOuter;
+            let aMin   = scene.angleMinDeg, aMax = scene.angleMaxDeg;
+
+            if (!rOuter || rOuter <= 0) {
+                const W = SS.width, H = SS.height;
+                // default: top-right corner wedge pointing toward sink
+                const corner = { x: W, y: 0 };
+                const dx = scene.sinkPosition.x - corner.x;
+                const dy = scene.sinkPosition.y - corner.y;
+                const centerDeg = Phaser.Math.RadToDeg(Math.atan2(Math.abs(dy), Math.abs(dx))); // ~ angle in 0..90
+
+                const margin = SS.cornerMargin ?? 40;
+                const band   = SS.cornerBandWidth ?? 180;
+                const cornerDist = Math.hypot(dx, dy);
+
+                rOuter = Math.max(60, cornerDist - margin);
+                rInner = Math.max(10, rOuter - band);
+
+                const spread = SS.angleSpreadDeg ?? 18;
+                aMin = Math.max(0, centerDeg - spread);
+                aMax = Math.min(90, centerDeg + spread);
+                if (aMin > aMax) { const t = aMin; aMin = aMax; aMax = t; }
+            }
+
+            // ---- Estimate new germ hit radius for spacing ----
+            const tex   = scene.textures.get("Germ");
+            const texW  = tex?.getSourceImage()?.width || 64;
             const scaledW = (SS.germSpriteSize ?? 1) * texW;
-            const newR = SS.germHitRadiusPx ?? Math.round(scaledW * (SS.germHitRadiusFromSprite ?? 0.35));
+            const newR  = SS.germHitRadiusPx ?? Math.round(scaledW * (SS.germHitRadiusFromSprite ?? 0.35));
 
+            // ---- Find a valid spawn point ----
             let tries = triesMax;
-            let pos = null;
+            let pos   = null;
 
             while (tries-- > 0) {
-                // sample position in ring sector
-                const theta = helpers.sampleAngle(scene.angleMinDeg, scene.angleMaxDeg);
-                const r = helpers.sampleRadius(scene.rInner, scene.rOuter);
-                const p = helpers.polarToWorld(scene.sinkPosition, r, theta);
+                const theta = helpers.sampleAngle(aMin, aMax);
+                const r     = helpers.sampleRadius(rInner, rOuter);
+                const p     = helpers.polarToWorld(scene.sinkPosition, r, theta);
 
-                // enforce minimum distance from sink
+                // minimum distance from sink
                 if (minSink > 0) {
                     const ds = Phaser.Math.Distance.Between(p.x, p.y, scene.sinkPosition.x, scene.sinkPosition.y);
                     if (ds < (minSink + newR)) continue;
                 }
 
-                // enforce separation from existing germs
+                // separation from existing germs
                 if (sep > 0 && scene.germs.length) {
                     let ok = true;
                     for (let i = 0; i < scene.germs.length; i++) {
@@ -541,13 +591,20 @@ const soapsplash = (() => {
                 pos = p; break;
             }
 
-            if (!pos) return;
-            const word = pickWord(scene);
+            if (!pos) {
+                // last-chance: drop one somewhere near the top-right quadrant
+                pos = { x: SS.width * 0.82, y: SS.height * 0.18 };
+            }
+
+            // ---- Word selection (robust) ----
+            const word = pickWord(scene); // now guaranteed non-empty string
+
             addGerm(scene, pos, word);
 
             // ensure there is an active target
             if (!scene.typing?.activeId) typing.pickNearest(scene);
         },
+
     };
 
     // ---------------- movement ----------------

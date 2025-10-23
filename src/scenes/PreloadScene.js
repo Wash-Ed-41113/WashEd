@@ -36,19 +36,49 @@ export default class PreloadScene extends Phaser.Scene {
     }
 
     create() {
-        const wordsData = this.cache.json.get("WordBank") || {};
-        const all = Array.isArray(wordsData.WordBank) ? wordsData.WordBank : [];
-        CONFIG.words = all;
+        const data = this.cache.json.get("WordBank") || {};
+        const rows = Array.isArray(data.WordBank) ? data.WordBank : [];
 
+        // Flat lists for Clean Catch
+        const goodFlat = rows.filter(r => r.type === "Good").map(r => r.word);
+        const badFlat  = rows.filter(r => r.type === "Bad").map(r => r.word);
+        CONFIG.cleanCatch.words = { good: goodFlat, bad: badFlat };
 
-        const good = all.filter(w => w.type === "Good").map(w => w.word);
-        const bad  = all.filter(w => w.type === "Bad").map(w => w.word);
+        // Group good words by difficulty for Soap Splash
+        const byDiff = { 1: [], 2: [], 3: [] };
+        for (const r of rows) {
+            if (r.type === "Good") {
+                const d = (Number(r.difficulty) || 1);
+                (byDiff[d] ?? byDiff[1]).push(r.word);
+            }
+        }
 
-        CONFIG.soapSplash.words = good;
-        CONFIG.cleanCatch.words = { good, bad };
+        // Make it available to scenes
+        CONFIG.soapSplash.wordsByDifficulty = byDiff;
+
+        // Non-repeating deck per level
+        const decks = { 1: [], 2: [], 3: [] };
+        const refill = (lvl) => {
+            const pool = (byDiff[lvl] || []).slice();
+            // Phaser shuffle if available; otherwise fallback
+            decks[lvl] = (window.Phaser?.Utils?.Array?.Shuffle)
+                ? Phaser.Utils.Array.Shuffle(pool)
+                : pool.sort(() => Math.random() - 0.5);
+        };
+
+        // Install strict supplier used by systems.soapsplash.pickWord(...)
+        CONFIG.soapSplash.nextWordFn = () => {
+            const lvl = CONFIG.soapSplash.activeDifficulty || 1;
+            if (!decks[lvl] || decks[lvl].length === 0) refill(lvl);
+            return decks[lvl].pop() || "wash";
+        };
+
+        // (Optional) legacy fallback list so helpers.words.soapSplashWords() still returns something
+        CONFIG.soapSplash.words = byDiff[1].concat(byDiff[2], byDiff[3]);
 
         this.scene.start("MenuScene");
     }
+
 
 
 
