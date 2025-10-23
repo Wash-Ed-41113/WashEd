@@ -1170,6 +1170,13 @@ const cleancatcher = {
         difficulty = String(difficulty).toLowerCase();
         const CC = CONFIG.cleanCatch;
         const ctx = canvas.getContext("2d");
+        //toast system for dialogue
+        let activeToasts = [];
+        const kikoCheer = new Image();
+        kikoCheer.src = CONFIG.assets.kiko?.cheer || "assets/images/Kiko/WashEd_kiko_sprite_cheer.png";
+        const kikoSad = new Image();
+        kikoSad.src = CONFIG.assets.kiko?.sad || "assets/images/Kiko/WashEd_kiko_sprite_sad.png";
+
         ctx.imageSmoothingEnabled = true;
 
         // set canvas resolution to the game size so drawing is crisp
@@ -1230,6 +1237,17 @@ const cleancatcher = {
             "Yikes, dirty water!",
             "Watch out for those germs!"
         ];
+
+        // --- Kiko Toast Builder ---
+        function makeToast(mood, text, ttl = 1800) {
+            activeToasts.push({
+                mood,
+                text,
+                createdAt: performance.now(),
+                ttl
+            });
+        }
+
 
         // current message to display and timer
         let currentMessage = "";       // the text to show
@@ -1445,27 +1463,51 @@ const cleancatcher = {
             ctx.textAlign = "center";
             ctx.fillText(timerText, canvas.width / 2, 105);
 
-            // message display (dialogues) animated pop up effect
-            if (messageTimer > 0 && currentMessage) {
-                const progress = messageTimer / messageDuration; // 1 → 0 as it fades
-                const popupScale = 1 + 0.2 * Math.sin(progress * Math.PI); // pop effect
-                const yOffset = 140 + (1 - progress) * 10; // move slightly upward as it fades
+            //NEW bottom-right toast dialogue
+            for (let i = activeToasts.length - 1; i >= 0; i--) {
+                const t = activeToasts[i];
+                const age = performance.now() - t.createdAt;
+                const p = age / t.ttl;
+
+                if (p >= 1) {
+                    activeToasts.splice(i, 1);
+                    continue;
+                }
+
+                const alpha = p < 0.1 ? p / 0.1 : (p > 0.9 ? (1 - p) / 0.1 : 1);
+                const bounce = 1 + 0.05 * Math.sin(p * Math.PI);
+                const x = canvas.width - 100;
+                const y = canvas.height - 100 - i * 160;
 
                 ctx.save();
-                ctx.translate(canvas.width - 80, canvas.height - yOffset);
-                ctx.scale(popupScale, popupScale);
+                ctx.globalAlpha = alpha;
+                ctx.scale(bounce, bounce);
 
-                ctx.font = "65px Chewy";
-                ctx.fillStyle = "black";
+                // Kiko sprite — ~0.23 scale equivalent (~250–280 px tall)
+                const img = t.mood === "sad" ? kikoSad : kikoCheer;
+                if (img && img.complete && img.naturalWidth > 0) {
+                    const baseH = 280;                       // target visual height
+                    const aspect = img.naturalWidth / img.naturalHeight;
+                    const baseW = baseH * aspect;
+                    ctx.drawImage(img, x - baseW, y - baseH + 30, baseW, baseH);
+                }
+
+                // Text (Chewy, white with black stroke, right-aligned)
+                ctx.font = "44px Chewy";
                 ctx.textAlign = "right";
-                ctx.shadowColor = "white";
-                ctx.shadowBlur = 10;
-
-                ctx.fillText(currentMessage, 0, 0);
+                ctx.lineWidth = 6;
+                ctx.strokeStyle = "#000000";
+                ctx.fillStyle = "#ffffff";
+                ctx.shadowColor = "#00000099";
+                ctx.shadowBlur = 8;
+                ctx.strokeText(t.text, x - 80, y + 15);
+                ctx.fillText(t.text, x - 80, y + 15);
 
                 ctx.restore();
-                messageTimer--;
             }
+
+
+
         }
 
 
@@ -1484,22 +1526,18 @@ const cleancatcher = {
                     if (item.type === "good") {
                         score += 10;
                         goodCatchCount++;
-
-                        // Play good catch sound
                         if (catchGoodSound) catchGoodSound.play();
 
-                        // Only show a message every 3 good catches
                         if (goodCatchCount % 3 === 0) {
-                            currentMessage = helpers.words.pick(goodMessages);
-                            messageTimer = messageDuration;
+                            makeToast("happy", helpers.words.pick(goodMessages)); // 👈 new toast
                         }
                     } else {
                         lives -= 1;
-                        if (catchBadSound) catchBadSound.play(); // 🔊 germ caught
-                        currentMessage = helpers.words.pick(badMessages);
-                        messageTimer = messageDuration;
+                        if (catchBadSound) catchBadSound.play();
+                        makeToast("sad", helpers.words.pick(badMessages)); // 👈 new toast
                         if (lives <= 0) gameOver = true;
                     }
+
 
                     // remove the item from the array
                     items.splice(i, 1);
