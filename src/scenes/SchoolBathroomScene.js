@@ -24,6 +24,9 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         this.nextSceneKey = null;
         this._dialogRoot = null;
         this._step1Done = false;
+
+        // holders for glow controls
+        this._hints = { tap: null, soapBar: null, soapBottle: null };
     }
 
     preload() {
@@ -121,16 +124,25 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
         makeHover(tap); makeHover(soapBar); makeHover(soapBottle);
 
+        // --------- Hints: glow guidance ----------
+        if (!this._step1Done) {
+            this._enableStep1Hints(tap); // blue glow on tap
+        } else {
+            this._enableStep2Hints(soapBar, soapBottle); // green glow on soaps
+        }
+
         // Click routing (blocked until dialog closes)
         // TAP is the FIRST correct step
-        // TAP handler ADD EXPLAIN SCENE HERE
         tap.on("pointerdown", onlyIfNoDialog(() => {
             if (!this._step1Done) {
                 // First time: Tap is correct → show success dialog, then start CleanCatch
                 this._step1Done = true;
 
+                // switch hints from tap → soaps immediately
+                this._enableStep2Hints(soapBar, soapBottle);
+
                 this._showCorrectDialog(
-                    "Good job! That’s the correct way to wash your hands. Now, let’s play Soap Splasher!",
+                    "Good job! That’s the correct way to wash your hands. \n\n Now, let’s play Soap Splasher!",
                     () => {
                         this._fadeTo("CleanCatchExplain");
                     }, 3000
@@ -144,32 +156,33 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             );
         }));
 
-
         // SOAP is WRONG if tap not done yet
         const handleSoapClick = onlyIfNoDialog(() => {
             if (!this._step1Done) {
-                // Wrong! Just show feedback (console for now)
-                this._showSmallDialog("Oops, that’s not the first step.\nLet's try again!\nRemember: we always start at the beginning.\nYou can do it!");  // (Later we will show a dialog instead of console.log)
+                // Wrong step — keep hint on tap
+                this._enableStep1Hints(tap);
+                this._showSmallDialog("Oops, that’s not the first step.\nLet's try again!\n\nRemember: we always start at the beginning.\nYou can do it!");
                 return;
             }
 
-            // Show success dialog then start SoapSplash
+            // Correct after step 1 — soaps are right
             this._showCorrectDialog(
-                "That's right! Scrubbing our hands together is how we chase away all the germs. " +
-                "\nLet's start scrubbing and make those hands sparkle clean!",
+                "That's right! Scrubbing our hands together is how we chase away all the germs. \n\n Let's start scrubbing and make those hands sparkle clean!",
                 () => {
+                    // turning off hints is optional here; next scene is starting anyway
+                    this._clearHints();
                     this._fadeTo("SoapSplash");
                 }
             );
-
         });
 
         soapBar.on("pointerdown", handleSoapClick);
         soapBottle.on("pointerdown", handleSoapClick);
 
-
         // Single fadeout handler — goes only where you clicked
         this.cameras.main.once("camerafadeoutcomplete", () => {
+            // cleanup hints when leaving
+            this._clearHints();
             if (this.nextSceneKey) {
                 this.scene.start(this.nextSceneKey);
             } else {
@@ -180,6 +193,10 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         if (!skipIntro) {
             this._showEntryDialog();
         }
+
+        // Also clean up hints on shutdown
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this._clearHints());
+        this.events.once(Phaser.Scenes.Events.DESTROY, () => this._clearHints());
     }
 
     _fadeTo(sceneKey) {
@@ -212,13 +229,13 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
         this._dialogRoot.add(
             this.add.text(panel.x, panel.y - panelH * 0.25, "Let's Wash!", {
-                fontFamily: "Chewy", fontSize: "42px", color: "#000000"
+                fontFamily: CONFIG.ui.fontFamily, fontSize: "42px", color: "#000000"
             }).setOrigin(0.5)
         );
 
         this._dialogRoot.add(
-            this.add.text(panel.x, panel.y, "We're here in the bathroom and it’s time to wash our hands! What should I do first?\nCan you help me choose? Click on the best choice!", {
-                fontFamily: "Montserrat", fontSize: "24px", color: "#2a4155", align: "center"
+            this.add.text(panel.x, panel.y, "We're here in the bathroom and it’s time to wash our hands!\n\nWhat should I do first? Can you help me choose?\n\nClick on the best choice!", {
+                fontFamily: CONFIG.ui.fontFamily, fontSize: "34px", color: "#2a4155", align: "center"
             }).setOrigin(0.5)
         );
 
@@ -244,17 +261,13 @@ export default class SchoolBathroomScene extends Phaser.Scene {
     }
 
     _showSmallDialog(message, duration = 5000) {
-
         const onlyIfNoDialog = (fn) => () => {
-            // Allow correct dialog to appear even if a previous dialog is open
             if (this._dialogRoot) {
-                // Destroy the old dialog immediately to allow new action
                 this._dialogRoot.destroy(true);
                 this._dialogRoot = null;
             }
             fn();
         };
-
 
         const { width, height } = this.scale;
 
@@ -263,20 +276,20 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
         // Very light overlay to catch clicks
         const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.001)
-            .setOrigin(0, 0)
+            .setOrigin(0, 0);
         this._dialogRoot.add(overlay);
 
         // Balloon image
         const balloon = this.add.image(width / 2 + 180, height * 0.15, DIALOG_BALLOON_KEY)
             .setOrigin(0.5);
         const scale = Math.min((width * 0.6) / balloon.width, (height * 0.2) / balloon.height);
-        balloon.setScale(scale);
+        balloon.setScale(scale * 1.5);
         this._dialogRoot.add(balloon);
 
         // Text
         const text = this.add.text(balloon.x, balloon.y - 15, message, {
-            fontFamily: "Montserrat",
-            fontSize: "22px",
+            fontFamily: CONFIG.ui.fontFamily,
+            fontSize: "25px",
             color: "#000000",
             align: "center",
             wordWrap: { width: balloon.displayWidth * 0.8 }
@@ -291,17 +304,13 @@ export default class SchoolBathroomScene extends Phaser.Scene {
     }
 
     _showCorrectDialog(message, onDone, duration = 5000) {
-
         const onlyIfNoDialog = (fn) => () => {
-            // Allow correct dialog to appear even if a previous dialog is open
             if (this._dialogRoot) {
-                // Destroy the old dialog immediately to allow new action
                 this._dialogRoot.destroy(true);
                 this._dialogRoot = null;
             }
             fn();
         };
-
 
         const { width, height } = this.scale;
 
@@ -315,12 +324,12 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         const balloon = this.add.image(width / 2 + 180, height * 0.15, DIALOG_BALLOON_KEY)
             .setOrigin(0.5);
         const scale = Math.min((width * 0.6) / balloon.width, (height * 0.2) / balloon.height);
-        balloon.setScale(scale);
+        balloon.setScale(scale * 1.5);
         this._dialogRoot.add(balloon);
 
         const text = this.add.text(balloon.x, balloon.y - 15, message, {
-            fontFamily: "Montserrat",
-            fontSize: "22px",
+            fontFamily: CONFIG.ui.fontFamily,
+            fontSize: "25px",
             color: "#000000",
             align: "center",
             wordWrap: { width: balloon.displayWidth * 0.8 }
@@ -333,5 +342,87 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             this._dialogRoot = null;
             if (onDone) onDone();
         });
+    }
+
+    // ---------------- Glow helpers & hint control ----------------
+
+    /** Create a subtle pulsing glow around an image.
+     *  Prefers postFX glow; falls back to an additive aura.
+     *  Returns { stop() } which cleans up the effect.
+     */
+    _makeGlow(target, {
+        color = 0xffffff,
+        alpha = 0.35,
+        scale = 1,
+        pulseMs = 1600
+    } = {}) {
+        if (!target) return { stop() {} };
+
+        // Prefer Phaser postFX glow if available
+        if (target.postFX && typeof target.postFX.addGlow === "function") {
+            const g = target.postFX.addGlow(color, 6, 1, false);
+            const tw = this.tweens.add({
+                targets: g,
+                outerStrength: { from: 4.5, to: 8.0 },
+                duration: pulseMs,
+                ease: "Sine.inOut",
+                yoyo: true,
+                repeat: -1
+            });
+            return {
+                stop: () => { try { tw?.stop(); target.postFX.remove(g); } catch(e) {} }
+            };
+        }
+
+        // Fallback: additive duplicate “aura”
+        const aura = this.add.image(target.x, target.y, target.texture.key, target.frame?.name)
+            .setDepth((target.depth ?? 0) - 1)
+            .setBlendMode(Phaser.BlendModes.ADD)
+            .setTint(color)
+            .setAlpha(alpha)
+            .setScale(target.scaleX * scale, target.scaleY * scale)
+            .setOrigin(target.originX, target.originY);
+
+        const sync = () => {
+            aura.x = target.x; aura.y = target.y;
+            aura.scaleX = target.scaleX * scale;
+            aura.scaleY = target.scaleY * scale;
+            aura.setDepth((target.depth ?? 0) - 1);
+        };
+        target.on("destroy", () => aura.destroy());
+
+        const tw = this.tweens.add({
+            targets: aura,
+            alpha: { from: alpha * 0.7, to: alpha },
+            duration: pulseMs,
+            ease: "Sine.inOut",
+            yoyo: true,
+            repeat: -1,
+            onUpdate: sync
+        });
+
+        return {
+            stop: () => { try { tw?.stop(); aura.destroy(); } catch(e) {} }
+        };
+    }
+
+    _clearHints() {
+        try { this._hints?.tap?.stop?.(); } catch(e) {}
+        try { this._hints?.soapBar?.stop?.(); } catch(e) {}
+        try { this._hints?.soapBottle?.stop?.(); } catch(e) {}
+        this._hints = { tap: null, soapBar: null, soapBottle: null };
+    }
+
+    _enableStep1Hints(tapImg) {
+        this._clearHints();
+        this._hints.tap = this._makeGlow(tapImg, { color: 0xffffff, alpha: 0.35, scale: 1, pulseMs: 1600 });
+
+    }
+
+    _enableStep2Hints(soapBarImg, soapBottleImg) {
+        this._clearHints();
+        this._hints.soapBar    = this._makeGlow(soapBarImg,    { color: 0xffffff, alpha: 0.35, scale: 1 });
+        this._hints.soapBottle = this._makeGlow(soapBottleImg, { color: 0xffffff, alpha: 0.35, scale: 1 });
+
     }
 }

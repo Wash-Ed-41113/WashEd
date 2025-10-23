@@ -1,4 +1,3 @@
-// src/scenes/CleanCatchExplain.js
 import systems from "../systems.js";
 
 export default class CleanCatchExplain extends Phaser.Scene {

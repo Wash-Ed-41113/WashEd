@@ -12,6 +12,7 @@ window.CONFIG = {
     ui: {
         fontFamily: "Montserrat",        // default font for text
         titleFontSize: 230,         // large font size for title text
+        typeSpeedMs: 120,
 
         button: {
             width: 300,             // button rectangle width
@@ -51,7 +52,7 @@ window.CONFIG = {
         kiko: {
             base: "assets/images/Kiko/WashEd_kiko_sprite_base.png",
             cheer: "assets/images/Kiko/WashEd_kiko_sprite_thumbs-up.png",
-            jump: "assets/images/Kiko/WashEd_kiko_sprite_jump.png",
+            jump: "assets/images/Kiko/WashEd_kiko_sprite_side-jump.png",
             sad: "assets/images/Kiko/WashEd_kiko_sprite_sad.png",
         },
         backgrounds: {
@@ -127,9 +128,6 @@ window.CONFIG = {
         spawnJitterMs: 350, // random spawn variation
         waveCap: 5,         // max germs per wave
 
-        minSpawnSeparationPx: 120,
-        minSinkDistancePx: 180,
-
         germBaseSpeed: 50,
         germSpeedRand: 20,
         germHitRadiusPx: 50,
@@ -157,10 +155,13 @@ window.CONFIG = {
         gameDurationTextHud: "01:00",
         reason: "Time up",
 
-        useSpawner: true,
-        cornerMargin: 120,
-        cornerBandWidth: 240,
-        angleSpreadDeg: 42,
+
+        useSpawner: true,          // <- must be true
+        cornerMargin: 40,          // distance from the corner to start the band
+        cornerBandWidth: 140,      // thickness of the band
+        angleSpreadDeg: 10,        // narrow cone aimed at the top-right (0..90°)
+        minSpawnSeparationPx: 32,  // avoid overlaps
+        minSinkDistancePx: 220,
 
         // debug options to show circles for sink and germs
         debug: {

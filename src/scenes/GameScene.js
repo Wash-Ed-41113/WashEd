@@ -80,6 +80,12 @@ export default class GameScene extends Phaser.Scene {
             "Select your difficulty!",
         ];
 
+        // --- typewriter tuning ---
+        const TYPE_BASE_MS   = 9000;  // ↑ higher = slower (try 120–160)
+        const PUNCT_PAUSE_MS = { ",": 140, ".": 280, "!": 280, "?": 280, "…": 320, ";": 160, ":": 160 };
+
+
+
         // typing state holds timer current index and flags
         this._typing = { timer: null, msgIndex: 0, isRunning: false, currentFull: "" };
 
@@ -90,42 +96,58 @@ export default class GameScene extends Phaser.Scene {
         };
 
         // starts typewriter animation for a given message
-        const startTyping = (msg, speed = 50) => {
+        // starts typewriter animation for a given message with punctuation-aware pauses
+        const startTyping = (msg) => {
             // clear previous timer if any
             if (this._typing.timer) {
                 this._typing.timer.remove(false);
                 this._typing.timer = null;
             }
-            // reset visible text and set running flag
+
             greetText.setText("");
             this._typing.isRunning = true;
             this._typing.currentFull = msg;
 
-            // add one character each tick until complete
+            // optional: show a soft blink cursor while typing
+            let cursor = this.add.text(greetText.x + greetText.displayWidth / 2 + 6, greetText.y, "│", {
+                fontFamily: greetText.style.fontFamily,
+                fontSize: greetText.style.fontSize,
+                color: "#000000",
+            }).setOrigin(0, 0.5).setDepth(greetText.depth + 1);
+            const cursorTw = this.tweens.add({ targets: cursor, alpha: { from: 1, to: 0.25 }, duration: 450, yoyo: true, repeat: -1 });
+
             let i = 0;
-            this._typing.timer = this.time.addEvent({
-                delay: speed,
-                repeat: msg.length - 1,
-                callback: () => {
-                    greetText.text += msg[i];
-                    i++;
-                    if (i >= msg.length) {
-                        this._typing.isRunning = false;
-                        this._typing.timer = null;
-                        updateNextLabel();
-                    }
-                },
-            });
 
-            // inside create(), after you create nextBtn/nextLabel and define startTyping(...)
+            const step = () => {
+                const ch = msg[i];
+                greetText.text += ch;
+                i++;
 
+                // keep cursor hugging the end of the text
+                cursor.setPosition(greetText.getTopRight().x + 6, greetText.y);
 
-// bind keys with .on once here
-            this.input.keyboard.on("keydown-SPACE", onNext);
-            this.input.keyboard.on("keydown-ENTER", onNext);
+                if (i >= msg.length) {
+                    // done
+                    this._typing.isRunning = false;
+                    this._typing.timer = null;
+                    cursorTw?.stop(); cursor.destroy();
+                    updateNextLabel();
+                    return;
+                }
 
+                // compute next delay = base + pause on current/next punctuation
+                const nextCh = msg[i] ?? "";
+                const pause  = Math.max(PUNCT_PAUSE_MS[ch] ?? 0, PUNCT_PAUSE_MS[nextCh] ?? 0);
+                const delay  = TYPE_BASE_MS + pause;
+
+                this._typing.timer = this.time.delayedCall(delay, step);
+            };
+
+            // kick off first tick
+            this._typing.timer = this.time.delayedCall(TYPE_BASE_MS, step);
             updateNextLabel();
         };
+
 
         // draw rectangular next button at bubble corner
         const nextBtn = this.add
@@ -381,9 +403,9 @@ export default class GameScene extends Phaser.Scene {
 
             // build three mode buttons with equal spacing
             const GAP = 86;
-            makeBtn("Play Soap Splash",  -GAP, () => go("SoapSplash"));
-            makeBtn("Play Clean Catch", 0, () =>  go("CleanCatchExplain", { difficulty: "hard" }));
-            makeBtn("Explore Playground",  GAP, () => go("PlaygroundScene"));
+            // makeBtn("Play Soap Splash",  -GAP, () => go("SoapSplash"));
+            // makeBtn("Play Clean Catch", 0, () =>  go("CleanCatchExplain", { difficulty: "hard" }));
+            // makeBtn("Explore Playground",  GAP, () => go("PlaygroundScene"));
 
             // animate panel open then fade in the content
             this.tweens.add({

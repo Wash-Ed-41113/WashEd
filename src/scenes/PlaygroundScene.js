@@ -184,6 +184,11 @@ export default class PlaygroundScene extends Phaser.Scene {
         const name = (this.registry.get("playerName") || "friend");
         this.speech.say(`Hello, ${name}! My name is Kiko.\nLook! Let's make sandcastle!\nTap the sand!`);
 
+        // --- typewriter tuning ---
+        const TYPE_BASE_MS   = (CONFIG?.ui?.typeSpeedMs ?? 85);   // default 85 ms/char (raise to slow more)
+        const PUNCT_PAUSE_MS = { ",": 140, ".": 280, "!": 280, "?": 280, "…": 320, ";": 160, ":": 160 };
+
+
 
         // Build handler
         const buildNext = () => {

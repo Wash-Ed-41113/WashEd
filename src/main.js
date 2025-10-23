@@ -1,9 +1,8 @@
 // entry point for the game
 // loads global CONFIG and shared SYSTEMS modules first so scenes can read them
+// import all scenes used by the game flow
 import "./config.js";
 import "./systems.js";
-
-// import all scenes used by the game flow
 import PreloadScene from "./scenes/PreloadScene.js";
 import MenuScene from "./scenes/MenuScene.js";
 import GameScene from "./scenes/GameScene.js";
@@ -12,14 +11,16 @@ import SoapSplashScene from "./scenes/SoapSplashScene.js";
 import CleanCatchScene from "./scenes/CleanCatchScene.js";
 import SoapSplashExplain from "./scenes/SoapSplashExplain.js";
 import CleanCatchExplain from "./scenes/CleanCatchExplain.js";
+import SchoolBathroomScene from "./scenes/SchoolBathroomScene.js";
+import EndingScene from "./scenes/EndingScene.js";
+import HandwashAnimationScene from "./scenes/HandwashAnimationScene.js";
+
+
+
 
 
 import { DB } from "./db.js";
 DB.init();
-
-
-import SchoolBathroomScene from "./scenes/SchoolBathroomScene.js";
-import EndingScene from "./scenes/EndingScene.js";
 
 
 
@@ -64,6 +65,7 @@ const config = {
         SoapSplashScene,
         CleanCatchExplain,
         CleanCatchScene,
+        HandwashAnimationScene,
         SchoolBathroomScene,
         EndingScene
     ],

@@ -2,6 +2,10 @@
 /* global Phaser, CONFIG */
 
 // Use the same target fractions for both dialogs
+
+import { DB } from "../db.js";
+
+
 const DLG = { W_FRAC: 0.80, H_FRAC: 0.60 }; // 80% of viewport width, 60% of height
 const UI_FONT_FALLBACK = "Montserrat, Arial, sans-serif";
 

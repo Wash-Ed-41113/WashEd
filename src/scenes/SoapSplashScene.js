@@ -44,13 +44,24 @@ export default class SoapSplashScene extends Phaser.Scene {
         // kiko toasts trackers
         this._lastSadAtBreaches = 0;
         this._lastEncouragementAt = 0;
+
+        // countdown (visual only, 100 → 0)
+        this._countdownMsTotal = 100 * 1000;
+        this._countdownMsLeft  = this._countdownMsTotal;
+        this._lastShownSec     = 101;
+        this._urgentPulsing    = false;
+        this.countdownText     = null;
     }
 
+    // pause must freeze timers/tweens and bg video
     togglePause() {
         if (this._paused) {
             this._paused = false;
             this._pauseUi?.destroy();
             this._pauseUi = null;
+            this.time.timeScale = 1;
+            this.tweens.timeScale = 1;
+            this.bgVideo?.resume();
         } else {
             this._paused = true;
             this._pauseUi = systems.ui.pauseOverlay(this, {
@@ -61,6 +72,9 @@ export default class SoapSplashScene extends Phaser.Scene {
                     this.scene.start("GameScene", { playerName });
                 }
             });
+            this.time.timeScale = 0;
+            this.tweens.timeScale = 0;
+            this.bgVideo?.pause();
         }
     }
 
@@ -89,7 +103,6 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         // game sprites
         this.load.image("Germ", CONFIG.assets.soapSplash.germ);
-
         this.load.image(
             "ss_end_bg",
             "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_01_germ-catcher_HIT-zero.png"
@@ -152,6 +165,9 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
         SS.spawnIntervalMs = SS.spawnEveryMs;
 
+        // (optional) align underlying systems timer to 100s
+        if (SS) SS.timerMs = 100000;
+
         // audio
         const savedMute = this.registry.get("mute") === true;
         if (this.sound) this.sound.mute = savedMute;
@@ -184,7 +200,6 @@ export default class SoapSplashScene extends Phaser.Scene {
             const W = SS.width, H = SS.height;
             const key = "SS_BG_VIDEO";
 
-            // Videos live in this.cache.video, not this.textures
             if (this.cache.video.exists(key)) {
                 const targetW = W * 0.18;
 
@@ -194,14 +209,12 @@ export default class SoapSplashScene extends Phaser.Scene {
                     .setLoop(true)
                     .setMute(true);
 
-                // Play the video (muted → autoplay works)
                 this.bgVideo.play(true);
 
-                // Once the video has dimensions, rescale it properly
                 const setScale = () => {
                     const vw = this.bgVideo.video?.videoWidth || 640;
                     const scale = targetW / vw;
-                    this.bgVideo.setScale(scale);
+                    this.bgVideo.setScale(scale * 1.5);
                 };
 
                 if (this.bgVideo.video?.readyState >= 2) setScale();
@@ -213,7 +226,6 @@ export default class SoapSplashScene extends Phaser.Scene {
                 console.warn("[SoapSplash] SS_BG_VIDEO not found in cache.video");
             }
         }
-
 
         // corner-ring spawner geometry (for systems.soapsplash.spawn)
         if (SS.useSpawner) {
@@ -243,7 +255,7 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         // DB round
         const difficulty = this.registry.get("difficulty") || "normal";
-        this.roundId = DB.beginRound(window.__SESSION_ID__, "SoapSplash", String(difficulty));
+        this.roundId = DB.beginRound(window.__SESSION_ID__, "SoapSplasher", String(difficulty));
 
         // topbar
         this.topbar = systems.ui.topbar(this, {
@@ -255,22 +267,27 @@ export default class SoapSplashScene extends Phaser.Scene {
             onPause: () => this.togglePause(),
         });
 
-        // timer + typing will be initialized after Explain screen resumes us
+        // hide generic systems timer text if exposed (non-breaking attempts)
+        this.topbar?.timerText?.setVisible(false);
+        this.topbar?.setTimerVisible?.(false);
+
+        // build our Chewy countdown HUD (visual only, 100 → 0)
+        this._buildCountdownHUD();
+
+        // typing + original systems timer start after Explain overlay resumes
         this.events.once(Phaser.Scenes.Events.RESUME, () => {
-            systems.soapsplash.timer.init(this);
+            systems.soapsplash.timer.init(this); // ← keep old system
             this.gameStartAt = this.time.now;
             systems.soapsplash.typing.init(this);
         });
 
         // launch explain overlay then pause ourselves
         console.log("[SoapSplash] launching Explain overlay");
-        if (this.scene.getIndex("SoapSplashExplain") !== -1) {
+        this.time.delayedCall(800, () => {
             this.scene.launch("SoapSplashExplain", { parentKey: "SoapSplash" });
-            this.scene.bringToTop("SoapSplashExplain"); // <-- ensures Explain is visible
-            this.scene.pause("SoapSplash");             // <-- explicitly name it
-        }
-
-
+            this.scene.bringToTop("SoapSplashExplain");
+            this.scene.pause("SoapSplash");
+        });
 
         // background stage swapper
         this.setSoapSplashBackground = (breaches) => {
@@ -278,9 +295,6 @@ export default class SoapSplashScene extends Phaser.Scene {
             const k = this._bgKeys[i] || this._bgKeys[0];
             if (k && this.bgSprite.setTexture) this.bgSprite.setTexture(k);
         };
-
-        // optional blur effect support
-        this.initSpotBlur?.();
 
         // finalize on shutdown
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -291,162 +305,265 @@ export default class SoapSplashScene extends Phaser.Scene {
     finalizeRound(reason = "Time up", overrides = {}) {
         if (this.gameOver) return;
         this.gameOver = true;
-        if (!this.roundId) return;
 
-        DB.finalizeRound(this.roundId, {
-            score: overrides.score ?? this.streakSys?.totalScore ?? this.typing?.score ?? 0,
-            bestStreak: overrides.bestStreak ?? this.streakSys?.bestStreak ?? this.typing?.bestStreak ?? 0,
-            breaches: overrides.breaches ?? this.breaches ?? 0,
-            baseScore: overrides.baseScore ?? this.streakSys?.baseScore ?? 0,
-            multiplier: overrides.multiplier ?? (this.streakSys?.multiplier?.() || 0),
-            reason,
-        });
+        if (this.roundId) {
+            DB.finalizeRound(this.roundId, {
+                score: overrides.score ?? this.streakSys?.totalScore ?? this.typing?.score ?? 0,
+                bestStreak: overrides.bestStreak ?? this.streakSys?.bestStreak ?? this.typing?.bestStreak ?? 0,
+                breaches: overrides.breaches ?? this.breaches ?? 0,
+                baseScore: overrides.baseScore ?? this.streakSys?.baseScore ?? 0,
+                multiplier: overrides.multiplier ?? (this.streakSys?.multiplier?.() || 0),
+                reason,
+            });
+        }
+        // NOTE: we do NOT force any scene transition here.
+        // Your original systems flow should already handle Game Over screen navigation.
     }
 
-    // ---- encouragement toast (bottom-right) ----
-    showKikoEncouragement(messageOverride = null) {
+    // ─────────────────────────────────────────────
+    // Toast builder (bottom-right, minimal, Chewy font)
+    // ─────────────────────────────────────────────
+    _makeToast({ mood = "happy", text, ttl = 1800 }) {
         const { width: W, height: H } = this.scale;
 
-        if (this._encourageGroup) {
-            const kids = this._encourageGroup.list || [];
-            this.tweens.add({
-                targets: kids, alpha: 0, y: '+=16', duration: 100,
-                onComplete: () => this._encourageGroup?.destroy(true)
-            });
-            this._encourageGroup = null;
+        if (!this._toastStack) this._toastStack = [];
+        const margin = 22;
+
+        const g = this.add.container(0, 0).setDepth(600);
+
+        // choose sprite based on mood
+        let spriteKey = null;
+        if (mood === "sad") {
+            if (this.textures.exists("KikoSad")) spriteKey = "KikoSad";
+            else if (this.textures.exists("KikoJump")) spriteKey = "KikoJump";
+            else if (this.textures.exists("KikoCheer")) spriteKey = "KikoCheer";
+        } else {
+            if (this.textures.exists("KikoCheer")) spriteKey = "KikoCheer";
+            else if (this.textures.exists("KikoJump")) spriteKey = "KikoJump";
+            else if (this.textures.exists("KikoSad"))  spriteKey = "KikoSad";
         }
 
-        const messages = [
-            "Keep going!",
-            "Good job!",
-            "Keep up with the scrubbing! Bye bye, Germs!",
-            "Awesome typing — you’re winning!"
-        ];
-        const msg = messageOverride || messages[Math.floor(Math.random() * messages.length)];
-
-        const g = this.add.container(0, 0).setDepth(500);
-        this._encourageGroup = g;
-
-        const text = this.add.text(0, 0, msg, {
-            fontFamily: 'Chewy, Arial, sans-serif',
-            fontSize: '42px',
-            color: '#ffffff',
-            align: 'right'
-        }).setOrigin(1, 1).setShadow(0, 3, '#00000090', 6, true, true).setAlpha(0);
-
+        // kiko sprite with subtle glow (white outline feel)
         let kiko = null;
-        let kikoKey = null;
-        if (this.textures.exists("KikoJump")) kikoKey = "KikoJump";
-        else if (this.textures.exists("KikoCheer")) kikoKey = "KikoCheer";
-        if (kikoKey) {
-            kiko = this.add.sprite(0, 0, kikoKey).setOrigin(0, 1).setScale(0.30).setAlpha(0);
+        if (spriteKey) {
+            const glow = this.add.image(0, 0, spriteKey)
+                .setOrigin(1, 1)
+                .setScale(0.23)
+                .setTint(0xffffff)
+                .setAlpha(0.25)
+                .setBlendMode(Phaser.BlendModes.SCREEN);
+            kiko = this.add.image(0, 0, spriteKey)
+                .setOrigin(1, 1)
+                .setScale(0.23)
+                .setTint(0xffffff);
+            g.add(glow);
+            g.add(kiko);
         }
 
-        g.add([text]); if (kiko) g.add(kiko);
+        // text style — Chewy font, no box behind
+        const label = this.add.text(0, 0, text, {
+            fontFamily: "Chewy, Arial, sans-serif",
+            fontSize: "44px",
+            color: "#ffffff",
+            align: "right",
+            wordWrap: { width: Math.min(W * 0.7, 600) }
+        })
+            .setOrigin(1, 1)
+            .setStroke("#000000", 6)
+            .setShadow(0, 3, "#00000090", 6, true, true)
+            .setAlpha(0);
 
-        const margin = 20;
+        g.add(label);
+
+        // layout bottom-right, stack upward if multiple
+        const stackHeight = this._toastStack.reduce((acc, it) => acc + (it.h + 6), 0);
         const baseX = W - margin;
-        const baseY = H - margin;
+        const baseY = H - margin - stackHeight;
 
-        text.setPosition(baseX - (kiko ? 70 : 0), baseY);
-        if (kiko) kiko.setPosition(baseX, baseY - 6);
+        label.setPosition(baseX - (kiko ? 80 : 0), baseY);
+        if (kiko) kiko.setPosition(baseX, baseY - 8);
 
-        const items = kiko ? [text, kiko] : [text];
-        this.tweens.add({ targets: items, y: '-=12', alpha: 1, duration: 200, ease: 'Back.Out' });
+        // animation (fade & float)
+        const items = kiko ? [label, kiko] : [label];
+        items.forEach(t => t.setY(t.y + 14));
+        this.tweens.add({
+            targets: items,
+            y: "-=14",
+            alpha: 1,
+            duration: 220,
+            ease: "Back.Out"
+        });
+
         if (kiko) {
-            this.tweens.add({ targets: kiko, y: '-=6', duration: 500, yoyo: true, repeat: 1, ease: 'Sine.inOut' });
+            this.tweens.add({
+                targets: kiko,
+                y: "-=6",
+                duration: 420,
+                yoyo: true,
+                repeat: (mood === "sad" ? 1 : 2),
+                ease: "Sine.inOut"
+            });
+            this.tweens.add({
+                targets: kiko,
+                angle: mood === "sad" ? -3 : 3,
+                duration: 360,
+                yoyo: true,
+                repeat: 1,
+                ease: "Sine.inOut"
+            });
         }
 
-        this.time.delayedCall(1600, () => {
+        // push to stack
+        const itemH = Math.round(label.height + (kiko ? kiko.displayHeight * 0.3 : 20));
+        const stackItem = { g, h: itemH };
+        this._toastStack.push(stackItem);
+
+        // fade out later
+        this.time.delayedCall(ttl, () => {
             this.tweens.add({
-                targets: items, y: '+=12', alpha: 0, duration: 250, ease: 'Cubic.In',
+                targets: items,
+                y: "+=12",
+                alpha: 0,
+                duration: 250,
+                ease: "Cubic.In",
                 onComplete: () => {
                     g.destroy(true);
-                    if (this._encourageGroup === g) this._encourageGroup = null;
+                    const idx = this._toastStack.indexOf(stackItem);
+                    if (idx >= 0) this._toastStack.splice(idx, 1);
                 }
             });
         });
+
+        return g;
     }
 
-    // ---- sad toast (bottom-left) ----
+    // ---- HAPPY (Encouragement)
+    showKikoEncouragement(messageOverride = null) {
+        if (this._encourageGroup) this._encourageGroup.destroy(true);
+
+        const LINES = [
+            "Keep going!",
+            "Awesome typing — you’re winning!",
+            "Keep up the scrubbing!",
+            "Nice streak — stay focused!"
+        ];
+        const msg = messageOverride ?? LINES[Math.floor(Math.random() * LINES.length)];
+
+        this._encourageGroup = this._makeToast({ mood: "happy", text: msg, ttl: 1700 });
+    }
+
+    // ---- SAD (Breach)
     showKikoSad(messageOverride = null) {
         if (this._sadCooldownUntil && this.time.now < this._sadCooldownUntil) return;
         this._sadCooldownUntil = this.time.now + 400;
+        if (this._sadGroup) this._sadGroup.destroy(true);
 
-        const { width: W, height: H } = this.scale;
-
-        if (this._sadGroup) {
-            const kids = this._sadGroup.list || [];
-            this.tweens.add({
-                targets: kids, alpha: 0, y: '+=10', duration: 100,
-                onComplete: () => this._sadGroup?.destroy(true)
-            });
-            this._sadGroup = null;
-        }
-
-        const msgs = [
-            "Stop the germs from spreading!",
-            "Oops, type faster next time!",
-            "Watch out — we need to scrub faster",
-            "Don’t give up, you can still do it!"
+        const LINES = [
+            "Oops! Stop those germs!",
+            "Type faster — you’ve got this!",
+            "Watch out — scrub quicker!",
+            "Don’t give up, try again!"
         ];
-        const msg = messageOverride || msgs[Math.floor(Math.random() * msgs.length)];
+        const msg = messageOverride ?? LINES[Math.floor(Math.random() * LINES.length)];
 
-        const g = this.add.container(0, 0).setDepth(501);
-        this._sadGroup = g;
+        this._sadGroup = this._makeToast({ mood: "sad", text: msg, ttl: 1850 });
+    }
 
-        const text = this.add.text(0, 0, msg, {
-            fontFamily: 'Chewy, Arial, sans-serif',
-            fontSize: '36px',
-            color: '#ffffff',
-            align: 'left',
-            wordWrap: { width: Math.min(560, W * 0.7) }
-        }).setOrigin(0, 1).setShadow(0, 3, '#00000090', 6, true, true).setAlpha(0);
+    // ===== Countdown (100 → 0), Chewy font, urgency under 10 (visual only) =====
+    _buildCountdownHUD() {
+        const { width: W } = this.scale;
+        this._countdownMsTotal = 100 * 1000;
+        this._countdownMsLeft  = this._countdownMsTotal;
+        this._lastShownSec     = 101;
+        this._urgentPulsing    = false;
 
-        let kiko = null;
-        let kikoKey = null;
-        if (this.textures.exists("KikoSad")) kikoKey = "KikoSad";
-        else if (this.textures.exists("KikoJump")) kikoKey = "KikoJump";
-        else if (this.textures.exists("KikoCheer")) kikoKey = "KikoCheer";
-        if (kikoKey) {
-            kiko = this.add.image(0, 0, kikoKey).setOrigin(0, 1).setScale(0.18).setAngle(-4).setAlpha(0).setScrollFactor(0);
-        }
+        // big, centered Chewy text
+        this.countdownText = this.add.text(W / 2, 16, "100", {
+            fontFamily: "Chewy, Arial, sans-serif",
+            fontSize: "64px",
+            color: "#ffffff",
+            align: "center"
+        })
+            .setOrigin(0.5, 0)
+            .setStroke("#000000", 8)
+            .setShadow(0, 4, "#00000099", 8, true, true)
+            .setDepth(1000);
+    }
 
-        g.add(kiko ? [kiko, text] : [text]);
+    _updateCountdown(delta) {
+        if (this._paused || this.gameOver) return;
 
-        const margin = 22;
-        const baseX = margin;
-        const baseY = H - margin;
+        // tick down (visual only) and clamp
+        this._countdownMsLeft = Math.max(0, this._countdownMsLeft - delta);
 
-        if (kiko) { kiko.setPosition(baseX, baseY); text.setPosition(baseX + 140, baseY - 6); }
-        else { text.setPosition(baseX, baseY); }
+        // compute whole seconds (clamped to 0 for display)
+        let secLeft = Math.ceil(this._countdownMsLeft / 1000);
+        if (secLeft < 0) secLeft = 0;
 
-        const items = kiko ? [kiko, text] : [text];
-        items.forEach(it => it.setY(it.y + 14));
-        this.tweens.add({ targets: items, y: '-=14', alpha: 1, duration: 220, ease: 'Back.Out' });
+        if (secLeft !== this._lastShownSec) {
+            this._lastShownSec = secLeft;
+            this.countdownText?.setText(String(secLeft));
 
-        if (kiko) {
-            this.tweens.add({ targets: kiko, y: '-=5', duration: 420, yoyo: true, repeat: 2, ease: 'Sine.inOut' });
-        }
+            if (secLeft <= 10) {
+                // urgent: red, faster pulse, stronger shadow
+                this.countdownText
+                    ?.setColor("#ff3b3b")
+                    .setStroke("#7a0000", 10)
+                    .setShadow(0, 6, "#ff3b3b", 14, true, true);
 
-        this.time.delayedCall(1800, () => {
-            this.tweens.add({
-                targets: items, y: '+=12', alpha: 0, duration: 240, ease: 'Cubic.In',
-                onComplete: () => {
-                    g.destroy(true);
-                    if (this._sadGroup === g) this._sadGroup = null;
+                if (!this._urgentPulsing) {
+                    this._urgentPulsing = true;
+                    this.tweens.add({
+                        targets: this.countdownText,
+                        scaleX: 1.12, scaleY: 1.12,
+                        duration: 110,
+                        yoyo: true,
+                        ease: "Sine.inOut",
+                        onComplete: () => { this._urgentPulsing = false; }
+                    });
                 }
-            });
-        });
+            } else if (secLeft <= 20) {
+                // warning: amber, gentle pulse
+                this.countdownText
+                    ?.setColor("#ffd166")
+                    .setStroke("#5c3b00", 9)
+                    .setShadow(0, 5, "#000000aa", 10, true, true);
+
+                this.tweens.add({
+                    targets: this.countdownText,
+                    scaleX: 1.06, scaleY: 1.06,
+                    duration: 140,
+                    yoyo: true,
+                    ease: "Sine.inOut"
+                });
+            } else {
+                // normal
+                this.countdownText
+                    ?.setColor("#ffffff")
+                    .setStroke("#000000", 8)
+                    .setShadow(0, 4, "#00000099", 8, true, true);
+            }
+        }
+
+        // IMPORTANT: do NOT end the round here.
+        // The original systems timer will handle time-up game over.
     }
 
     // -------------------------------
     // WAVE-BASED UPDATE LOOP (+ toasts)
     // -------------------------------
     update(time, delta) {
+        // ensure an active target exists without needing a keypress
+        if (!this._paused && !this.gameOver && this.germs.length && (!this.typing || !this.typing.activeId)) {
+            systems.soapsplash.typing.pickNearest(this);
+        }
+
         const SS = CONFIG.soapSplash;
         if (this._paused || this.gameOver) return;
         if (this.gameStartAt == null) this.gameStartAt = time;
+
+        // drive our Chewy countdown (visual only)
+        this._updateCountdown(delta);
 
         const base = SS.spawnIntervalMs ?? 1200;
         const jitter = SS.spawnJitterMs ?? 0;
@@ -473,16 +590,15 @@ export default class SoapSplashScene extends Phaser.Scene {
             this._waveActive = false;
         }
 
-        // movement + collisions + HUD
+        // movement + collisions + rules
         systems.soapsplash.movement.moveGerms(this, delta);
         systems.soapsplash.rules.checkBreaches(this);
+
+        // keep original systems HUD update (drives old Game Over logic)
         systems.soapsplash.timer.updateHUD(this, this.time.now);
 
-        // optional blur mask refresh
-        this.redrawSpotBlurMask?.();
-
         // toasts:
-        // 1) Sad once per new breach
+        // 1) Sad once per new breach (old behavior)
         if (this.breaches > this._lastSadAtBreaches) {
             this._lastSadAtBreaches = this.breaches;
             this.showKikoSad();

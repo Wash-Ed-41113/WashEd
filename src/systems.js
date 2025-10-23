@@ -656,11 +656,13 @@ const soapsplash = (() => {
             );
         },
         // update remaining time label every frame from start time
-        updateHUD(scene, now) {
-            if (scene.gameStartAt == null) return;
-            const remaining = Math.max(0, (SS.gameDurationMin * 60 * 1000) - (now - scene.gameStartAt));
-            scene.timerHud.setText(`Time: ${helpers.mmss(remaining)}`);
-        },
+            updateHUD(scene, now) {
+                if (scene.gameStartAt == null) return;
+                if (!scene.timerHud) return;        // ← add this guard
+                const remaining = Math.max(0, (SS.gameDurationMin * 60 * 1000) - (now - scene.gameStartAt));
+                scene.timerHud.setText(`Time: ${helpers.mmss(remaining)}`);
+            },
+
         endGame(scene, reason = SS.reason || "Game over") {
             if (scene.gameOver) return;
             scene.gameOver = true;
@@ -850,28 +852,6 @@ const soapsplash = (() => {
             // attach reusable streak/score engine
             scene.streakSys = streakScore.create();
 
-            // HUD shows base, multiplier, and total
-            // add a larger, prominent HUD panel (white with black border)
-            scene.hudPanel = scene.add.rectangle(
-                10, SS.height - 56,          // x, y (anchored bottom-left)
-                SS.width - 20, 48,           // width, height
-                0xffffff, 0.90               // fill color & alpha
-            )
-                .setOrigin(0, 0)
-                .setStrokeStyle(2, 0x000000)   // black outline
-                .setDepth(9);
-
-            scene.typeHud = scene.add.text(
-                20, SS.height - 46,
-                `Score: 0  (base 0 × x0.0)   Streak: 0`,
-                {
-                    fontFamily: SS.fontFamily,
-                    fontSize: "20px",
-                    fontStyle: "700",          // Phaser accepts numeric weight or "bold"
-                    color: "#000000"           // <-- black
-                }
-            ).setDepth(10);
-
 
             // hidden text for measuring caret etc (unchanged)
             scene.typing._measure = scene.add.text(-9999, -9999, "", {
@@ -983,7 +963,11 @@ const soapsplash = (() => {
         },
         pickNearest(scene) {
             if (!scene.germs.length) { scene.typing.activeId = null; return; }
-            const cand = scene.germs.filter(g => helpers.isOnScreen(scene, g.sprite.x, g.sprite.y, 0));
+            // either: no on-screen filter
+            const cand = scene.germs; // was: filter by helpers.isOnScreen(...)
+            // or: keep the filter but with a generous margin
+            // const cand = scene.germs.filter(g => helpers.isOnScreen(scene, g.sprite.x, g.sprite.y, 64));
+
             if (!cand.length) { scene.typing.activeId = null; return; }
             const hit = scene.getSinkHitPoint();
             let best = null, bestDist = Infinity;
@@ -1051,43 +1035,61 @@ const soapsplash = (() => {
         onKey(e, scene) {
             if (scene.gameOver || scene._paused) return;
             if (!scene.typing.startedAt) scene.typing.startedAt = scene.time.now;
+
+            // if no target yet, pick one
             if (!scene.typing.activeId) typing.pickNearest(scene);
 
-            const g = scene.germs.find(x => x.id === scene.typing.activeId);
-            if (!g) return;
+            // self-heal stale/removed target (e.g., it breached or was cleared)
+            let g = scene.germs.find(x => x.id === scene.typing.activeId);
+            if (!g) {
+                scene.typing.activeId = null;
+                typing.pickNearest(scene);
+                g = scene.germs.find(x => x.id === scene.typing.activeId);
+                if (!g) return; // nothing to type yet
+            }
 
             const key = e.key;
+
+            // handle backspace
             if (key === "Backspace") {
                 if (g.typedIdx > 0) g.typedIdx--;
                 typing.renderTarget(g, scene);
-                typing.updateHud(scene); e.preventDefault(); return;
+                typing.updateHud(scene);
+                e.preventDefault();
+                return;
             }
+
+            // ignore non-printable
             if (key.length !== 1) return;
 
+            // prevent accidental browser focus/scroll on printable keys
+            e.preventDefault();
+
             scene.typing.keystrokes++;
-            const ch = key, expected = g.word[g.typedIdx];
+            const ch = key;
+            const expected = g.word[g.typedIdx];
             if (!expected) return;
 
             if (ch.toLowerCase() === expected.toLowerCase()) {
-                g.typedIdx++; typing.renderTarget(g, scene);
+                g.typedIdx++;
+                // reset error tint once user gets back on track
+                const C = CONFIG.soapSplash.colors || {};
+                g.labelRemain.setColor(C.remain ?? "#000000");
+                g.labelTyped.setColor(C.typed ?? "#000000");
+
+                typing.renderTarget(g, scene);
                 if (g.typedIdx >= g.word.length) typing.onWordComplete(scene, g);
             } else {
                 g.errors++;
                 scene.typing.mistakes++;
                 scene.typing.wordClean = false;
-
-                // NEW: mistakes wipe the clean run & streak immediately
                 scene.streakSys.onMistake();
-
-                // DB hook: log a mistake event
                 telemetry.onMistake(scene);
-
 
                 const C = CONFIG.soapSplash.colors || {};
                 g.labelRemain.setColor(C.errorRemain ?? "#ff4d4d");
                 g.labelTyped.setColor(C.errorTyped ?? g.labelTyped.style.color);
 
-                // small shake feedback on error
                 scene.tweens.add({
                     targets: g.labelRemain,
                     x: g.labelRemain.x + 4,
@@ -1097,55 +1099,49 @@ const soapsplash = (() => {
                 });
             }
 
-
             typing.updateHud(scene);
         },
 
         // when a word is completed remove germ update score and streak and retarget
         onWordComplete(scene, g) {
-            const idx = scene.germs.indexOf(g);
-            if (idx >= 0) removeGermByIndex(scene, idx);
-            scene.typing.activeId = null;
+            // 1) cache anything you need from g BEFORE removal
+            const px = g.sprite?.x ?? (SS.width / 2);
+            const py = (g.sprite?.y ?? (SS.height / 2)) - 10;
 
-            // capture current streak before we change it
+            // 2) scoring & telemetry (no UI mutation on g here)
             const oldStreak = scene.streakSys?.streak ?? 0;
-
             scene.typing.wordsCompleted++;
 
             const clean = !!scene.typing.wordClean;
-
-            // award base points first
-            scene.streakSys.addBase(100);
-
-            // apply streak rule
-            scene.streakSys.onWord(clean);
+            scene.streakSys.addBase(100);        // award base points
+            scene.streakSys.onWord(clean);       // apply streak rule
 
             // keep legacy fields in sync
             scene.typing.streak = scene.streakSys.streak;
             scene.typing.bestStreak = Math.max(scene.typing.bestStreak, scene.streakSys.bestStreak);
             scene.typing.score = scene.streakSys.totalScore;
 
-            // optional telemetry
+            // telemetry
             telemetry.onWordComplete(scene, g, clean);
 
+            // streak popup (uses cached px/py)
             if (scene.typing.streak > oldStreak && scene.typing.streak >= 1) {
-                const px = g.sprite?.x ?? (SS.width / 2);
-                const py = (g.sprite?.y ?? (SS.height / 2)) - 10;
                 helpers.streakPopup(scene, scene.typing.streak, px, py);
                 scene.typing.streakPops += 1;
             }
 
-            // reset per-word cleanliness for the next word
+            // reset cleanliness for the NEXT word
             scene.typing.wordClean = true;
 
-            const C = CONFIG.soapSplash.colors || {};
-            g.labelTyped.setColor(C.typed ?? "#000000");
-            g.labelRemain.setColor(C.remain ?? "#000000");
+            // 3) NOW remove the germ visuals and clear target
+            const idx = scene.germs.indexOf(g);
+            if (idx >= 0) removeGermByIndex(scene, idx);
+            scene.typing.activeId = null;
 
+            // 4) refresh HUD and auto-select next target
             typing.updateHud(scene);
             typing.pickNearest(scene);
         },
-
 
         // refresh the score and streak hud text
         updateHud(scene) {

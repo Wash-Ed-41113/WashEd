@@ -4,135 +4,129 @@
 export const DB = (() => {
     const STORAGE_KEY = "gameDatabase"; // name used to store data in sessionStorage
 
-    //-----in memory database-----
+    // ----- in-memory database -----
     const state = {
-        inited: false, // tracks if DB has been initialized
-        ids: { session: 0, round: 0, event: 0 }, // counters for unique IDs
-        games: [ // list of available games
+        inited: false,
+        ids: { session: 0, round: 0, event: 0 },
+        games: [
             { game_id: 1, key: "SoapSplasher", title: "Soap Splasher" },
             { game_id: 2, key: "GermScrubber", title: "Germ Scrubber" }
         ],
-        sessions: [],      // each session = {session_id, started_at, player_name}
-        rounds: [],        // each round = gameplay info for a session
-        typing_events: []  // each typing event = player input during a round
+        sessions: [],      // { session_id, started_at, player_name }
+        rounds: [],        // per-play summary rows
+        typing_events: []  // detailed events per round
     };
 
-    //---- load data from storage ----
+    // ---- load / save / clear ----
     function loadFromStorage() {
-        const saved = sessionStorage.getItem(STORAGE_KEY); // get saved data
-        if (!saved) return; // nothing saved yet
-
+        const saved = sessionStorage.getItem(STORAGE_KEY);
+        if (!saved) return;
         try {
-            const parsed = JSON.parse(saved); // convert saved string to object
-            Object.assign(state, parsed); // copy saved data into current state
+            const parsed = JSON.parse(saved);
+            Object.assign(state, parsed);
             console.log("Database loaded from sessionStorage");
         } catch (e) {
-            console.error("Failed to load from storage:", e); // error if JSON is bad - for debugging
+            console.error("Failed to load from storage:", e);
         }
     }
 
-    // ---- SAVE DATA TO STORAGE ----
     function saveToStorage() {
         try {
-            const json = JSON.stringify(state); // convert state to string
-            sessionStorage.setItem(STORAGE_KEY, json); // save to sessionStorage
+            const json = JSON.stringify(state);
+            sessionStorage.setItem(STORAGE_KEY, json);
             console.log("Database saved to sessionStorage");
         } catch (e) {
-            console.error("Failed to save to storage:", e); // error if save fails - for debugging
+            console.error("Failed to save to storage:", e);
         }
     }
 
-    // ---- CLEAR STORAGE ON TAB CLOSE ----
     function clearStorage() {
-        sessionStorage.removeItem(STORAGE_KEY); // delete saved data
+        sessionStorage.removeItem(STORAGE_KEY);
         console.log("Storage cleared on tab close");
     }
 
-    //----INIT - runs once ----
+    // ---- init (runs once per page lifetime) ----
     function init() {
-        if (state.inited) return; // skip if already initialized
-        state.inited = true; // mark as initialized
-//-----------PLACEHOLDER DATA FOR NOW-------------------------
-        if (state.sessions.length === 0 && state.rounds.length === 0) {
-            const jordan = beginSession("Jordan");
-            const riya   = beginSession("Riya");
-            const alex   = beginSession("Alex");
+        if (state.inited) return;
+        state.inited = true;
 
-            const r1 = beginRound(jordan, "GermScrubber", "hard");
-            const r2 = beginRound(riya, "GermScrubber", "medium");
-            const r3 = beginRound(alex, "GermScrubber", "easy");
-
-            finalizeRound(r1, { score: 1007 });
-            finalizeRound(r2, { score: 120 });
-            finalizeRound(r3, { score: 98 });
-        }
+        // If you want persistence across reloads in the *same* tab without closing it,
+        // uncomment the next line. It has no effect if you close the tab, because we clear on beforeunload.
+        // loadFromStorage();
     }
 
-    //id and time helpers
-    const now = () => Date.now(); // get current time in ms
-    const nextId = k => (state.ids[k] += 1); // increment and return next ID
+    // ---- helpers ----
+    const now = () => Date.now();
+    const nextId = k => (state.ids[k] += 1);
+    const gameId = key => state.games.find(g => g.key === key)?.game_id ?? null;
 
-    //-----main functions-----
+    // ---- main API ----
     function beginSession(playerName = "Player") {
-        init(); // make sure DB is ready
-        const session_id = nextId("session"); // get new session ID
-        state.sessions.push({ session_id, started_at: now(), player_name: playerName }); // add session
-        saveToStorage(); // save after change
-        return session_id; // return new session ID
+        init();
+        const session_id = nextId("session");
+        state.sessions.push({ session_id, started_at: now(), player_name: playerName });
+        saveToStorage();
+        return session_id;
     }
-
-    const gameId = key => state.games.find(g => g.key === key)?.game_id ?? null; // get game_id from key
 
     function beginRound(sessionId, gameKey, difficulty = "normal") {
-        init(); // make sure DB is ready
-        const gid = gameId(gameKey); // get game ID
-        if (!gid) throw new Error(`Unknown game key: ${gameKey}`); // error if game not found
-        const round_id = nextId("round"); // get new round ID
-        state.rounds.push({ // add round info
-            round_id, session_id: sessionId, game_id: gid,
+        init();
+        const gid = gameId(gameKey);
+        if (!gid) throw new Error(`Unknown game key: ${gameKey}`);
+        const round_id = nextId("round");
+        state.rounds.push({
+            round_id,
+            session_id: sessionId,
+            game_id: gid,
             difficulty: String(difficulty),
-            started_at: now(), ended_at: null, reason: null,
-            score: 0, best_streak: 0, breaches: 0, base_score: 0, multiplier: 0
+            started_at: now(),
+            ended_at: null,
+            reason: null,
+            score: 0,
+            best_streak: 0,
+            breaches: 0,
+            base_score: 0,
+            multiplier: 0
         });
-        saveToStorage(); // save after change
-        return round_id; // return new round ID
+        saveToStorage();
+        return round_id;
     }
 
     function logTyping(roundId, kind, payload = {}) {
-        init(); // make sure DB is ready
-        const event_id = nextId("event"); // get new event ID
-        state.typing_events.push({ // add typing event
+        init();
+        const event_id = nextId("event");
+        state.typing_events.push({
             event_id, round_id: roundId, ts: now(), kind,
-            clean: payload.clean ?? null,
-            streak: payload.streak ?? null,
-            base_score: payload.base_score ?? null,
-            total_score: payload.total_score ?? null,
-            word: payload.word ?? null
+            clean:        payload.clean ?? null,
+            streak:       payload.streak ?? null,
+            base_score:   payload.base_score ?? null,
+            total_score:  payload.total_score ?? null,
+            word:         payload.word ?? null
         });
-        saveToStorage(); // save after change
+        saveToStorage();
     }
 
     function finalizeRound(roundId, summary = {}) {
-        const r = state.rounds.find(r => r.round_id === roundId); // find round
-        if (!r) return; // skip if not found
-        r.ended_at   = now(); // set end time
-        r.reason     = summary.reason ?? r.reason; // update reason
-        r.score      = summary.score ?? r.score; // update score
-        r.best_streak= summary.bestStreak ?? r.best_streak; // update streak
-        r.breaches   = summary.breaches ?? r.breaches; // update breaches
-        r.base_score = summary.baseScore ?? r.base_score; // update base score
-        r.multiplier = summary.multiplier ?? r.multiplier; // update multiplier
-        saveToStorage(); // save after change
+        const r = state.rounds.find(r => r.round_id === roundId);
+        if (!r) return;
+        r.ended_at    = now();
+        r.reason      = summary.reason      ?? r.reason;
+        r.score       = summary.score       ?? r.score;
+        r.best_streak = summary.bestStreak  ?? r.best_streak;
+        r.breaches    = summary.breaches    ?? r.breaches;
+        r.base_score  = summary.baseScore   ?? r.base_score;
+        r.multiplier  = summary.multiplier  ?? r.multiplier;
+        saveToStorage();
     }
 
-    // simple queries for debug/leaderboards
+    // ---- queries (rounds) ----
     function topRounds({ gameKey = null, limit = 10 } = {}) {
-        const gid = gameKey ? gameId(gameKey) : null; // get game ID if provided
+        const gid = gameKey ? gameId(gameKey) : null;
         return state.rounds
-            .filter(r => r.ended_at && (!gid || r.game_id === gid)) // only finished rounds
-            .sort((a,b) => b.score - a.score) // sort by score, high to low
-            .slice(0, limit) // take top N
-            .map(r => ({ // format result
+            .filter(r => r.ended_at && (!gid || r.game_id === gid))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, limit)
+            .map(r => ({
                 round_id: r.round_id,
                 score: r.score,
                 best_streak: r.best_streak,
@@ -143,17 +137,40 @@ export const DB = (() => {
             }));
     }
 
-    const roundsBySession = sid => state.rounds.filter(r => r.session_id === sid); // get rounds for a session
-    const eventsByRound   = rid => state.typing_events.filter(e => e.round_id === rid); // get events for a round
-    const dump            = () => JSON.parse(JSON.stringify(state)); // deep copy of current state
+    const roundsBySession = sid => state.rounds.filter(r => r.session_id === sid);
+    const eventsByRound   = rid => state.typing_events.filter(e => e.round_id === rid);
 
-    // ---- EVENT LISTENER TO CLEAR STORAGE ----
-    window.addEventListener("beforeunload", clearStorage); // clear when tab closes
+    // ---- NEW: totals & leaderboard across sessions ----
+    function sessionTotal(sessionId) {
+        return state.rounds
+            .filter(r => r.session_id === sessionId && r.ended_at)
+            .reduce((sum, r) => sum + (r.score || 0), 0);
+    }
+
+    function topTotals({ limit = 10 } = {}) {
+        const rows = state.sessions.map(s => ({
+            session_id: s.session_id,
+            player_name: s.player_name || "Player",
+            total: sessionTotal(s.session_id),
+            started_at: s.started_at
+        }));
+        return rows
+            .sort((a, b) => (b.total - a.total) || (a.started_at - b.started_at))
+            .slice(0, limit);
+    }
+
+    const dump = () => JSON.parse(JSON.stringify(state));
+
+    // wipe everything when the tab/window closes
+    window.addEventListener("beforeunload", clearStorage);
 
     return {
-        init, beginSession, beginRound, logTyping, finalizeRound, // main functions
-        query: { topRounds, roundsBySession, eventsByRound }, // query helpers
-        dump, // get full state
-        saveToStorage, loadFromStorage, clearStorage // optional external access
+        init, beginSession, beginRound, logTyping, finalizeRound,
+        query: {
+            topRounds, roundsBySession, eventsByRound,
+            sessionTotal, topTotals
+        },
+        dump,
+        saveToStorage, loadFromStorage, clearStorage
     };
 })();
