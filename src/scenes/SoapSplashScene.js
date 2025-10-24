@@ -53,10 +53,53 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.countdownText     = null;
     }
 
+    preload() {
+        const set = CONFIG.assets.soapSplash.backgrounds;
+        this._bgKeys = set.map((path, i) => {
+            const key = `SS_BG_${i}`;
+            this.load.image(key, path);
+            return key;
+        });
+
+        const vids = CONFIG.assets?.soapSplash?.backgroundVid;
+        if (vids) {
+            const sources = Array.isArray(vids) ? vids : [vids];
+            this.load.video("SS_BG_VIDEO", sources, "loadeddata", false, true);
+        }
+
+        const frames = CONFIG.assets?.soapSplash?.handsFrames;
+        if (frames?.dir && frames?.count) {
+            const z = frames.zeroPad ?? 3;
+            for (let i = 1; i <= frames.count; i++) {
+                const n = String(i).padStart(z, "0");
+                this.load.image(`HANDS_${n}`, `${frames.dir}/hands_${n}.png`);
+            }
+        }
+
+        // game sprites
+        this.load.image("Germ", CONFIG.assets.soapSplash.germ);
+        this.load.image(
+            "ss_end_bg",
+            "assets/images/SoapSplash/washed_kikos-day_LEVEL_01_scene_05_action_01_germ-catcher_HIT-zero.png"
+        );
+
+
+        // kiko sprites for toasts (optional; code safely falls back if missing)
+        this.load.image("KikoJump", CONFIG.assets.kiko.jump);
+        this.load.image("KikoCheer", CONFIG.assets.kiko.cheer);
+        this.load.image("KikoSad", CONFIG.assets.kiko.sad);
+        this.load.image("ui_close_button", CONFIG.assets.ui.closeBut);
+        this.load.image("DialogPanel", CONFIG.assets.ui.dialogPanel);
+        this.load.image("ui_home", CONFIG.assets.ui.homeBut);
+        this.load.image("ui_pause", CONFIG.assets.ui.pauseBut);
+
+    }
+
 
     _buildPauseOverlay() {
         const { width: W, height: H } = this.scale;
-        const g = this.add.container(0, 0).setDepth(10_000);
+        const g = this.add.container(0, 0).setDepth(99_999); // guaranteed top layer
+
 
         // backdrop
         const overlay = this.add.rectangle(0, 0, W, H, 0xffffff, 0.45)
@@ -83,29 +126,28 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
         g.add(panel);
 
-        // title
-        const title = this.add.text(W/2, H/2 - 140, "Game Paused", {
-            fontFamily: "Chewy, Arial, sans-serif",
+        const title = this.add.text(W/2, H/2 - 170, "Game Paused", {
+            fontFamily: "Chewy",
             fontSize: "72px",
             color: "#000000",
             align: "center"
         }).setOrigin(0.5).setDepth(10_002);
         g.add(title);
 
-        // 🔧 stats now in Montserrat
-        const score = this.streakSys?.totalScore ?? this.typing?.score ?? 0;
-        const best  = this.streakSys?.bestStreak ?? this.typing?.bestStreak ?? 0;
+        const score    = this.streakSys?.totalScore ?? this.typing?.score ?? 0;
+        const best     = this.streakSys?.bestStreak ?? this.typing?.bestStreak ?? 0;
         const breaches = this.breaches ?? 0;
 
-        const stats = this.add.text(W/2, H/2 - 50,
+        const stats = this.add.text(W/2, H/2 - 10,
             `Score: ${score}\nBest Streak: ${best}\nBreaches: ${breaches}`, {
-                fontFamily: "Montserrat, Arial, sans-serif",   // ← Montserrat
+                fontFamily: "Montserrat",
                 fontSize: "40px",
                 color: "#000000",
                 align: "center",
-                lineSpacing: 8
+                lineSpacing: 12         // ↑ a touch more line spacing too
             }).setOrigin(0.5).setDepth(10_002);
         g.add(stats);
+
 
         // compute panel corners for placing buttons
         let px, py, pw, ph;
@@ -119,8 +161,8 @@ export default class SoapSplashScene extends Phaser.Scene {
         // 🔧 CLOSE (top-right) — use sprite, no resize on hover
         const closeX = px + pw - 26, closeY = py + 26;
 
-        const closeImg = this.add.image(closeX, closeY, "ui_close")
-            .setDisplaySize(36, 36)
+        const closeImg = this.add.image(closeX, closeY, "ui_close_button")
+            .setDisplaySize(70, 70)
             .setOrigin(0.5)
             .setDepth(10_003)
             .setInteractive({ useHandCursor: true });
@@ -161,74 +203,118 @@ export default class SoapSplashScene extends Phaser.Scene {
         };
 
 
-        const rowY = py + ph - 86;
-        // needs these textures preloaded in PreloadScene: "ui_home", "ui_close_button" already used
-        const homeBtn = (this.textures.exists("ui_home"))
-            ? makeIconButton("ui_home", W/2 - 80, rowY, () => {
-                this.finalizeRound?.("Paused → Home");
-                const playerName = this.registry.get("playerName");
-                destroyAll();
-                this.scene.start("GameScene", { playerName });
-            }, 76)
-            : null;
+        // ---- BUTTON ROW (same row, centered) ----
+// Use robust positions (not fragile to panelGeom math)
+        const rowY = Math.min(py + ph - 90, (H/2) + 160);
 
-        // const exitBtn = makeIconButton(closeKey ?? null, W/2 + 80, rowY, () => {
-        //     this.finalizeRound?.("Paused → Exit to Menu");
-        //     destroyAll();
-        //     this.scene.start("MenuScene");
-        // }, 76);
+// left/right anchors for the pair
+        const MUTE_W = 350;     // pill width
+        const ICON_W = 76;      // home icon visual width
+        const GAP    = 28;      // spacing between the two
+        const pairW  = MUTE_W + GAP + ICON_W;
+        const leftX  = (W/2) - (pairW/2);
+        const rightX = leftX + MUTE_W + GAP + (ICON_W/2);
 
-        const exitBtn = makeIconButton("ui_close", W/2 + 80, rowY, () => {
-            this.finalizeRound?.("Paused → Exit to Menu");
-            destroyAll();
-            this.scene.start("MenuScene");
-        }, 76);
+// --- MUTE (pill like "Easy") ---
+        const makePillBtn = (label, x, y, onClick, w = MUTE_W, h = 90) => {
+            const baseFill  = 0xBFF4C7;  // Easy green
+            const hoverFill = 0xAEEAB7;
+            const stroke    = 0x6DAE7F;
 
-        // 🔧 MUTE as a proper coloured button (like difficulty UI)
-        const makeRectBtn = (label, x, y, onClick) => {
-            const Bw = CONFIG?.ui?.button?.width  ?? 520;
-            const Bh = CONFIG?.ui?.button?.height ?? 64;
-            const rect = this.add.rectangle(x, y, Bw, Bh, 0x142038, 1)
-                .setOrigin(0.5).setStrokeStyle(2, 0xffffff)
-                .setInteractive({ useHandCursor: true }).setDepth(10_003);
-            const txt = this.add.text(x, y, label, {
-                fontFamily: "Montserrat, Arial, sans-serif",
-                fontSize: "26px",
-                color: "#ffffff",
-                align: "center",
-                fixedWidth: Bw
-            }).setOrigin(0.5).setDepth(10_004);
-            rect.on("pointerover", () => rect.setFillStyle(0x1d2b52));
-            rect.on("pointerout",  () => rect.setFillStyle(0x142038));
-            rect.on("pointerup", onClick);
-            txt.on("pointerup", onClick);
-            g.add(rect); g.add(txt);
-            return { rect, txt };
+            const c = this.add.container(x, y).setDepth(10_003);
+            c.setSize(w, h).setInteractive({ useHandCursor: true });
+
+            // const shadow = this.add.graphics();
+            // shadow.fillStyle(0x000000, 0.25);
+            // // shadow.fillRoundedRect(-w/2, -h/2 + 6, w, h, 26);
+
+            const gfx = this.add.graphics();
+            const draw = (fill) => {
+                gfx.clear();
+                gfx.fillStyle(fill, 1);
+                gfx.fillRoundedRect(-w/2, -h/2, w, h, 26);
+                gfx.lineStyle(4, stroke, 1);
+                gfx.strokeRoundedRect(-w/2, -h/2, w, h, 26);
+            };
+            draw(baseFill);
+
+            const txt = this.add.text(0, 0, label, {
+                fontFamily: "Montserrat",
+                fontSize: "44px",
+                color: "#1d4330",
+            }).setOrigin(0.5);
+
+            c.add([ gfx, txt]);
+            c.on("pointerover", () => draw(hoverFill));
+            c.on("pointerout",  () => draw(baseFill));
+            c.on("pointerup", onClick);
+
+            g.add(c);
+            return { c, txt };
         };
 
         const muteLabel = this.sound?.mute ? "Unmute" : "Mute";
-        const muteY = rowY - 76;
-        const muteBtn = makeRectBtn(muteLabel, W/2, muteY, () => {
+        const muteBtn = makePillBtn(muteLabel, leftX + (MUTE_W/2), rowY, () => {
             if (this.sound) {
                 this.sound.mute = !this.sound.mute;
                 muteBtn.txt.setText(this.sound.mute ? "Unmute" : "Mute");
             }
         });
 
+// --- HOME (icon) on same row, to the right ---
+        let homeBtn = null;
+        if (this.textures.exists("ui_home")) {
+            homeBtn = this.add.image(rightX, rowY, "ui_home")
+                .setOrigin(0.5)
+                .setDepth(10_003)
+                .setDisplaySize(ICON_W, ICON_W)
+                .setInteractive({ useHandCursor: true });
+
+            homeBtn.on("pointerover", () => homeBtn.setTint(0xcde3ff));
+            homeBtn.on("pointerout",  () => homeBtn.clearTint());
+            homeBtn.on("pointerup", () => {
+                this.finalizeRound?.("Paused → Home");
+                destroyAll();
+                this.scene.start("MenuScene");
+            });
+
+            g.add(homeBtn);
+        } else {
+            console.warn("[Pause] ui_home texture missing — showing text fallback");
+            const fb = this.add.text(rightX, rowY, "Home", {
+                fontFamily: "Montserrat, Arial, sans-serif",
+                fontSize: "40px",
+                color: "#1d4330",
+                backgroundColor: "#BFF4C7",
+                padding: { left: 18, right: 18, top: 12, bottom: 12 }
+            }).setOrigin(0.5).setDepth(10_003).setInteractive({ useHandCursor: true });
+            fb.on("pointerup", () => {
+                this.finalizeRound?.("Paused → Home");
+                destroyAll();
+                this.scene.start("MenuScene");
+            });
+            g.add(fb);
+        }
+
+// DEBUG: a tiny dot so we know rowY is where we think it is
+        this.add.circle(W/2, rowY, 3, 0xff00ff, 1).setDepth(10_010);
+        console.log("[Pause] buttons row at", { rowY, leftX, rightX });
+
+
         function destroyAll() {
             if (panel?.destroy) panel.destroy();
             title.destroy(); stats.destroy();
             closeImg.destroy(); overlay.destroy();
             muteBtn.rect.destroy(); muteBtn.txt.destroy();
-            homeBtn?.destroy();
-            exitBtn?.destroy();
+            homeBtn?.destroy();       // keep
             g.destroy?.();
         }
+
         return g;
+
     }
 
 
-    // pause must freeze timers/tweens and bg video
     togglePause() {
         if (this._paused) {
             // --- resume game ---
@@ -238,71 +324,45 @@ export default class SoapSplashScene extends Phaser.Scene {
             this._pauseUi?.destroy();
             this._pauseUi = null;
 
+            // ✅ restore legacy pause overlay handler (if we replaced it before)
+            if (this._origSysPauseOverlay) {
+                systems.ui.pauseOverlay = this._origSysPauseOverlay;
+                this._origSysPauseOverlay = null;
+            }
+
             // restore time / tween / physics / audio / video
             this.time.timeScale = 1;
             this.tweens.timeScale = 1;
             if (this.physics?.world) this.physics.world.isPaused = false;
             this.bgVideo?.resume();
             this.sound.resumeAll();
-        } else {
-            // --- pause game ---
-            this._paused = true;
-
-            // build the new Game-Over-styled overlay (replaces systems.ui.pauseOverlay)
-            this._pauseUi = this._buildPauseOverlay();
-
-            // freeze time / tweens / physics / audio / video
-            this.time.timeScale = 0;
-            this.tweens.timeScale = 0;
-            if (this.physics?.world) this.physics.world.isPaused = true;
-            this.bgVideo?.pause();
-            this.sound.pauseAll();
+            return;
         }
+
+        // --- pause game ---
+        this._paused = true;
+
+        // 🚫 1) suppress the legacy overlay so we don't get two menus
+        if (systems?.ui?.pauseOverlay) {
+            this._origSysPauseOverlay = this._origSysPauseOverlay || systems.ui.pauseOverlay;
+            systems.ui.pauseOverlay = () => {}; // no-op while this scene is paused
+        }
+
+        // 🧰 2) build only OUR overlay (make sure its container uses a very high depth)
+        this._pauseUi = this._buildPauseOverlay();
+
+        // 🧊 3) freeze time / tweens / physics / audio / video
+        this.time.timeScale = 0;
+        this.tweens.timeScale = 0;
+        if (this.physics?.world) this.physics.world.isPaused = true;
+        this.bgVideo?.pause();
+        this.sound.pauseAll();
     }
 
 
 
-    preload() {
-        const set = CONFIG.assets.soapSplash.backgrounds;
-        this._bgKeys = set.map((path, i) => {
-            const key = `SS_BG_${i}`;
-            this.load.image(key, path);
-            return key;
-        });
-
-        const vids = CONFIG.assets?.soapSplash?.backgroundVid;
-        if (vids) {
-            const sources = Array.isArray(vids) ? vids : [vids];
-            this.load.video("SS_BG_VIDEO", sources, "loadeddata", false, true);
-        }
-
-        const frames = CONFIG.assets?.soapSplash?.handsFrames;
-        if (frames?.dir && frames?.count) {
-            const z = frames.zeroPad ?? 3;
-            for (let i = 1; i <= frames.count; i++) {
-                const n = String(i).padStart(z, "0");
-                this.load.image(`HANDS_${n}`, `${frames.dir}/hands_${n}.png`);
-            }
-        }
-
-        // game sprites
-        this.load.image("Germ", CONFIG.assets.soapSplash.germ);
-        this.load.image(
-            "ss_end_bg",
-            "assets/images/SoapSplash/washed_kikos-day_LEVEL_01_scene_05_action_01_germ-catcher_HIT-zero.png"
-        );
 
 
-        // kiko sprites for toasts (optional; code safely falls back if missing)
-        this.load.image("KikoJump", CONFIG.assets.kiko.jump);
-        this.load.image("KikoCheer", CONFIG.assets.kiko.cheer);
-        this.load.image("KikoSad", CONFIG.assets.kiko.sad);
-        this.load.image("ui_close", CONFIG.assets.ui.closeBut);
-        this.load.image("DialogPanel", CONFIG.assets.ui.dialogPanel);
-        this.load.image("ui_home", CONFIG.assets.ui.homeBut);
-        this.load.image("ui_pause", CONFIG.assets.ui.pauseBut);
-
-    }
 
     create() {
         const SS = CONFIG.soapSplash;
@@ -461,7 +521,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         this._lastEncouragementAt = 0;
 
         // DB round
-        const difficulty = this.registry.get("difficulty") || "normal";
+        const difficulty = this.registry.get("difficulty");
         this.roundId = DB.beginRound(window.__SESSION_ID__, "SoapSplasher", String(difficulty));
 
         // ── Top-right PAUSE icon only (no home/settings in this scene) ───────────
@@ -687,7 +747,7 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         // big, centered Chewy text
         this.countdownText = this.add.text(W / 2, 16, "100", {
-            fontFamily: "Chewy, Arial, sans-serif",
+            fontFamily: "Chewy",
             fontSize: "64px",
             color: "#ffffff",
             align: "center"

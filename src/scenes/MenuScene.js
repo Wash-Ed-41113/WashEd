@@ -7,7 +7,7 @@ import { DB } from "../db.js";
 
 
 const DLG = { W_FRAC: 0.80, H_FRAC: 0.60 }; // 80% of viewport width, 60% of height
-const UI_FONT_FALLBACK = "Montserrat, Arial, sans-serif";
+const UI_FONT_FALLBACK = "Montserrat";
 
 const getUIFont = () => CONFIG.ui?.fontFamily || "Montserrat";
 
