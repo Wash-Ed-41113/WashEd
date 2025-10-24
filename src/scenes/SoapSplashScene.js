@@ -116,15 +116,22 @@ export default class SoapSplashScene extends Phaser.Scene {
             px = panel.x - pw/2; py = panel.y - ph/2;
         }
 
-        // 🔧 CLOSE "X" (top-right)
-        const closeKey = this.textures.exists("ui_close") ? "ui_close" : null;
+        // 🔧 CLOSE (top-right) — use sprite, no resize on hover
         const closeX = px + pw - 26, closeY = py + 26;
-        const closeImg = closeKey
-            ? this.add.image(closeX, closeY, "ui_close").setDisplaySize(36,36)
-            : this.add.text(closeX, closeY, "✕", { fontFamily: "Arial", fontSize: "36px", color: "#000" }).setOrigin(0.5);
-        closeImg.setOrigin(0.5).setDepth(10_003).setInteractive({ useHandCursor: true });
+
+        const closeImg = this.add.image(closeX, closeY, "ui_close")
+            .setDisplaySize(36, 36)
+            .setOrigin(0.5)
+            .setDepth(10_003)
+            .setInteractive({ useHandCursor: true });
+
+// hover feedback: tint only (no scale changes)
+        closeImg.on("pointerover", () => closeImg.setTint(0xcde3ff));
+        closeImg.on("pointerout",  () => closeImg.clearTint());
+
         g.add(closeImg);
 
+// unpause logic stays the same
         const unpause = () => {
             this._paused = false;
             this._pauseUi = null;
@@ -134,22 +141,28 @@ export default class SoapSplashScene extends Phaser.Scene {
             this.bgVideo?.resume();
             this.sound.resumeAll();
         };
+
         closeImg.on("pointerup", () => { destroyAll(); unpause(); });
 
-        // 🔧 HOME + EXIT image buttons (center-bottom row)
+
         const makeIconButton = (key, x, y, onClick, size = 72) => {
-            const img = this.add.image(x, y, key).setOrigin(0.5).setDepth(10_003)
+            const img = this.add.image(x, y, key)
+                .setOrigin(0.5)
+                .setDepth(10_003)
                 .setDisplaySize(size, size)
                 .setInteractive({ useHandCursor: true });
-            img.on("pointerover", () => img.setScale(1.06));
-            img.on("pointerout",  () => img.setScale(1.00));
+
+            img.on("pointerover", () => img.setTint(0xcde3ff));
+            img.on("pointerout",  () => img.clearTint());
             img.on("pointerup", onClick);
+
             g.add(img);
             return img;
         };
 
+
         const rowY = py + ph - 86;
-        // needs these textures preloaded in PreloadScene: "ui_home", "ui_close" already used
+        // needs these textures preloaded in PreloadScene: "ui_home", "ui_close_button" already used
         const homeBtn = (this.textures.exists("ui_home"))
             ? makeIconButton("ui_home", W/2 - 80, rowY, () => {
                 this.finalizeRound?.("Paused → Home");
@@ -159,7 +172,13 @@ export default class SoapSplashScene extends Phaser.Scene {
             }, 76)
             : null;
 
-        const exitBtn = makeIconButton(closeKey ?? null, W/2 + 80, rowY, () => {
+        // const exitBtn = makeIconButton(closeKey ?? null, W/2 + 80, rowY, () => {
+        //     this.finalizeRound?.("Paused → Exit to Menu");
+        //     destroyAll();
+        //     this.scene.start("MenuScene");
+        // }, 76);
+
+        const exitBtn = makeIconButton("ui_close", W/2 + 80, rowY, () => {
             this.finalizeRound?.("Paused → Exit to Menu");
             destroyAll();
             this.scene.start("MenuScene");
@@ -270,16 +289,19 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.load.image("Germ", CONFIG.assets.soapSplash.germ);
         this.load.image(
             "ss_end_bg",
-            "assets/images/SopaSplash/washed_kikos-day_LEVEL_01_scene_05_action_01_germ-catcher_HIT-zero.png"
+            "assets/images/SoapSplash/washed_kikos-day_LEVEL_01_scene_05_action_01_germ-catcher_HIT-zero.png"
         );
 
-        // kiko sprites for toasts (optional; code safely falls back if missing)
-        if (CONFIG.assets?.kiko?.jump) this.load.image("KikoJump", CONFIG.assets.kiko.jump);
-        if (CONFIG.assets?.kiko?.cheer) this.load.image("KikoCheer", CONFIG.assets.kiko.cheer);
-        if (CONFIG.assets?.kiko?.sad) this.load.image("KikoSad", CONFIG.assets.kiko.sad);
 
-        // optional dialog panel (not required by the toasts)
-        if (CONFIG.assets?.ui?.dialogPanel) this.load.image("DialogPanel", CONFIG.assets.ui.dialogPanel);
+        // kiko sprites for toasts (optional; code safely falls back if missing)
+        this.load.image("KikoJump", CONFIG.assets.kiko.jump);
+        this.load.image("KikoCheer", CONFIG.assets.kiko.cheer);
+        this.load.image("KikoSad", CONFIG.assets.kiko.sad);
+        this.load.image("ui_close", CONFIG.assets.ui.closeBut);
+        this.load.image("DialogPanel", CONFIG.assets.ui.dialogPanel);
+        this.load.image("ui_home", CONFIG.assets.ui.homeBut);
+        this.load.image("ui_pause", CONFIG.assets.ui.pauseBut);
+
     }
 
     create() {
