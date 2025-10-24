@@ -192,12 +192,10 @@ export default class CleanCatchExplain extends Phaser.Scene {
                     // Toggle mute only
                     if (this.bgm) this.bgm.setMute(!this.bgm.mute);
                 },
-                x: this.scale.width * 0.15,
-                y: this.scale.height * 0.08,
+                showMute: false, // completely disable the Mute button
             });
         }
 
-        // IMPORTANT: Do NOT stop/destroy BGM on SHUTDOWN — we want it to continue into the game.
-        // So no SHUTDOWN handler here touching this.bgm.
+
     }
 }

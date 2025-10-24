@@ -229,8 +229,15 @@ const ui = {
 
     // top bar with optional home, pause, and settings icons anchored to top-right
 // now also includes a styled Mute/Unmute toggle (dark rectangle) below icons
-    topbar(scene, { onHome, onPause, onSettings, showMute = true } = {}) {
-        const T = CONFIG.ui.topbar;
+    topbar(scene, { onHome, onPause, onSettings, showMute = false } = {}) {
+        // scale icons relative to current screen size
+        const scaleFactor = Math.max(0.5, Math.min(1, scene.scale.width / 1920));
+        const T = {
+            iconSize: 140 * scaleFactor,
+            gap: 40 * scaleFactor,
+            top: 140 * scaleFactor,
+        };
+
         const B = CONFIG.ui.button || { width: 520, height: 64 }; // fallback
 
         let x = scene.scale.width - T.padding;
@@ -238,7 +245,7 @@ const ui = {
 
         // helper to spawn each icon safely
         const makeIcon = (key, cb) => {
-            if (!scene.textures.exists(key)) return null; // avoid missing sprite
+            if (!scene.textures.exists(key)|| !cb) return null; // avoid missing sprite
             x -= T.iconSize / 2;
             const img = scene.add.image(x, y, key)
                 .setOrigin(0.5)
@@ -246,14 +253,14 @@ const ui = {
                 .setScale(1)
                 .setDepth(200)
                 .setScrollFactor(0)
-                // .setInteractive({ useHandCursor: true })
+                .setInteractive({ useHandCursor: true })
             ;
 
 // fix hover bounce — lock scale instead of tween
 //             img.on("pointerover", () => img.setTint(0xcde3ff));
 //             img.on("pointerout", () => img.clearTint());
 
-            if (cb) img.on("pointerup", cb);
+            img.on("pointerup", cb);
             x -= T.iconSize + T.gap;
             return img;
         };
@@ -1300,10 +1307,6 @@ const cleancatcher = {
 
         ctx.imageSmoothingEnabled = true;
 
-        // set canvas resolution to the game size so drawing is crisp
-        canvas.width = CC.width;
-        canvas.height = CC.height;
-
         // images and word lists
         const A = CONFIG.assets.cleanCatch || {};
         const background = new Image();
@@ -1432,7 +1435,7 @@ const cleancatcher = {
 
         // when the player image finishes loading recompute size and keep player inside bounds
         playerImg.onload = () => {
-            pSize = sizeFrom(playerImg, P, 300);
+            pSize = sizeFrom(playerImg, P, 450);
             const baseline = canvas.height - (P.bottom ?? 30);
             player.width = pSize.w;
             player.height = pSize.h;
@@ -1602,12 +1605,16 @@ const cleancatcher = {
 
                 ctx.save();
                 ctx.globalAlpha = alpha;
+                // scale around the toast's anchor (x, y) instead of the top-left (0,0)
+                ctx.translate(x, y);
                 ctx.scale(bounce, bounce);
+                ctx.translate(-x, -y);
 
                 // Kiko sprite — ~0.23 scale equivalent (~250–280 px tall)>
                 const img = t.mood === "sad" ? kikoSad : kikoCheer;
                 if (img && img.complete && img.naturalWidth > 0) {
-                    const baseH = 280;                       // target visual height
+                    const baseH = Math.min(280, Math.round(canvas.height * 0.28)); // responsive, capped
+                    // target visual height
                     const aspect = img.naturalWidth / img.naturalHeight;
                     const baseW = baseH * aspect;
                     ctx.drawImage(img, x - baseW, y - baseH + 30, baseW, baseH);

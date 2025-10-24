@@ -99,9 +99,15 @@ export default class CleanCatchScene extends Phaser.Scene {
 
         const canvas = document.createElement("canvas");
         canvas.style.display = "block";
+// CSS size (what the user sees)
         canvas.style.width = `${width}px`;
         canvas.style.height = `${height}px`;
+// Internal drawing resolution (what ctx draws to) — MUST match the Phaser size
+        canvas.width = width;
+        canvas.height = height;
+
         root.node.appendChild(canvas);
+
 
         const difficulty = this.registry.get("difficulty") || "easy";
         this._runtime = systems.cleancatcher.create(this, canvas, difficulty);
@@ -116,6 +122,7 @@ export default class CleanCatchScene extends Phaser.Scene {
                 this.scene.start("GameScene", { playerName });
             },
             onPause: () => this.togglePause(),
+            showMute: false,
         });
 
         // Pause shortcuts
