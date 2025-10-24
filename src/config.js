@@ -47,6 +47,8 @@ window.CONFIG = {
         },
     },
 
+    isDevMode: true,
+
     // file paths for all images used in the game
     assets: {
         kiko: {
@@ -67,6 +69,7 @@ window.CONFIG = {
             startBut: "assets/images/UI/washed_kikos-day_UI-Button_Main_START.png",
             dialogPanel: "assets/images/UI/washed_kikos-day_UI-dialogue-box-v1.png",
             next: "assets/images/UI/washed_kikos-day_UI-Button_ARROW_Right.png",
+            closeBut: "assets/images/UI/washed_kikos-day_UI-Button_CLOSE.png"
         },
         soapSplash: {
             sink: "assets/images/soap/sink.png", // sink sprite

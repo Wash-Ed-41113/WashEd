@@ -53,30 +53,195 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.countdownText     = null;
     }
 
-    // pause must freeze timers/tweens and bg video
-    togglePause() {
-        if (this._paused) {
+
+    _buildPauseOverlay() {
+        const { width: W, height: H } = this.scale;
+        const g = this.add.container(0, 0).setDepth(10_000);
+
+        // backdrop
+        const overlay = this.add.rectangle(0, 0, W, H, 0xffffff, 0.45)
+            .setOrigin(0, 0)
+            .setInteractive();
+        g.add(overlay);
+
+        // panel
+        let panel; let panelGeom = null;
+        if (this.textures.exists("DialogPanel")) {
+            panel = this.add.image(W/2, H/2, "DialogPanel").setOrigin(0.5).setDepth(10_001);
+            const targetW = Math.min(W * 0.8, 980);
+            panel.setDisplaySize(targetW, targetW * 0.58);
+        } else {
+            const gfx = this.add.graphics().setDepth(10_001);
+            const pw = Math.min(W * 0.8, 980), ph = Math.min(H * 0.6, 520);
+            const px = (W - pw) / 2, py = (H - ph) / 2;
+            gfx.fillStyle(0xffffff, 1);
+            gfx.fillRoundedRect(px, py, pw, ph, 28);
+            gfx.lineStyle(6, 0x222222, 0.18);
+            gfx.strokeRoundedRect(px, py, pw, ph, 28);
+            panel = gfx;
+            panelGeom = { px, py, pw, ph };
+        }
+        g.add(panel);
+
+        // title
+        const title = this.add.text(W/2, H/2 - 140, "Game Paused", {
+            fontFamily: "Chewy, Arial, sans-serif",
+            fontSize: "72px",
+            color: "#000000",
+            align: "center"
+        }).setOrigin(0.5).setDepth(10_002);
+        g.add(title);
+
+        // 🔧 stats now in Montserrat
+        const score = this.streakSys?.totalScore ?? this.typing?.score ?? 0;
+        const best  = this.streakSys?.bestStreak ?? this.typing?.bestStreak ?? 0;
+        const breaches = this.breaches ?? 0;
+
+        const stats = this.add.text(W/2, H/2 - 50,
+            `Score: ${score}\nBest Streak: ${best}\nBreaches: ${breaches}`, {
+                fontFamily: "Montserrat, Arial, sans-serif",   // ← Montserrat
+                fontSize: "40px",
+                color: "#000000",
+                align: "center",
+                lineSpacing: 8
+            }).setOrigin(0.5).setDepth(10_002);
+        g.add(stats);
+
+        // compute panel corners for placing buttons
+        let px, py, pw, ph;
+        if (panelGeom) ({ px, py, pw, ph } = panelGeom);
+        else {
+            pw = panel.displayWidth ?? Math.min(W * 0.8, 980);
+            ph = panel.displayHeight ?? Math.min(H * 0.6, 520);
+            px = panel.x - pw/2; py = panel.y - ph/2;
+        }
+
+        // 🔧 CLOSE "X" (top-right)
+        const closeKey = this.textures.exists("ui_close") ? "ui_close" : null;
+        const closeX = px + pw - 26, closeY = py + 26;
+        const closeImg = closeKey
+            ? this.add.image(closeX, closeY, "ui_close").setDisplaySize(36,36)
+            : this.add.text(closeX, closeY, "✕", { fontFamily: "Arial", fontSize: "36px", color: "#000" }).setOrigin(0.5);
+        closeImg.setOrigin(0.5).setDepth(10_003).setInteractive({ useHandCursor: true });
+        g.add(closeImg);
+
+        const unpause = () => {
             this._paused = false;
-            this._pauseUi?.destroy();
             this._pauseUi = null;
             this.time.timeScale = 1;
             this.tweens.timeScale = 1;
+            if (this.physics?.world) this.physics.world.isPaused = false;
             this.bgVideo?.resume();
+            this.sound.resumeAll();
+        };
+        closeImg.on("pointerup", () => { destroyAll(); unpause(); });
+
+        // 🔧 HOME + EXIT image buttons (center-bottom row)
+        const makeIconButton = (key, x, y, onClick, size = 72) => {
+            const img = this.add.image(x, y, key).setOrigin(0.5).setDepth(10_003)
+                .setDisplaySize(size, size)
+                .setInteractive({ useHandCursor: true });
+            img.on("pointerover", () => img.setScale(1.06));
+            img.on("pointerout",  () => img.setScale(1.00));
+            img.on("pointerup", onClick);
+            g.add(img);
+            return img;
+        };
+
+        const rowY = py + ph - 86;
+        // needs these textures preloaded in PreloadScene: "ui_home", "ui_close" already used
+        const homeBtn = (this.textures.exists("ui_home"))
+            ? makeIconButton("ui_home", W/2 - 80, rowY, () => {
+                this.finalizeRound?.("Paused → Home");
+                const playerName = this.registry.get("playerName");
+                destroyAll();
+                this.scene.start("GameScene", { playerName });
+            }, 76)
+            : null;
+
+        const exitBtn = makeIconButton(closeKey ?? null, W/2 + 80, rowY, () => {
+            this.finalizeRound?.("Paused → Exit to Menu");
+            destroyAll();
+            this.scene.start("MenuScene");
+        }, 76);
+
+        // 🔧 MUTE as a proper coloured button (like difficulty UI)
+        const makeRectBtn = (label, x, y, onClick) => {
+            const Bw = CONFIG?.ui?.button?.width  ?? 520;
+            const Bh = CONFIG?.ui?.button?.height ?? 64;
+            const rect = this.add.rectangle(x, y, Bw, Bh, 0x142038, 1)
+                .setOrigin(0.5).setStrokeStyle(2, 0xffffff)
+                .setInteractive({ useHandCursor: true }).setDepth(10_003);
+            const txt = this.add.text(x, y, label, {
+                fontFamily: "Montserrat, Arial, sans-serif",
+                fontSize: "26px",
+                color: "#ffffff",
+                align: "center",
+                fixedWidth: Bw
+            }).setOrigin(0.5).setDepth(10_004);
+            rect.on("pointerover", () => rect.setFillStyle(0x1d2b52));
+            rect.on("pointerout",  () => rect.setFillStyle(0x142038));
+            rect.on("pointerup", onClick);
+            txt.on("pointerup", onClick);
+            g.add(rect); g.add(txt);
+            return { rect, txt };
+        };
+
+        const muteLabel = this.sound?.mute ? "Unmute" : "Mute";
+        const muteY = rowY - 76;
+        const muteBtn = makeRectBtn(muteLabel, W/2, muteY, () => {
+            if (this.sound) {
+                this.sound.mute = !this.sound.mute;
+                muteBtn.txt.setText(this.sound.mute ? "Unmute" : "Mute");
+            }
+        });
+
+        function destroyAll() {
+            if (panel?.destroy) panel.destroy();
+            title.destroy(); stats.destroy();
+            closeImg.destroy(); overlay.destroy();
+            muteBtn.rect.destroy(); muteBtn.txt.destroy();
+            homeBtn?.destroy();
+            exitBtn?.destroy();
+            g.destroy?.();
+        }
+        return g;
+    }
+
+
+    // pause must freeze timers/tweens and bg video
+    togglePause() {
+        if (this._paused) {
+            // --- resume game ---
+            this._paused = false;
+
+            // destroy our custom pause UI
+            this._pauseUi?.destroy();
+            this._pauseUi = null;
+
+            // restore time / tween / physics / audio / video
+            this.time.timeScale = 1;
+            this.tweens.timeScale = 1;
+            if (this.physics?.world) this.physics.world.isPaused = false;
+            this.bgVideo?.resume();
+            this.sound.resumeAll();
         } else {
+            // --- pause game ---
             this._paused = true;
-            this._pauseUi = systems.ui.pauseOverlay(this, {
-                onResume: () => this.togglePause(),
-                onHome: () => {
-                    this.finalizeRound?.("Paused → Main Menu");
-                    const playerName = this.registry.get("playerName");
-                    this.scene.start("GameScene", { playerName });
-                }
-            });
+
+            // build the new Game-Over-styled overlay (replaces systems.ui.pauseOverlay)
+            this._pauseUi = this._buildPauseOverlay();
+
+            // freeze time / tweens / physics / audio / video
             this.time.timeScale = 0;
             this.tweens.timeScale = 0;
+            if (this.physics?.world) this.physics.world.isPaused = true;
             this.bgVideo?.pause();
+            this.sound.pauseAll();
         }
     }
+
+
 
     preload() {
         const set = CONFIG.assets.soapSplash.backgrounds;
@@ -129,8 +294,6 @@ export default class SoapSplashScene extends Phaser.Scene {
         SS.activeDifficulty = levelNum;
 
         // ── Word buckets from WordBank loader ────────────────────────────────────
-        // Prefer: SS.wordsByDifficulty = {1:[],2:[],3:[]}
-        // Fallback: SS.words as an object {1:[],2:[],3:[]}, or flat array (legacy)
         const grouped =
             (SS.wordsByDifficulty && typeof SS.wordsByDifficulty === "object")
                 ? SS.wordsByDifficulty
@@ -161,7 +324,7 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         console.log(`[SoapSplash] level=${levelNum} | words=${pool.length}`);
 
-        // ── Tuning by level (unchanged below this line) ──────────────────────────
+        // ── Tuning by level ──────────────────────────────────────────────────────
         switch (levelNum) {
             case 1:
                 SS.spawnEveryMs = 1600;
@@ -189,9 +352,6 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         // (optional) align underlying systems timer to 100s
         if (SS) SS.timerMs = 100000;
-
-        // … keep the rest of your existing create() exactly as-is …
-
 
         // audio
         const savedMute = this.registry.get("mute") === true;
@@ -282,19 +442,19 @@ export default class SoapSplashScene extends Phaser.Scene {
         const difficulty = this.registry.get("difficulty") || "normal";
         this.roundId = DB.beginRound(window.__SESSION_ID__, "SoapSplasher", String(difficulty));
 
-        // topbar
-        this.topbar = systems.ui.topbar(this, {
-            onHome: () => {
-                this.finalizeRound?.("Home button");
-                const playerName = this.registry.get("playerName");
-                this.scene.start("GameScene", { playerName });
-            },
-            onPause: () => this.togglePause(),
-        });
+        // ── Top-right PAUSE icon only (no home/settings in this scene) ───────────
+        const T = CONFIG.ui.topbar;
+        const pause = this.add.image(this.scale.width - T.padding - T.iconSize/2, T.padding + T.iconSize/2, "ui_pause")
+            .setOrigin(0.5).setDisplaySize(T.iconSize, T.iconSize).setDepth(200).setScrollFactor(0)
+            .setInteractive({ useHandCursor: true });
+        pause.on("pointerup", () => this.togglePause());
 
-        // hide generic systems timer text if exposed (non-breaking attempts)
+        // Hide generic systems timer text if exposed (remove small white timer)
         this.topbar?.timerText?.setVisible(false);
         this.topbar?.setTimerVisible?.(false);
+
+        // ── REMOVE keyboard pause toggles (no ESC/P pause) ──────────────────────
+        // (intentionally no key bindings for pause)
 
         // build our Chewy countdown HUD (visual only, 100 → 0)
         this._buildCountdownHUD();
@@ -326,6 +486,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             if (!this.gameOver) this.finalizeRound("Scene shutdown");
         });
     }
+
 
 
     finalizeRound(reason = "Time up", overrides = {}) {
@@ -396,7 +557,6 @@ export default class SoapSplashScene extends Phaser.Scene {
         })
             .setOrigin(1, 1)
             .setStroke("#000000", 6)
-            // .setShadow(0, 3, "#00000090", 6, true, true)
             .setAlpha(0);
 
         g.add(label);
@@ -579,23 +739,27 @@ export default class SoapSplashScene extends Phaser.Scene {
     // WAVE-BASED UPDATE LOOP (+ toasts)
     // -------------------------------
     update(time, delta) {
+        // stop all game logic when finished or paused
+        if (this.gameOver) return;
+        if (this._paused) {
+            // timers/tweens are already frozen via timeScale=0 in togglePause()
+            return;
+        }
+
         // ensure an active target exists without needing a keypress
-        if (!this._paused && !this.gameOver && this.germs.length && (!this.typing || !this.typing.activeId)) {
+        if (this.germs.length && (!this.typing || !this.typing.activeId)) {
             systems.soapsplash.typing.pickNearest(this);
         }
 
         const SS = CONFIG.soapSplash;
-        if (this._paused || this.gameOver) return;
         if (this.gameStartAt == null) this.gameStartAt = time;
 
         // drive our Chewy countdown (visual only)
         this._updateCountdown(delta);
 
-        const base = SS.spawnIntervalMs ?? 1200;
+        const base   = SS.spawnIntervalMs ?? 1200;
         const jitter = SS.spawnJitterMs ?? 0;
-
-
-        const cap = SS.waveCap ?? SS.maxGerms ?? 5;
+        const cap    = SS.waveCap ?? SS.maxGerms ?? 5;
 
         // start a new wave if none active and field is clear
         if (!this._waveActive && this.germs.length === 0) {
@@ -626,16 +790,26 @@ export default class SoapSplashScene extends Phaser.Scene {
         systems.soapsplash.timer.updateHUD(this, this.time.now);
 
         // toasts:
-        // 1) Sad once per new breach (old behavior)
         if (this.breaches > this._lastSadAtBreaches) {
             this._lastSadAtBreaches = this.breaches;
             this.showKikoSad();
         }
-        // 2) Encouragement when streak increases (>= 1)
         const curStreak = this.streakSys?.streak ?? this.typing?.streak ?? 0;
         if (curStreak > (this._lastEncouragementAt ?? 0) && curStreak >= 1) {
             this._lastEncouragementAt = curStreak;
             this.showKikoEncouragement();
         }
+    }
+
+    // (optional) clean up overlay and listeners on shutdown
+    shutdown() {
+        // destroy pause UI if present
+        if (this._pauseUi) {
+            this._pauseUi.destroy();
+            this._pauseUi = null;
+        }
+
+        // stop background video (saves resources across scene swaps)
+        this.bgVideo?.stop?.();
     }
 }

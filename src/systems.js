@@ -227,29 +227,96 @@ const ui = {
         };
     },
 
-    // top bar with optional home pause settings icons anchored to top right
-    topbar(scene, { onHome, onPause, onSettings } = {}) {
+    // top bar with optional home, pause, and settings icons anchored to top-right
+// now also includes a styled Mute/Unmute toggle (dark rectangle) below icons
+    topbar(scene, { onHome, onPause, onSettings, showMute = true } = {}) {
         const T = CONFIG.ui.topbar;
+        const B = CONFIG.ui.button || { width: 520, height: 64 }; // fallback
+
         let x = scene.scale.width - T.padding;
         const y = T.padding + T.iconSize / 2;
 
-        const make = (key, cb) => {
+        // helper to spawn each icon safely
+        const makeIcon = (key, cb) => {
+            if (!scene.textures.exists(key)) return null; // avoid missing sprite
             x -= T.iconSize / 2;
-            const img = scene.add.image(x, y, key).setOrigin(0.5)
+            const img = scene.add.image(x, y, key)
+                .setOrigin(0.5)
                 .setDisplaySize(T.iconSize, T.iconSize)
+                .setScale(1)
                 .setDepth(200)
                 .setScrollFactor(0)
-                .setInteractive({ useHandCursor: true });
+                // .setInteractive({ useHandCursor: true })
+            ;
+
+// fix hover bounce — lock scale instead of tween
+//             img.on("pointerover", () => img.setTint(0xcde3ff));
+//             img.on("pointerout", () => img.clearTint());
+
             if (cb) img.on("pointerup", cb);
             x -= T.iconSize + T.gap;
             return img;
         };
 
-        const home = make("ui_home", onHome || null);
-        const pause = make("ui_pause", onPause || null);
-        const settings = make("ui_settings", onSettings || null);
-        return { home, pause, settings };
+        // build optional icons
+        const home = makeIcon("ui_home", onHome || null);
+        const pause = makeIcon("ui_pause", onPause || null);
+        const settings = makeIcon("ui_settings", onSettings || null);
+
+        // create Mute/Unmute dark rectangle toggle
+        let muteRect = null, muteTxt = null;
+        if (showMute) {
+            const W = B.width, H = B.height;
+            const bx = scene.scale.width - (W / 2 + T.padding);
+            const by = y + T.iconSize / 2 + 12 + H / 2; // just below icons
+
+            const fillIdle  = 0x142038;
+            const fillHover = 0x1d2b52;
+
+            muteRect = scene.add.rectangle(bx, by, W, H, fillIdle, 1)
+                .setOrigin(0.5)
+                .setStrokeStyle(2, 0xffffff)
+                .setDepth(200)
+                .setScrollFactor(0)
+                .setInteractive({ useHandCursor: true });
+
+            muteTxt = scene.add.text(bx, by, (scene.sound?.mute ? "Unmute" : "Mute"), {
+                fontFamily: CONFIG.ui.fontFamily,
+                fontSize: "26px",
+                color: "#ffffff",
+                align: "center",
+                fixedWidth: W
+            })
+                .setOrigin(0.5)
+                .setDepth(201)
+                .setScrollFactor(0);
+
+            const toggleMute = () => {
+                if (!scene.sound) return;
+                scene.sound.mute = !scene.sound.mute;
+                scene.registry.set("mute", !!scene.sound.mute);
+                muteTxt.setText(scene.sound.mute ? "Unmute" : "Mute");
+            };
+
+            muteRect
+                .on("pointerover", () => muteRect.setFillStyle(fillHover))
+                .on("pointerout",  () => muteRect.setFillStyle(fillIdle))
+                .on("pointerup",   toggleMute);
+            muteTxt.on("pointerup", toggleMute);
+        }
+
+        // clean up utility if you need to destroy later
+        const destroy = () => {
+            home?.destroy();
+            pause?.destroy();
+            settings?.destroy();
+            muteRect?.destroy();
+            muteTxt?.destroy();
+        };
+
+        return { home, pause, settings, destroy };
     },
+
 
     // pause overlay with menu, resume, audio toggle, and live stats
     pauseOverlay(scene, { onResume, onHome } = {}) {
@@ -257,7 +324,7 @@ const ui = {
         const P = CONFIG.ui.pauseOverlay;
 
         const overlay = scene.add.rectangle(0, 0, width, height, P.bgColor, P.bgAlpha)
-            .setOrigin(0, 0).setDepth(999);
+            .setOrigin(0, 0).setDepth(999).setInteractive(); // blocks clicks behind
 
         const panelW = 780, panelH = 420;
         const panel = scene.add.rectangle(width / 2, height / 2, panelW, panelH, P.panelColor, 1)
@@ -265,12 +332,23 @@ const ui = {
 
         // Title
         const title = scene.add.text(width / 2, height / 2 - 150, "Paused", {
-            fontFamily: CONFIG.ui.fontFamily,
-            fontSize: `${P.titleSize}px`,
-            color: "#ffffff"
+            fontFamily: CONFIG.ui.fontFamily, fontSize: `${P.titleSize}px`, color: "#ffffff"
         }).setOrigin(0.5).setDepth(1001);
 
-        // Live stats: score + streak (reads from streakSys if present)
+        // Close button (top-right of panel)
+        const close = scene.add.image(panel.x + panelW/2 - 26, panel.y - panelH/2 + 26, "ui_close")
+            .setOrigin(0.5).setDepth(1002).setDisplaySize(36,36)
+            .setInteractive({ useHandCursor: true });
+
+        close.on("pointerup", () => {
+            // CLOSE is the only way to unpause now
+            destroyAll();
+            scene._paused = false;
+            scene._pauseUi = null;
+            // re-enable your game loop, timers etc if you pause them elsewhere
+        });
+
+        // Live stats (optional)
         const base  = scene.streakSys?.baseScore ?? 0;
         const mult  = scene.streakSys?.multiplier?.() ?? 0;
         const total = scene.streakSys?.totalScore ?? scene.typing?.score ?? 0;
@@ -283,43 +361,22 @@ const ui = {
             { fontFamily: CONFIG.ui.fontFamily, fontSize: "24px", color: "#ffffff", align: "center" }
         ).setOrigin(0.5).setDepth(1001);
 
-        // Buttons (reuse your ui.button helper)
-        const y0 = height / 2 + 10;
+        // Keep a “Main Menu” button if you like
         const mkBtn = (label, y, cb) => {
             const { btn, txt } = ui.button(scene, width / 2, y, label, cb);
             btn.setDepth(1001); txt.setDepth(1001);
             return { btn, txt };
         };
+        const y0 = height / 2 + 40;
+        const homeBtn = mkBtn("Main Menu", y0, () => onHome?.());
 
-        const resumeBtn = mkBtn("Resume", y0, () => onResume?.());
-        const homeBtn   = mkBtn("Main Menu", y0 + 90, () => onHome?.());
+        function destroyAll() {
+            overlay.destroy(); panel.destroy(); title.destroy(); stats.destroy();
+            homeBtn.btn.destroy(); homeBtn.txt.destroy();
+            close.destroy();
+        }
 
-        // Mute/Unmute toggle
-        const isMuted = !!scene.sound?.mute;
-        let audioLabel = scene.add.text(width / 2, y0 + 155, isMuted ? "Unmute" : "Mute", {
-            fontFamily: CONFIG.ui.fontFamily, fontSize: "22px", color: "#ffffff",
-            backgroundColor: "#2d344f", padding: { left: 14, right: 14, top: 8, bottom: 8 }
-        }).setOrigin(0.5).setDepth(1001).setInteractive({ useHandCursor: true });
-
-        const toggleAudio = () => {
-            if (scene.sound) {
-                scene.sound.mute = !scene.sound.mute;
-                // persist mute across scenes
-                scene.registry.set("mute", scene.sound.mute);
-                audioLabel.setText(scene.sound.mute ? "Unmute" : "Mute");
-            }
-        };
-
-        audioLabel.on("pointerup", toggleAudio);
-
-        return {
-            destroy() {
-                overlay.destroy(); panel.destroy(); title.destroy(); stats.destroy();
-                resumeBtn.btn.destroy(); resumeBtn.txt.destroy();
-                homeBtn.btn.destroy(); homeBtn.txt.destroy();
-                audioLabel.destroy();
-            }
-        };
+        return { destroy: destroyAll };
     },
 
     togglePause() {

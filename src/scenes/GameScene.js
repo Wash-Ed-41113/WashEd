@@ -4,7 +4,6 @@ import { DB } from "../db.js";
 const soapSplashMusic = new Audio("assets/sounds/soap splasher.mp3");
 soapSplashMusic.loop = true;
 
-
 // define the main hub scene for the game flow
 export default class GameScene extends Phaser.Scene {
     // register scene key and set up state flags
@@ -23,6 +22,16 @@ export default class GameScene extends Phaser.Scene {
 
         // read player name once (fallback to default)
         const playerName = this.registry.get("playerName") || "Player";
+
+        // ---- keep mute state in sync (Phaser Audio <-> HTMLAudio <-> registry) ----
+        const initialMute = !!this.registry.get("mute");
+        if (this.sound) this.sound.mute = initialMute;
+        try { soapSplashMusic.muted = initialMute; } catch (_) {}
+        this.registry.events?.on("changedata-mute", (_key, _prev, v) => {
+            if (this.sound) this.sound.mute = !!v;
+            try { soapSplashMusic.muted = !!v; } catch (_) {}
+        });
+        // ---------------------------------------------------------------------------
 
         // get current canvas size
         const { width, height } = this.scale;
@@ -81,10 +90,8 @@ export default class GameScene extends Phaser.Scene {
         ];
 
         // --- typewriter tuning ---
-        const TYPE_BASE_MS   = 9000;  // ↑ higher = slower (try 120–160)
+        const TYPE_BASE_MS   = 9000;  // ↑ higher = slower
         const PUNCT_PAUSE_MS = { ",": 140, ".": 280, "!": 280, "?": 280, "…": 320, ";": 160, ":": 160 };
-
-
 
         // typing state holds timer current index and flags
         this._typing = { timer: null, msgIndex: 0, isRunning: false, currentFull: "" };
@@ -95,7 +102,6 @@ export default class GameScene extends Phaser.Scene {
             else nextLabel.setText(this._typing.msgIndex >= messages.length - 1 ? "Done" : "Next ▶");
         };
 
-        // starts typewriter animation for a given message
         // starts typewriter animation for a given message with punctuation-aware pauses
         const startTyping = (msg) => {
             // clear previous timer if any
@@ -108,7 +114,7 @@ export default class GameScene extends Phaser.Scene {
             this._typing.isRunning = true;
             this._typing.currentFull = msg;
 
-            // optional: show a soft blink cursor while typing
+            // soft blink cursor while typing
             let cursor = this.add.text(greetText.x + greetText.displayWidth / 2 + 6, greetText.y, "│", {
                 fontFamily: greetText.style.fontFamily,
                 fontSize: greetText.style.fontSize,
@@ -147,7 +153,6 @@ export default class GameScene extends Phaser.Scene {
             this._typing.timer = this.time.delayedCall(TYPE_BASE_MS, step);
             updateNextLabel();
         };
-
 
         // draw rectangular next button at bubble corner
         const nextBtn = this.add
@@ -209,18 +214,39 @@ export default class GameScene extends Phaser.Scene {
                     this.input.enabled = true;
                     this._navigating = false;
 
-
                     // show difficulty panel
                     this.showDifficultyPanel({ bubbleX, bubbleY, bubbleW, bubbleH });
                 }
             });
         };
 
+        // --- bind once (ENTER also triggers onNext; S/L dev keys) ---
+        const bindDevKeys = () => {
+            const ENTER = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+            const S     = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+            const L     = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L);
 
-// bind once
-        this.input.keyboard.on("keydown-SPACE", onNext);
-        this.input.keyboard.on("keydown-ENTER", onNext);
+            ENTER.on("down", () => onNext?.());
+            S.on("down", () => {
+                if (this._navigating) return;
+                const data = {
+                    playerName: this.registry.get("playerName") || "Player",
+                    difficulty: this.registry.get("difficulty") || 2,
+                };
+                this.scene.start("SoapSplashExplain", { parentKey: "SoapSplash" });
+                this.scene.launch("SoapSplash", data);
+            });
+            L.on("down", () => {
+                if (this._navigating) return;
+                if (this.scene.get("LeaderboardScene")) this.scene.start("LeaderboardScene");
+                else if (this.scene.get("EndingScene")) this.scene.start("EndingScene");
+            });
 
+            this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+                ENTER.destroy(); S.destroy(); L.destroy();
+            });
+        };
+        bindDevKeys();
 
         // wire up interactions for next
         nextBtn.on("pointerdown", onNext);
@@ -233,29 +259,23 @@ export default class GameScene extends Phaser.Scene {
 
         // function to build the difficulty panel
         this.showDifficultyPanel = ({ bubbleX, bubbleY, bubbleW, bubbleH }) => {
-            // target panel size and position
             const panelW = bubbleW, panelFinalH = 340, panelX = bubbleX;
             const panelTopY = bubbleY - bubbleH / 2 - 50;
 
-            // panel rect starts collapsed and animates open
             const panelRect = this.add
                 .rectangle(panelX, panelTopY, panelW, 0, 0xffffff, 0.95)
                 .setOrigin(0.5, 0).setStrokeStyle(3, 0x000000).setDepth(50);
 
-            // create a mask so content reveals only as panel grows
             const mask = panelRect.createGeometryMask();
             const content = this.add.container(panelX, panelTopY).setDepth(51);
             content.setMask(mask);
 
-            // title text which fades in as the panel opens
             const title = this.add.text(0, 24, "Select your difficulty!", {
                 fontFamily: CONFIG.ui.fontFamily, fontSize: "44px", color: "#000000",
             }).setOrigin(0.5, 0).setAlpha(0.0);
 
-            // track selected difficulty
             let selectedDifficulty = null;
 
-            // helper to make a labeled button inside content
             const makeBtn = (label, y, key) => {
                 const btn = this.add.rectangle(0, y, 520, 64, 0x142038, 1)
                     .setStrokeStyle(2, 0xffffff).setOrigin(0.5)
@@ -265,11 +285,9 @@ export default class GameScene extends Phaser.Scene {
                     fontFamily: CONFIG.ui.fontFamily, fontSize: "26px", color: "#ffffff",
                 }).setOrigin(0.5).setAlpha(0.0);
 
-                // hover feedback for button
                 btn.on("pointerover", () => btn.setFillStyle(0x1d2b52, 1));
                 btn.on("pointerout",  () => btn.setFillStyle(0x142038, 1));
 
-                // select difficulty when either rect or label is pressed
                 const choose = () => finalizeSelection(key, btn, txt);
                 btn.on("pointerdown", choose);
                 txt.on("pointerdown", choose);
@@ -278,8 +296,6 @@ export default class GameScene extends Phaser.Scene {
                 return { btn, txt };
             };
 
-            // build three buttons with spacing, commiting part 2
-
             const gap = 78, baseY = 120;
             const b1 = makeBtn("Easy",   baseY,           "easy");
             const b2 = makeBtn("Normal", baseY + gap,     "normal");
@@ -287,7 +303,6 @@ export default class GameScene extends Phaser.Scene {
 
             content.add([title]);
 
-            // animate the panel opening and reveal contents smoothly
             this.tweens.add({
                 targets: panelRect,
                 height: panelFinalH,
@@ -301,50 +316,72 @@ export default class GameScene extends Phaser.Scene {
                     [b1.btn, b1.txt, b2.btn, b2.txt, b3.btn, b3.txt].forEach(o => o.setAlpha(a));
                 },
                 onComplete: () => {
-                    // ensure full opacity after animation
                     title.setAlpha(1);
                     [b1.btn, b1.txt, b2.btn, b2.txt, b3.btn, b3.txt].forEach(o => o.setAlpha(1));
                 }
             });
 
-            // prevent further clicks after one selection
             const disableAll = () => {
                 [b1, b2, b3].forEach(({ btn, txt }) => { btn.disableInteractive(); txt.disableInteractive(); });
             };
 
-            // finalize selection then transition to mode panel
             const finalizeSelection = (difficultyKey, btn, txt) => {
                 if (this._navigating) return;
+                this._navigating = true;
 
-                // map UI choice -> numeric level for the registry (1 easy, 2 normal, 3 hard)
                 const lvlMap = { easy: 1, normal: 2, hard: 3 };
-                this.registry.set("difficulty", lvlMap[difficultyKey] ?? 2);
+                const chosen = lvlMap[difficultyKey] ?? 2;
+                this.registry.set("difficulty", chosen);
 
                 selectedDifficulty = difficultyKey;
                 disableAll();
 
-                // small blink feedback on chosen button then collapse panel
+                // quick feedback + collapse
+                systems?.ui?.toast?.(this, `Difficulty: ${difficultyKey.toUpperCase()}`, { ms: 900 });
                 this.tweens.add({
                     targets: [btn, txt],
                     alpha: 0.4, yoyo: true, duration: 120, repeat: 1,
                     onComplete: () => {
-                        // collapse difficulty panel then show mode panel
                         this.tweens.add({
                             targets: panelRect, height: 10, duration: 160, ease: "Cubic.In",
                             onComplete: () => {
                                 content.clearMask(true);
                                 panelRect.destroy(); content.destroy();
+                                // cleanup key bindings before moving on
+                                cleanupKeys();
                                 this.showModePanel(selectedDifficulty);
+                                this._navigating = false;
                             },
                         });
                     },
                 });
             };
 
-            // keyboard shortcuts for quick selection
-            this.input.keyboard.once("keydown-ONE",   () => finalizeSelection("easy",   b1.btn, b1.txt));
-            this.input.keyboard.once("keydown-TWO",   () => finalizeSelection("normal", b2.btn, b2.txt));
-            this.input.keyboard.once("keydown-THREE", () => finalizeSelection("hard",   b3.btn, b3.txt));
+            const keys = this.input.keyboard.addKeys({
+                one:   Phaser.Input.Keyboard.KeyCodes.ONE,
+                two:   Phaser.Input.Keyboard.KeyCodes.TWO,
+                three: Phaser.Input.Keyboard.KeyCodes.THREE,
+                n1:    Phaser.Input.Keyboard.KeyCodes.NUMPAD_ONE,
+                n2:    Phaser.Input.Keyboard.KeyCodes.NUMPAD_TWO,
+                n3:    Phaser.Input.Keyboard.KeyCodes.NUMPAD_THREE,
+            });
+
+            const on1 = () => finalizeSelection("easy",   b1.btn, b1.txt);
+            const on2 = () => finalizeSelection("normal", b2.btn, b2.txt);
+            const on3 = () => finalizeSelection("hard",   b3.btn, b3.txt);
+
+            keys.one.on("down", on1); keys.n1.on("down", on1);
+            keys.two.on("down", on2); keys.n2.on("down", on2);
+            keys.three.on("down", on3); keys.n3.on("down", on3);
+
+            const cleanupKeys = () => {
+                keys.one.off("down", on1); keys.n1.off("down", on1);
+                keys.two.off("down", on2); keys.n2.off("down", on2);
+                keys.three.off("down", on3); keys.n3.off("down", on3);
+            };
+
+            // clean on scene shutdown too (belt & braces)
+            this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupKeys);
         };
 
         // function to build the mode selection panel after difficulty
@@ -385,7 +422,7 @@ export default class GameScene extends Phaser.Scene {
                     .setInteractive({ useHandCursor: true });
 
                 const txt = this.add.text(0, y, label, {
-                    fontFamily: CONFIG.ui.fontFamily || "Arial",
+                    fontFamily: CONFIG.ui.fontFamily,
                     fontSize: "26px",
                     color: "#fff",
                     align: "center",
@@ -401,8 +438,8 @@ export default class GameScene extends Phaser.Scene {
                 return { rect, txt };
             };
 
-            // build three mode buttons with equal spacing
-            const GAP = 86;
+            // (buttons intentionally commented in your file)
+            // const GAP = 86;
             // makeBtn("Play Soap Splash",  -GAP, () => go("SoapSplash"));
             // makeBtn("Play Clean Catch", 0, () =>  go("CleanCatchExplain", { difficulty: "hard" }));
             // makeBtn("Explore Playground",  GAP, () => go("PlaygroundScene"));
@@ -437,7 +474,9 @@ export default class GameScene extends Phaser.Scene {
 
             // put a minimal topbar with home that returns to this scene state. merging
             systems.ui.topbar(this, {
-                onHome: () => this.scene.start("GameScene", { playerName: this.registry.get("playerName") })
+                onHome: () => this.scene.start("GameScene", { playerName: this.registry.get("playerName") }),
+                // pass showMute: true if you want the toggle visible here
+                showMute: true
             });
 
             // allow escape to back out to menu
@@ -445,6 +484,32 @@ export default class GameScene extends Phaser.Scene {
                 bg.destroy(); content.destroy();
                 this.scene.start("MenuScene");
             });
+
+            // optional S/L hotkeys while mode panel is open
+            const keysMode = this.input.keyboard.addKeys({
+                s: Phaser.Input.Keyboard.KeyCodes.S,
+                l: Phaser.Input.Keyboard.KeyCodes.L
+            });
+            keysMode.s.on("down", () => go("SoapSplash"));
+            keysMode.l.on("down", () => {
+                if (this.scene.get("LeaderboardScene")) this.scene.start("LeaderboardScene");
+                else if (this.scene.get("EndingScene")) this.scene.start("EndingScene");
+            });
+            this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+                keysMode.s.destroy(); keysMode.l.destroy();
+            });
         };
+
+        if (CONFIG.isDevMode) {
+            const setLvl = (n) => {
+                this.registry.set("difficulty", n);
+                // optional: quick feedback so you know it worked
+                systems?.ui?.toast?.(this, `Dev: difficulty = ${["","easy","normal","hard"][n]}`, { ms: 900 });
+            };
+
+            this.input.keyboard.on("keydown-ONE",   () => setLvl(1));
+            this.input.keyboard.on("keydown-TWO",   () => setLvl(2));
+            this.input.keyboard.on("keydown-THREE", () => setLvl(3));
+        }
     }
 }

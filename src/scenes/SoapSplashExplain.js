@@ -126,7 +126,7 @@ export default class SoapSplashExplain extends Phaser.Scene {
         };
 
         // keyboard shortcut
-        this.input.keyboard.on("keydown-SPACE", nextLine);
+        this.input.keyboard.on("keydown-ENTER", nextLine);
     }
 
 

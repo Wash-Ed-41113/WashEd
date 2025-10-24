@@ -22,6 +22,7 @@ export default class PreloadScene extends Phaser.Scene {
         this.load.image("ui_pause", UI.pauseBut);
         this.load.image("ui_settings", UI.settingsBut);
         this.load.image("ui_home", UI.homeBut);
+        this.load.image("ui_close", CONFIG.assets.ui.closeBut);
         // conditionally load start button if path is defined
         if (UI.startBut)    this.load.image("ui_start", UI.startBut);
         // conditionally load dialog panel if path is defined

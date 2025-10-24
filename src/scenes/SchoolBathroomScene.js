@@ -126,10 +126,13 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
         // --------- Hints: glow guidance ----------
         if (!this._step1Done) {
-            this._enableStep1Hints(tap); // blue glow on tap
+            // white glow on tap + both soaps (less obvious)
+            this._enableStep1Hints(tap, soapBar, soapBottle);
         } else {
-            this._enableStep2Hints(soapBar, soapBottle); // green glow on soaps
+            // white glow on soaps in step 2
+            this._enableStep2Hints(soapBar, soapBottle);
         }
+
 
         // Click routing (blocked until dialog closes)
         // TAP is the FIRST correct step
@@ -160,7 +163,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         const handleSoapClick = onlyIfNoDialog(() => {
             if (!this._step1Done) {
                 // Wrong step — keep hint on tap
-                this._enableStep1Hints(tap);
+                this._enableStep1Hints(tap, soapBar, soapBottle);
                 this._showSmallDialog("Oops, that’s not the first step.\nLet's try again!\n\nRemember: we always start at the beginning.\nYou can do it!");
                 return;
             }
@@ -190,9 +193,32 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             }
         });
 
+        if (CONFIG.isDevMode) {
+            // 1/2/3 = set difficulty level
+            const setLvl = (n) => this.registry.set("difficulty", n);
+            this.input.keyboard.on("keydown-ONE",   () => setLvl(1));
+            this.input.keyboard.on("keydown-TWO",   () => setLvl(2));
+            this.input.keyboard.on("keydown-THREE", () => setLvl(3));
+
+            // S = jump straight to SoapSplash (bypass Clean Catcher)
+            this.input.keyboard.on("keydown-S", () => {
+                this._clearHints?.();
+                this.scene.start("SoapSplash");
+            });
+
+            // L = open leaderboard screen directly (bypass minis)
+            this.input.keyboard.on("keydown-L", () => {
+                this._clearHints?.();
+                this.scene.start("EndingScene");
+            });
+        }
+
+
         if (!skipIntro) {
             this._showEntryDialog();
         }
+
+
 
         // Also clean up hints on shutdown
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this._clearHints());
@@ -413,11 +439,14 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         this._hints = { tap: null, soapBar: null, soapBottle: null };
     }
 
-    _enableStep1Hints(tapImg) {
+    _enableStep1Hints(tapImg, soapBarImg, soapBottleImg) {
         this._clearHints();
-        this._hints.tap = this._makeGlow(tapImg, { color: 0xffffff, alpha: 0.35, scale: 1, pulseMs: 1600 });
-
+        // white glow on all three so the first step isn't obvious
+        this._hints.tap        = this._makeGlow(tapImg,        { color: 0xffffff, alpha: 0.35, scale: 1, pulseMs: 1600 });
+        this._hints.soapBar    = this._makeGlow(soapBarImg,    { color: 0xffffff, alpha: 0.35, scale: 1, pulseMs: 1600 });
+        this._hints.soapBottle = this._makeGlow(soapBottleImg, { color: 0xffffff, alpha: 0.35, scale: 1, pulseMs: 1600 });
     }
+
 
     _enableStep2Hints(soapBarImg, soapBottleImg) {
         this._clearHints();
