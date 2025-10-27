@@ -149,6 +149,31 @@ export const DB = (() => {
         return rows.sort((a, b) => b.total - a.total || (b.started_at || "").localeCompare(a.started_at || "")).slice(0, n);
     }
 
+    // NEW: total for a specific game within a session
+    function sessionGameTotal(session_id, game_key) {
+        if (!session_id || !game_key) return 0;
+        return state.rounds
+            .filter(r => r.session_id === session_id && r.game_key === game_key)
+            .reduce((acc, r) => acc + (r.score || 0), 0);
+    }
+
+    // NEW: best overall session totals (top N sessions)
+    function bestSessionTotals(n = 1) {
+        const totals = new Map(); // session_id -> total
+        for (const r of state.rounds) {
+            totals.set(r.session_id, (totals.get(r.session_id) || 0) + (r.score || 0));
+        }
+        const rows = state.sessions.map(s => ({
+            session_id: s.session_id,
+            player_name: s.player_name,
+            total: totals.get(s.session_id) || 0,
+            started_at: s.started_at
+        }));
+        return rows
+            .sort((a, b) => b.total - a.total || (b.started_at || "").localeCompare(a.started_at || ""))
+            .slice(0, n);
+    }
+
     function dump() { return JSON.parse(JSON.stringify(state)); }
 
     // clear DB when tab/window closes (keeps memory for this tab life)
@@ -159,7 +184,8 @@ export const DB = (() => {
         init, beginSession, endSession, beginRound, finalizeRound,
         // queries
         query: {
-            players, roundsBySession, topRoundsBySession, sessionTotal, topTotals
+            players, roundsBySession, topRoundsBySession, sessionTotal, topTotals,
+            sessionGameTotal, bestSessionTotals
         },
         dump
     };

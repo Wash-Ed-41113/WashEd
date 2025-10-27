@@ -9,6 +9,7 @@ export default class EndingScene extends Phaser.Scene {
         super("EndingScene");
         this._nameUi = null; // track modal bits for cleanup
         this._leaderboardPanel = null;
+        this._simpleScoresBox = null;
     }
 
     preload() {
@@ -154,13 +155,52 @@ export default class EndingScene extends Phaser.Scene {
         this._nameUi = null;
     }
 
-    /** Build a transparent, resizable leaderboard window. */
+    /** Build a transparent, resizable leaderboard window. (SAFE VERSION) */
     _showLeaderboard(opts = {}) {
-        // Fractions of screen (safe defaults)
-        const xFrac = opts.xFrac ?? 0.50;   // center by default
+        // ---- local helpers ----
+        const isGO = (x) => x && typeof x === "object" && ("type" in x) && x.once && x.on; // basic Phaser GO shape
+
+        // Always returns a Container (safe to add to other Containers)
+        const makeDarkButton = (x, y, label, onClick, w = 160, h = 54) => {
+            const cont = this.add.container(x, y);
+            const rect = this.add.rectangle(0, 0, w, h, 0x000000, 0.65)
+                .setStrokeStyle(2, 0xffffff, 0.9)
+                .setOrigin(0, 0)
+                .setInteractive({ useHandCursor: true });
+            const txt = this.add.text(w / 2, h / 2, label, {
+                fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
+                fontSize: Math.round(Math.min(w, h) * 0.38),
+                color: "#ffffff",
+            }).setOrigin(0.5);
+
+            rect.on("pointerover", () => rect.setFillStyle(0x111111, 0.85));
+            rect.on("pointerout",  () => rect.setFillStyle(0x000000, 0.65));
+            rect.on("pointerdown", () => {
+                this.sound?.play?.("click_sfx"); // optional if you have it
+                onClick?.();
+            });
+
+            cont.add([rect, txt]);
+            cont.setSize(w, h);
+            cont.setDepth(205);
+            return cont;
+        };
+
+        const addSafe = (parent, child) => {
+            if (!child) return;
+            if (Array.isArray(child)) {
+                for (const c of child) addSafe(parent, c);
+                return;
+            }
+            if (!isGO(child)) return; // ignore plain objects
+            parent.add(child);
+        };
+
+        // ---- layout options ----
+        const xFrac = opts.xFrac ?? 0.50;
         const yFrac = opts.yFrac ?? 0.50;
-        const wFrac = opts.wFrac ?? 0.78;   // ~4/5 width
-        const hFrac = opts.hFrac ?? 0.60;   // ~3/5 height
+        const wFrac = opts.wFrac ?? 0.78;
+        const hFrac = opts.hFrac ?? 0.60;
         const corner = opts.corner ?? 18;
         const bgAlpha = opts.bgAlpha ?? 0.18;
         const strokeAlpha = opts.strokeAlpha ?? 0.65;
@@ -171,40 +211,36 @@ export default class EndingScene extends Phaser.Scene {
         const panelX = W * xFrac - panelW / 2;
         const panelY = H * yFrac - panelH / 2;
 
-        // Container anchor at top-left of panel rect
         const panel = this.add.container(panelX, panelY).setDepth(200).setScrollFactor(0);
 
-        // BG (transparent)
+        // BG
         const g = this.add.graphics();
         g.fillStyle(0x000000, bgAlpha);
         g.fillRoundedRect(0, 0, panelW, panelH, corner);
         g.lineStyle(2, 0xffffff, strokeAlpha);
         g.strokeRoundedRect(0, 0, panelW, panelH, corner);
-        panel.add(g);
+        addSafe(panel, g);
 
-        // Relative paddings
+        // Metrics
         const pad = Math.round(Math.min(panelW, panelH) * 0.05);
         const colGap = Math.round(panelW * 0.04);
-        const colWidth = Math.floor((panelW - pad*2 - colGap) / 2);
+        const colWidth = Math.floor((panelW - pad * 2 - colGap) / 2);
         const headerH = Math.round(panelH * 0.13);
-        const listH = panelH - headerH - pad*2;
+        const listH = panelH - headerH - pad * 2;
 
         // Title
         const title = this.add.text(pad, pad, "Leaderboard", {
             fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
             fontSize: Math.round(headerH * 0.45),
             fontStyle: "700",
-            color: "#ffffff"
+            color: "#ffffff",
         });
-        panel.add(title);
+        addSafe(panel, title);
 
-        // Subheader: current player total
-        const name = (this.registry.get("playerName") || "Player");
+        // Subheader with current totals
+        const name = this.registry.get("playerName") || "Player";
         const sessionId = window.__SESSION_ID__;
-        let currentTotal = 0;
-        let top3 = [];
-        let uniquePlayers = [];
-
+        let currentTotal = 0, top3 = [], uniquePlayers = [];
         try {
             currentTotal = DB.query.sessionTotal(sessionId) || 0;
             top3 = DB.query.topRoundsBySession(sessionId, 3) || [];
@@ -220,104 +256,183 @@ export default class EndingScene extends Phaser.Scene {
             {
                 fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
                 fontSize: Math.round(headerH * 0.32),
-                color: "#ffffff"
+                color: "#ffffff",
             }
         );
-        panel.add(sub);
+        addSafe(panel, sub);
 
-        // Column 1: Top-3 this session
+        // Left column: Top-3
         const leftX = pad;
         const leftY = pad + headerH;
-        const leftTitle = this.add.text(leftX, leftY, "Top 3 (this session)", {
+        addSafe(panel, this.add.text(leftX, leftY, "Top 3 (this session)", {
             fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
             fontSize: Math.round(headerH * 0.30),
-            color: "#ffffff"
-        });
-        panel.add(leftTitle);
+            color: "#ffffff",
+        }));
 
         const list1 = this.add.container(leftX, leftY + Math.round(headerH * 0.35));
-        panel.add(list1);
+        addSafe(panel, list1);
 
-        const rowH = Math.max(28, Math.round(listH / 6)); // leave room comfortably
+        const rowH = Math.max(28, Math.round(listH / 6));
         top3.forEach((r, i) => {
             const y = i * rowH;
-            const rank = this.add.text(0, y, `${i+1}.`, {
+            addSafe(list1, this.add.text(0, y, `${i + 1}.`, {
                 fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
                 fontSize: Math.round(rowH * 0.55),
-                color: "#ffffff"
-            });
-            const score = this.add.text(Math.round(colWidth * 0.15), y, `${r.score}`, {
+                color: "#ffffff",
+            }));
+            addSafe(list1, this.add.text(Math.round(colWidth * 0.15), y, `${r.score}`, {
                 fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
                 fontSize: Math.round(rowH * 0.55),
-                color: "#A2F1B1"
-            });
-            const meta = this.add.text(
+                color: "#A2F1B1",
+            }));
+            addSafe(list1, this.add.text(
                 Math.round(colWidth * 0.45),
                 y,
                 `${r.game_key || ""}  (streak ${r.best_streak || 0})`,
                 {
                     fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
                     fontSize: Math.round(rowH * 0.40),
-                    color: "#dfe9ff"
+                    color: "#dfe9ff",
                 }
-            );
-            list1.add([rank, score, meta]);
+            ));
         });
 
-        // Column 2: All players (unique)
+        // Right column: unique players (first 8)
         const rightX = pad + colWidth + colGap;
         const rightY = leftY;
-        const rightTitle = this.add.text(rightX, rightY, "Players in database", {
+        addSafe(panel, this.add.text(rightX, rightY, "Players in database", {
             fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
             fontSize: Math.round(headerH * 0.30),
-            color: "#ffffff"
-        });
-        panel.add(rightTitle);
+            color: "#ffffff",
+        }));
 
         const list2 = this.add.container(rightX, rightY + Math.round(headerH * 0.35));
-        panel.add(list2);
+        addSafe(panel, list2);
 
-        // Show up to 8 players (oldest last). Could paginate later if needed.
-        (uniquePlayers.slice(0, 8)).forEach((p, i) => {
+        uniquePlayers.slice(0, 8).forEach((p, i) => {
             const y = i * rowH;
-            const dot = this.add.circle(0, y + Math.round(rowH*0.42), Math.round(rowH*0.14), 0xffffff, 0.9);
-            const nameTxt = this.add.text(Math.round(rowH*0.38), y, p.name, {
+            addSafe(list2, this.add.circle(0, y + Math.round(rowH * 0.42), Math.round(rowH * 0.14), 0xffffff, 0.9));
+            addSafe(list2, this.add.text(Math.round(rowH * 0.38), y, p.name, {
                 fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
                 fontSize: Math.round(rowH * 0.50),
-                color: "#ffffff"
-            });
-            const metaTxt = this.add.text(Math.round(colWidth * 0.55), y, `sessions ${p.sessions}`, {
+                color: "#ffffff",
+            }));
+            addSafe(list2, this.add.text(Math.round(colWidth * 0.55), y, `sessions ${p.sessions}`, {
                 fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
                 fontSize: Math.round(rowH * 0.38),
-                color: "#dfe9ff"
-            });
-            list2.add([dot, nameTxt, metaTxt]);
+                color: "#dfe9ff",
+            }));
         });
 
-        // Close button (same style as your mute/home)
+        // Close button (always a proper Container)
         const btnW = Math.max(120, Math.round(panelW * 0.18));
         const btnH = Math.max(40, Math.round(panelH * 0.10));
-        const btn = this._darkButton(panelW - btnW - pad, panelH - btnH - pad, "Close", () => {
-            panel.destroy();
-        });
-        panel.add(btn);
+        const btn = makeDarkButton(
+            panelW - btnW - pad,
+            panelH - btnH - pad,
+            "Close",
+            () => { panel.destroy(); },
+            btnW,
+            btnH
+        );
+        addSafe(panel, btn);
 
-        // Keep reference for cleanup
+        // keep a reference for cleanup
         this._leaderboardPanel = panel;
 
-        // Optional API to reposition/resize later
-        return {
-            panel,
-            setRect: (xF, yF, wF, hF) => {
-                const W2 = this.scale.width, H2 = this.scale.height;
-                const nW = Math.max(420, W2 * wF);
-                const nH = Math.max(300, H2 * hF);
-                panel.setPosition(W2 * xF - nW / 2, H2 * yF - nH / 2);
-                // Simple rebuild for now
-                panel.destroy();
-                this._showLeaderboard({ xFrac: xF, yFrac: yF, wFrac: wF, hFrac: hF });
+        // cleanup on shutdown
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            this._leaderboardPanel?.destroy?.();
+            this._leaderboardPanel = null;
+        });
+
+        return panel;
+    }
+
+    /** Simple text-only scoreboard that reads from DB and lays out cleanly. */
+    _showSimpleSessionScores(opts = {}) {
+        const name = this.registry.get("playerName") || "Player";
+        const sessionId = window.__SESSION_ID__;
+        const W = this.scale.width, H = this.scale.height;
+
+        let soap = 0, catchr = 0, total = 0, best = { player_name: "-", total: 0 };
+        try {
+            soap   = DB.query.sessionGameTotal(sessionId, "SoapSplash") || 0;
+            catchr = DB.query.sessionGameTotal(sessionId, "CleanCatch") || 0;
+            total  = DB.query.sessionTotal(sessionId) || 0;
+            best   = (DB.query.bestSessionTotals(1)[0]) || best;
+        } catch (e) {
+            console.warn("[EndingScene] simple scores query failed:", e);
+        }
+
+        // Anchor box to keep layout stable and relative
+        const boxW = Math.max(520, Math.round(W * (opts.wFrac ?? 0.55)));
+        const boxH = Math.max(220, Math.round(H * (opts.hFrac ?? 0.28)));
+        const boxX = Math.round(W * (opts.xFrac ?? 0.5) - boxW / 2);
+        const boxY = Math.round(H * (opts.yFrac ?? 0.78) - boxH / 2);
+
+        const cont = this.add.container(boxX, boxY).setDepth(180);
+
+        // Optional translucent backdrop so white text reads over confetti
+        const bg = this.add.graphics();
+        bg.fillStyle(0x000000, 0.22);
+        bg.fillRoundedRect(0, 0, boxW, boxH, 14);
+        cont.add(bg);
+
+        const pad = Math.round(Math.min(boxW, boxH) * 0.08);
+        const lineH = Math.round(Math.min(boxW, boxH) * 0.16);
+
+        const header = this.add.text(pad, pad, `Scores — ${name}`, {
+            fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
+            fontSize: Math.round(lineH * 0.8),
+            color: "#ffffff",
+        });
+        cont.add(header);
+
+        const t1 = this.add.text(pad, pad + lineH * 1.2, `Soap Splash: ${soap}`, {
+            fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
+            fontSize: Math.round(lineH * 0.7),
+            color: "#dfe9ff",
+        });
+        const t2 = this.add.text(pad, pad + lineH * 2.0, `Clean Catch: ${catchr}`, {
+            fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
+            fontSize: Math.round(lineH * 0.7),
+            color: "#dfe9ff",
+        });
+        const t3 = this.add.text(pad, pad + lineH * 2.8, `Total this session: ${total}`, {
+            fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
+            fontSize: Math.round(lineH * 0.75),
+            color: "#A2F1B1",
+        });
+
+        const bestTxt = this.add.text(
+            Math.round(boxW * 0.50),
+            pad + lineH * 1.2,
+            `Best total: ${best.total}`,
+            {
+                fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
+                fontSize: Math.round(lineH * 0.70),
+                color: "#ffffff",
             }
-        };
+        ).setOrigin(0.5, 0);
+        const bestBy = this.add.text(
+            Math.round(boxW * 0.50),
+            pad + lineH * 2.0,
+            `by ${best.player_name || "-"}`,
+            {
+                fontFamily: (window.CONFIG?.ui?.fontFamily || "Arial"),
+                fontSize: Math.round(lineH * 0.55),
+                color: "#dfe9ff",
+            }
+        ).setOrigin(0.5, 0);
+
+        cont.add([t1, t2, t3, bestTxt, bestBy]);
+
+        this._simpleScoresBox = cont;
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            this._simpleScoresBox?.destroy?.(); this._simpleScoresBox = null;
+        });
     }
 
     create() {
@@ -390,9 +505,9 @@ export default class EndingScene extends Phaser.Scene {
         this.tweens.add({ targets: text, alpha: 1, duration: 800, ease: "Sine.inOut", delay: 200 });
 
         // =========================
-        // ---- Live LEADERBOARD ---
+        // ---- Live LEADERBOARD / SIMPLE SCORES ---
         // =========================
-        const board = DB.query.topTotals({ limit: 6 }); // one row per session (player)
+        const board = DB.query.topTotals({ limit: 6 }); // existing code kept as-is
         this.add.text(width * 0.65, height * 0.17, "SCOREBOARD", {
             fontFamily: "Chewy",
             fontSize: "88px",
@@ -417,28 +532,6 @@ export default class EndingScene extends Phaser.Scene {
             `My Total: ${myTotal}`,
             { fontFamily: "Chewy", fontSize: "64px", color: "#ffffff" }
         ).setOrigin(0.5).setDepth(21);
-
-        // --- Action buttons (bottom/right of the board) ---
-        const btnY = height * 0.86;
-        const gap  = 420;
-        const xMid = width * 0.66;
-
-        // ▶ Replay — keep current player/session, just go back to Menu (original first scene)
-        this._darkButton(xMid - gap/2, btnY, "Replay", () => {
-            this.music?.stop(); this.music?.destroy();
-            this.scene.start("MenuScene");   // no flags, no prompts, pure original flow
-        });
-
-        // ✚ New Player — clear name + session, then go back to Menu (original flow handles Start)
-        this._darkButton(xMid + gap/2, btnY, "New Player", () => {
-            // wipe current identity so the next run is a clean player
-            this.registry.set("playerName", null);
-            try { DB.endSession?.(window.__SESSION_ID__); } catch (_) {}
-            window.__SESSION_ID__ = null;
-
-            this.music?.stop(); this.music?.destroy();
-            this.scene.start("MenuScene");   // let your Menu’s Start button do its normal thing
-        });
 
         // ---- Confetti loop params ----
         this.MAX_LIVE_CONFETTI = 40;
@@ -548,15 +641,27 @@ export default class EndingScene extends Phaser.Scene {
 
         this.cameras.main.fadeIn(600, 0, 0, 0);
 
-        // Initialize DB (safe-guard) and show resizable transparent leaderboard panel
-        try { DB.init?.(); } catch (e) { console.warn("DB init error", e); }
-        this._showLeaderboard({
-            xFrac: 0.50,
-            yFrac: 0.52,
-            wFrac: 0.75,
-            hFrac: 0.60,
-            bgAlpha: 0.18
-        });
+        // Initialize DB and choose scoreboard UI via flag
+        try { DB.init(); } catch (e) { console.warn("DB init error", e); }
+
+        if (CONFIG?.ui?.isLeaderboardsSwas) {
+            // Fancy transparent, resizable window
+            this._showLeaderboard({
+                xFrac: 0.50,
+                yFrac: 0.52,
+                wFrac: 0.75,
+                hFrac: 0.60,
+                bgAlpha: 0.18
+            });
+        } else {
+            // Simple text-only scoreboard using the DB
+            this._showSimpleSessionScores({
+                xFrac: 0.50,
+                yFrac: 0.80,
+                wFrac: 0.55,
+                hFrac: 0.28
+            });
+        }
 
         // clean-up on shutdown just in case
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -564,11 +669,15 @@ export default class EndingScene extends Phaser.Scene {
             if (this.music) { try { this.music.stop(); } catch(_){} this.music.destroy(); this.music = null; }
             this._leaderboardPanel?.destroy?.();
             this._leaderboardPanel = null;
+            this._simpleScoresBox?.destroy?.();
+            this._simpleScoresBox = null;
             this._closeNameDialog();
         });
         this.events.once(Phaser.Scenes.Events.DESTROY, () => {
             this._leaderboardPanel?.destroy?.();
             this._leaderboardPanel = null;
+            this._simpleScoresBox?.destroy?.();
+            this._simpleScoresBox = null;
             this._closeNameDialog();
         });
     }
