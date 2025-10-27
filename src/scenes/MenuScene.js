@@ -2,9 +2,8 @@
 /* global Phaser, CONFIG */
 
 // Use the same target fractions for both dialogs
-
+import systems from "../systems.js";
 import { DB } from "../db.js";
-
 
 const DLG = { W_FRAC: 0.80, H_FRAC: 0.60 }; // 80% of viewport width, 60% of height
 const UI_FONT_FALLBACK = "Montserrat";
@@ -38,9 +37,10 @@ export default class MenuScene extends Phaser.Scene {
 
         // background video
         this.load.video(
-            "menu_bg_video",
-            "assets/videos/washed_kikos-day_LEVEL_01_scene_01_action_01_launcher.mp4",
-            true // noAudio
+            "menu_bg_video","assets/videos/washed_kikos-day_LEVEL_01_scene_01_action_01_launcher.mp4",
+            "loadeddata", // load event
+            false,        // asBlob
+            true          // noAudio
         );
 
         // pop up + X button + kiko + continue arrow
@@ -53,8 +53,18 @@ export default class MenuScene extends Phaser.Scene {
         this.load.audio("bgm_kiko", "assets/sounds/kikos_day.mp3");
     }
 
-    create() {
-        const { width, height } = this.scale;
+    create(data) {
+        // Handle "New Player" flow from EndingScene (do NOT open name dialog here)
+        if (data?.resetSession) {
+            window.__SESSION_ID__ = null;
+        }
+
+        const {width, height} = this.scale;
+
+        this._leaving = false;
+        this.input.enabled = true;
+        this.tweens.killAll();
+        this.cameras.main.resetFX();
 
         // backup background
         this.fallback = this.add
@@ -80,8 +90,13 @@ export default class MenuScene extends Phaser.Scene {
             const sr = W / H;
 
             let dw, dh;
-            if (vr > sr) { dh = H; dw = H * vr; }
-            else { dw = W; dh = W / vr; }
+            if (vr > sr) {
+                dh = H;
+                dw = H * vr;
+            } else {
+                dw = W;
+                dh = W / vr;
+            }
 
             this.video.setSize(dw, dh).setPosition(W / 2, H / 2);
             this.fallback.setDisplaySize(W, H).setPosition(0, 0);
@@ -96,7 +111,7 @@ export default class MenuScene extends Phaser.Scene {
         const startBgm = () => {
             let bgm = this.sound.get("bgm_kiko");
             if (!bgm) {
-                bgm = this.sound.add("bgm_kiko", { loop: true, volume: 0.45 });
+                bgm = this.sound.add("bgm_kiko", {loop: true, volume: 0.45});
             }
             if (!bgm.isPlaying) bgm.play();
         };
@@ -107,39 +122,63 @@ export default class MenuScene extends Phaser.Scene {
             startBgm();
         }
 
-        // START → ask name → ask difficulty → go Playground
+        // START → ask name → go Playground (DIFFICULTY PICKER REMOVED)
         const startFlow = () => {
             const cachedName = this.registry.get("playerName");
-            const cachedDiff = this.registry.get("difficulty");
 
-            const goPlay = (playerName, difficulty) => {
+            const goPlay = (playerName) => {
+                // default to Easy=1
+                const difficulty = 1;
+                // create a session if we don't already have one
+                window.__SESSION_ID__ = window.__SESSION_ID__ ?? DB.beginSession(playerName);
+                this.registry.set("difficulty", difficulty);
                 this.goToPlaygroundSmooth(playerName, difficulty, 600);
             };
 
             const afterName = (playerName) => {
-                this.registry.set("playerName", playerName);
-                const diff = this.registry.get("difficulty");
-                if (diff) return goPlay(playerName, diff);
-                this.openDifficultyDialog((difficulty) => {
-                    this.registry.set("difficulty", difficulty);
-                    goPlay(playerName, difficulty);
-                });
+                const name = (playerName || "").trim() || "Player";
+                this.registry.set("playerName", name);
+                goPlay(name);
             };
 
             if (!cachedName) {
+                // ask name only AFTER pressing Start
                 this.openNameDialog(afterName);
-            } else if (!cachedDiff) {
-                this.openDifficultyDialog((difficulty) => {
-                    this.registry.set("difficulty", difficulty);
-                    goPlay(cachedName, difficulty);
-                });
             } else {
-                goPlay(cachedName, cachedDiff);
+                goPlay(cachedName);
             }
         };
 
-        // START button
-        this.createStartButton(startFlow);
+        // --- QUICK RESTART FLAGS (must appear BEFORE we wire the Start button) ---
+        this._quickRestart = !!data?.quickRestart;
+        this._qrName = data?.restartName || "Kiko";
+        this._qrReuseDifficulty = (data?.reuseDifficulty !== false); // legacy flag, unused now
+
+        // Unified Start handler: quick-restart path OR normal flow
+        const onStartPressed = () => {
+            if (this._quickRestart) {
+                // REUSE existing player + session (DO NOT create a new session)
+                const currentName = this.registry.get("playerName") ?? this._qrName;
+                const difficulty = 1; // fixed default; no difficulty screen
+
+                // Only write if missing (do not overwrite existing values)
+                if (!this.registry.get("playerName")) this.registry.set("playerName", currentName);
+                if (!this.registry.get("difficulty")) this.registry.set("difficulty", difficulty);
+                // IMPORTANT: no DB.beginSession() here — keep window.__SESSION_ID__ as-is
+
+                if (typeof this.goToPlaygroundSmooth === "function") {
+                    this.goToPlaygroundSmooth(currentName, difficulty, 400);
+                } else {
+                    this.scene.start("PlaygroundScene", { playerName: currentName, difficulty });
+                }
+                return;
+            }
+            // NORMAL: ask name ONLY after Start; skip difficulty
+            startFlow();
+        };
+
+        // START button uses the unified handler
+        this.createStartButton(onStartPressed);
 
         this.scale.on("resize", () => {
             resizeVideo();
@@ -217,7 +256,6 @@ export default class MenuScene extends Phaser.Scene {
         }
 
         // title
-
         const uiFont = getUIFont();
 
         const title = this.add
@@ -227,7 +265,6 @@ export default class MenuScene extends Phaser.Scene {
             })
             .setOrigin(0, 0.5);
         title.setFontSize(Math.max(40, Math.round(40 * s)));
-        // title.setFontStyle("bold");
         title.setWordWrapWidth(rightW, true);
         dialogRoot.add(title);
 
@@ -389,7 +426,6 @@ export default class MenuScene extends Phaser.Scene {
 
         // Map button value -> numeric difficulty
         const lvlMap = { easy: 1, normal: 2, hard: 3 };
-
 
         const panel = this.add.image(width / 2, height / 2, "dialog_skin").setScale(s);
         dialogRoot.add(panel);
@@ -640,7 +676,6 @@ export default class MenuScene extends Phaser.Scene {
                 .text(BTN_X, BTN_Y, "START", {
                     fontFamily: getUIFont(),
                     color: "#ffffff",
-                    // fontStyle: "bold",
                 })
                 .setOrigin(0.5)
                 .setDepth(3);

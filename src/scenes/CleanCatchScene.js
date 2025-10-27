@@ -99,30 +99,28 @@ export default class CleanCatchScene extends Phaser.Scene {
 
         const canvas = document.createElement("canvas");
         canvas.style.display = "block";
-// CSS size (what the user sees)
+        // CSS size (what the user sees)
         canvas.style.width = `${width}px`;
         canvas.style.height = `${height}px`;
-// Internal drawing resolution (what ctx draws to) — MUST match the Phaser size
+        // Internal drawing resolution (what ctx draws to) — MUST match the Phaser size
         canvas.width = width;
         canvas.height = height;
 
         root.node.appendChild(canvas);
 
-
         const difficulty = this.registry.get("difficulty") || "easy";
         this._runtime = systems.cleancatcher.create(this, canvas, difficulty);
 
-        // Top bar (home / pause)
+        // Top bar (home / pause) — pause uses our unified overlay; Home returns to hub
         systems.ui.topbar(this, {
             onHome: () => {
-                // If going home, it's OK to stop BGM
+                const playerName = this.registry.get("playerName") || "Player";
                 this._runtime?.destroy?.();
-                if (this._bgm) { this._bgm.stop(); /* destroy is optional here */ }
-                const playerName = this.registry.get("playerName");
-                this.scene.start("GameScene", { playerName });
+                this._bgm?.stop?.();
+                this.scene.start("GameScene", { playerName }); // hub
             },
             onPause: () => this.togglePause(),
-            showMute: false,
+            showMute: true,
         });
 
         // Pause shortcuts
@@ -149,24 +147,41 @@ export default class CleanCatchScene extends Phaser.Scene {
         });
     }
 
+    // === Unified pause overlay (no Home inside the overlay) ===
     togglePause() {
-        this._paused = !this._paused;
-        this._runtime?.setPaused?.(this._paused);
-
         if (this._paused) {
-            this._pauseUi = systems.ui.pauseOverlay(this, {
-                onResume: () => this.togglePause(),
-                onHome: () => {
-                    // If returning home from pause, stop BGM
-                    this._runtime?.destroy?.();
-                    if (this._bgm) { this._bgm.stop(); /* destroy optional */ }
-                    const playerName = this.registry.get("playerName");
-                    this.scene.start("GameScene", { playerName });
-                }
-            });
-        } else {
+            // resume
+            this._paused = false;
             this._pauseUi?.destroy?.();
             this._pauseUi = null;
+
+            this.time.timeScale = 1;
+            this.tweens.timeScale = 1;
+            this.physics?.world?.resume?.();
+
+            // resume the game's audio world (BGM/SFX)
+            this.sound?.resumeAll?.();
+
+            // let the runtime tick again
+            this._runtime?.setPaused?.(false);
+        } else {
+            // pause
+            this._paused = true;
+
+            // build shared pause overlay with only Resume (no Home)
+            this._pauseUi = systems.ui.pauseOverlay(this, {
+                onResume: () => this.togglePause()
+            });
+
+            this.time.timeScale = 0;
+            this.tweens.timeScale = 0;
+            this.physics?.world?.pause?.();
+
+            // pause the game's audio world (BGM/SFX)
+            this.sound?.pauseAll?.();
+
+            // pause the runtime update/render
+            this._runtime?.setPaused?.(true);
         }
     }
 }

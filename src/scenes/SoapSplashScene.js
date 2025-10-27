@@ -10,6 +10,12 @@ export default class SoapSplashScene extends Phaser.Scene {
     constructor() {
         super("SoapSplash");
 
+        // NEW: boot guard so we install teardown hooks once
+        this._booted = false;
+
+        // NEW: tearing-down guard to freeze update during reset/stop
+        this._tearingDown = false;
+
         // core state
         this.germs = [];
         this.lastSpawn = 0;
@@ -51,6 +57,44 @@ export default class SoapSplashScene extends Phaser.Scene {
         this._lastShownSec     = 101;
         this._urgentPulsing    = false;
         this.countdownText     = null;
+
+        // NEW: spawn re-arm flag + watchdog tick
+        this._spawnArmed = false;
+        this._idleWatchStart = 0;
+        this._debugTick = 0;
+    }
+
+    // NEW: restart-safe reset of volatile state each time we enter this scene
+    init(data) {
+        // core gameplay state
+        this.germs = [];
+        this.lastSpawn = 0;
+        this.germSeq = 0;
+        this.breaches = 0;
+        this.gameOver = false;
+        this.gameStartAt = null;
+
+        // ui / pause
+        this._paused = false;
+        this._pauseUi = null;
+
+        // round/session
+        this.roundId = null;
+        this._difficulty = data?.difficulty ?? this.registry.get("difficulty") ?? 1;
+
+        // make absolutely sure clocks aren’t paused from a previous run
+        try { this.time?.removeAllEvents?.(); } catch {}
+        this.time.timeScale = 1;
+        this.tweens.timeScale = 1;
+        this.physics?.world?.resume?.();
+
+        // NEW: make sure the spawner is re-armed on fresh entry
+        this._spawnArmed = false;
+        this._waveActive = false;
+        this._pendingSpawns = 0;
+        this._nextSpawnAt = 0;
+        this._idleWatchStart = 0;
+        this._debugTick = 0;
     }
 
     preload() {
@@ -83,23 +127,19 @@ export default class SoapSplashScene extends Phaser.Scene {
             "assets/images/SoapSplash/washed_kikos-day_LEVEL_01_scene_05_action_01_germ-catcher_HIT-zero.png"
         );
 
-
         // kiko sprites for toasts (optional; code safely falls back if missing)
         this.load.image("KikoJump", CONFIG.assets.kiko.jump);
         this.load.image("KikoCheer", CONFIG.assets.kiko.cheer);
         this.load.image("KikoSad", CONFIG.assets.kiko.sad);
         this.load.image("ui_close_button", CONFIG.assets.ui.closeBut);
         this.load.image("DialogPanel", CONFIG.assets.ui.dialogPanel);
-        this.load.image("ui_home", CONFIG.assets.ui.homeBut);
+        this.load.image("ui_home", CONFIG.assets.ui.homeBut); // kept for other scenes if needed
         this.load.image("ui_pause", CONFIG.assets.ui.pauseBut);
-
     }
-
 
     _buildPauseOverlay() {
         const { width: W, height: H } = this.scale;
         const g = this.add.container(0, 0).setDepth(99_999); // guaranteed top layer
-
 
         // backdrop
         const overlay = this.add.rectangle(0, 0, W, H, 0xffffff, 0.45)
@@ -144,10 +184,9 @@ export default class SoapSplashScene extends Phaser.Scene {
                 fontSize: "40px",
                 color: "#000000",
                 align: "center",
-                lineSpacing: 12         // ↑ a touch more line spacing too
+                lineSpacing: 12
             }).setOrigin(0.5).setDepth(10_002);
         g.add(stats);
-
 
         // compute panel corners for placing buttons
         let px, py, pw, ph;
@@ -158,25 +197,28 @@ export default class SoapSplashScene extends Phaser.Scene {
             px = panel.x - pw/2; py = panel.y - ph/2;
         }
 
-        // 🔧 CLOSE (top-right) — use sprite, no resize on hover
+        // 🔧 CLOSE (top-right)
         const closeX = px + pw - 26, closeY = py + 26;
-
         const closeImg = this.add.image(closeX, closeY, "ui_close_button")
             .setDisplaySize(70, 70)
             .setOrigin(0.5)
             .setDepth(10_003)
             .setInteractive({ useHandCursor: true });
 
-// hover feedback: tint only (no scale changes)
         closeImg.on("pointerover", () => closeImg.setTint(0xcde3ff));
         closeImg.on("pointerout",  () => closeImg.clearTint());
 
-        g.add(closeImg);
-
-// unpause logic stays the same
+        // unpause logic
         const unpause = () => {
             this._paused = false;
-            this._pauseUi = null;
+            if (this._pauseUi?.destroy) {
+                this._pauseUi.destroy();
+                this._pauseUi = null;
+            }
+            if (this._origSysPauseOverlay) {
+                systems.ui.pauseOverlay = this._origSysPauseOverlay;
+                this._origSysPauseOverlay = null;
+            }
             this.time.timeScale = 1;
             this.tweens.timeScale = 1;
             if (this.physics?.world) this.physics.world.isPaused = false;
@@ -184,49 +226,22 @@ export default class SoapSplashScene extends Phaser.Scene {
             this.sound.resumeAll();
         };
 
-        closeImg.on("pointerup", () => { destroyAll(); unpause(); });
+        closeImg.on("pointerup", () => {
+            unpause();
+            destroyAll();
+        });
 
+        // ---- BUTTON ROW (Mute only, centered) ----
+        const rowY   = Math.min(py + ph - 90, (H/2) + 160);
+        const MUTE_W = 350;
 
-        const makeIconButton = (key, x, y, onClick, size = 72) => {
-            const img = this.add.image(x, y, key)
-                .setOrigin(0.5)
-                .setDepth(10_003)
-                .setDisplaySize(size, size)
-                .setInteractive({ useHandCursor: true });
-
-            img.on("pointerover", () => img.setTint(0xcde3ff));
-            img.on("pointerout",  () => img.clearTint());
-            img.on("pointerup", onClick);
-
-            g.add(img);
-            return img;
-        };
-
-
-        // ---- BUTTON ROW (same row, centered) ----
-// Use robust positions (not fragile to panelGeom math)
-        const rowY = Math.min(py + ph - 90, (H/2) + 160);
-
-// left/right anchors for the pair
-        const MUTE_W = 350;     // pill width
-        const ICON_W = 76;      // home icon visual width
-        const GAP    = 28;      // spacing between the two
-        const pairW  = MUTE_W + GAP + ICON_W;
-        const leftX  = (W/2) - (pairW/2);
-        const rightX = leftX + MUTE_W + GAP + (ICON_W/2);
-
-// --- MUTE (pill like "Easy") ---
         const makePillBtn = (label, x, y, onClick, w = MUTE_W, h = 90) => {
-            const baseFill  = 0xBFF4C7;  // Easy green
+            const baseFill  = 0xBFF4C7;
             const hoverFill = 0xAEEAB7;
             const stroke    = 0x6DAE7F;
 
             const c = this.add.container(x, y).setDepth(10_003);
             c.setSize(w, h).setInteractive({ useHandCursor: true });
-
-            // const shadow = this.add.graphics();
-            // shadow.fillStyle(0x000000, 0.25);
-            // // shadow.fillRoundedRect(-w/2, -h/2 + 6, w, h, 26);
 
             const gfx = this.add.graphics();
             const draw = (fill) => {
@@ -244,7 +259,7 @@ export default class SoapSplashScene extends Phaser.Scene {
                 color: "#1d4330",
             }).setOrigin(0.5);
 
-            c.add([ gfx, txt]);
+            c.add([ gfx, txt ]);
             c.on("pointerover", () => draw(hoverFill));
             c.on("pointerout",  () => draw(baseFill));
             c.on("pointerup", onClick);
@@ -253,67 +268,43 @@ export default class SoapSplashScene extends Phaser.Scene {
             return { c, txt };
         };
 
-        const muteLabel = this.sound?.mute ? "Unmute" : "Mute";
-        const muteBtn = makePillBtn(muteLabel, leftX + (MUTE_W/2), rowY, () => {
+        const muteLabel = (this.registry.get("mute") === true || this.sound?.mute) ? "Unmute" : "Mute";
+        const muteBtn = makePillBtn(muteLabel, W / 2, rowY, () => {
             if (this.sound) {
                 this.sound.mute = !this.sound.mute;
+                this.registry.set("mute", !!this.sound.mute);
                 muteBtn.txt.setText(this.sound.mute ? "Unmute" : "Mute");
             }
         });
 
-// --- HOME (icon) on same row, to the right ---
-        let homeBtn = null;
-        if (this.textures.exists("ui_home")) {
-            homeBtn = this.add.image(rightX, rowY, "ui_home")
-                .setOrigin(0.5)
-                .setDepth(10_003)
-                .setDisplaySize(ICON_W, ICON_W)
-                .setInteractive({ useHandCursor: true });
-
-            homeBtn.on("pointerover", () => homeBtn.setTint(0xcde3ff));
-            homeBtn.on("pointerout",  () => homeBtn.clearTint());
-            homeBtn.on("pointerup", () => {
-                this.finalizeRound?.("Paused → Home");
-                destroyAll();
-                this.scene.start("MenuScene");
-            });
-
-            g.add(homeBtn);
-        } else {
-            console.warn("[Pause] ui_home texture missing — showing text fallback");
-            const fb = this.add.text(rightX, rowY, "Home", {
-                fontFamily: "Montserrat, Arial, sans-serif",
-                fontSize: "40px",
-                color: "#1d4330",
-                backgroundColor: "#BFF4C7",
-                padding: { left: 18, right: 18, top: 12, bottom: 12 }
-            }).setOrigin(0.5).setDepth(10_003).setInteractive({ useHandCursor: true });
-            fb.on("pointerup", () => {
-                this.finalizeRound?.("Paused → Home");
-                destroyAll();
-                this.scene.start("MenuScene");
-            });
-            g.add(fb);
-        }
-
-// DEBUG: a tiny dot so we know rowY is where we think it is
+        // DEBUG: row locator
         this.add.circle(W/2, rowY, 3, 0xff00ff, 1).setDepth(10_010);
-        console.log("[Pause] buttons row at", { rowY, leftX, rightX });
+        console.log("[Pause] mute row at", { rowY });
 
-
-        function destroyAll() {
-            if (panel?.destroy) panel.destroy();
-            title.destroy(); stats.destroy();
-            closeImg.destroy(); overlay.destroy();
-            muteBtn.rect.destroy(); muteBtn.txt.destroy();
-            homeBtn?.destroy();       // keep
-            g.destroy?.();
-        }
+        const destroyAll = () => {
+            if (g?.destroy) g.destroy(true);
+            panel?.destroy();
+            title?.destroy();
+            stats?.destroy();
+            closeImg?.destroy();
+            overlay?.destroy();
+            muteBtn?.c?.destroy?.();
+            muteBtn?.txt?.destroy?.();
+            this._pauseUi = null;
+            this._paused = false;
+            this.time.timeScale = 1;
+            this.tweens.timeScale = 1;
+            if (this.physics?.world) this.physics.world.isPaused = false;
+            this.bgVideo?.resume?.();
+            this.sound?.resumeAll?.();
+            if (this._origSysPauseOverlay) {
+                systems.ui.pauseOverlay = this._origSysPauseOverlay;
+                this._origSysPauseOverlay = null;
+            }
+        };
 
         return g;
-
     }
-
 
     togglePause() {
         if (this._paused) {
@@ -359,13 +350,29 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.sound.pauseAll();
     }
 
-
-
-
-
-
     create() {
         const SS = CONFIG.soapSplash;
+
+        // NEW: ensure global audio isn’t stuck paused from previous scene
+        this.sound?.resumeAll?.();
+
+        // NEW: install teardown hooks once
+        if (!this._booted) {
+            this.events.once("shutdown", this._teardown, this);
+            this.events.on("sleep", this._teardown, this);
+            this._booted = true;
+        }
+
+        // NEW: re-arm & fully unpause on wake/resume (fixes no-spawn after Home/Explain)
+        const _fullUnpause = () => {
+            this._paused = false;
+            this._spawnArmed = false;
+            this.time.timeScale = 1;
+            this.tweens.timeScale = 1;
+            if (this.physics?.world) this.physics.world.isPaused = false;
+        };
+        this.events.on("wake",   _fullUnpause);
+        this.events.on("resume", _fullUnpause);
 
         // ── Difficulty: normalise to 1..3 and expose ─────────────────────────────
         const raw = this.registry.get("difficulty"); // may be "easy"/"normal"/"hard" or 1/2/3
@@ -520,7 +527,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         this._lastSadAtBreaches = 0;
         this._lastEncouragementAt = 0;
 
-        // DB round
+        // DB round — NEW: always start a new round on entry (same as before, explicit intent)
         const difficulty = this.registry.get("difficulty");
         this.roundId = DB.beginRound(window.__SESSION_ID__, "SoapSplasher", String(difficulty));
 
@@ -535,9 +542,6 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.topbar?.timerText?.setVisible(false);
         this.topbar?.setTimerVisible?.(false);
 
-        // ── REMOVE keyboard pause toggles (no ESC/P pause) ──────────────────────
-        // (intentionally no key bindings for pause)
-
         // build our Chewy countdown HUD (visual only, 100 → 0)
         this._buildCountdownHUD();
 
@@ -548,12 +552,20 @@ export default class SoapSplashScene extends Phaser.Scene {
             systems.soapsplash.typing.init(this);
         });
 
-        // launch explain overlay then pause ourselves
+        // launch explain overlay then pause ourselves (with watchdog auto-resume)
         console.log("[SoapSplash] launching Explain overlay");
         this.time.delayedCall(800, () => {
             this.scene.launch("SoapSplashExplain", { parentKey: "SoapSplash" });
             this.scene.bringToTop("SoapSplashExplain");
             this.scene.pause("SoapSplash");
+
+            // NEW: watchdog — if still paused after 5s, auto-resume (dev-safety)
+            this.time.delayedCall(5000, () => {
+                if (this.scene.isPaused("SoapSplash")) {
+                    console.warn("[SoapSplash] auto-resume watchdog fired");
+                    this.scene.resume("SoapSplash");
+                }
+            });
         });
 
         // background stage swapper
@@ -569,8 +581,6 @@ export default class SoapSplashScene extends Phaser.Scene {
         });
     }
 
-
-
     finalizeRound(reason = "Time up", overrides = {}) {
         if (this.gameOver) return;
         this.gameOver = true;
@@ -585,8 +595,7 @@ export default class SoapSplashScene extends Phaser.Scene {
                 reason,
             });
         }
-        // NOTE: we do NOT force any scene transition here.
-        // Your original systems flow should already handle Game Over screen navigation.
+        // NOTE: no forced transition here.
     }
 
     // ─────────────────────────────────────────────
@@ -761,10 +770,8 @@ export default class SoapSplashScene extends Phaser.Scene {
     _updateCountdown(delta) {
         if (this._paused || this.gameOver) return;
 
-        // tick down (visual only) and clamp
         this._countdownMsLeft = Math.max(0, this._countdownMsLeft - delta);
 
-        // compute whole seconds (clamped to 0 for display)
         let secLeft = Math.ceil(this._countdownMsLeft / 1000);
         if (secLeft < 0) secLeft = 0;
 
@@ -773,7 +780,6 @@ export default class SoapSplashScene extends Phaser.Scene {
             this.countdownText?.setText(String(secLeft));
 
             if (secLeft <= 10) {
-                // urgent: red, faster pulse, stronger shadow
                 this.countdownText
                     ?.setColor("#ff3b3b")
                     .setStroke("#7a0000", 10)
@@ -791,7 +797,6 @@ export default class SoapSplashScene extends Phaser.Scene {
                     });
                 }
             } else if (secLeft <= 20) {
-                // warning: amber, gentle pulse
                 this.countdownText
                     ?.setColor("#ffd166")
                     .setStroke("#5c3b00", 9)
@@ -805,93 +810,152 @@ export default class SoapSplashScene extends Phaser.Scene {
                     ease: "Sine.inOut"
                 });
             } else {
-                // normal
                 this.countdownText
                     ?.setColor("#ffffff")
                     .setStroke("#000000", 8)
                     .setShadow(0, 4, "#00000099", 8, true, true);
             }
         }
-
-        // IMPORTANT: do NOT end the round here.
-        // The original systems timer will handle time-up game over.
     }
 
     // -------------------------------
     // WAVE-BASED UPDATE LOOP (+ toasts)
     // -------------------------------
     update(time, delta) {
-        // stop all game logic when finished or paused
+        // --- hard guards ---
+        const active = this.sys?.isActive?.() ?? true;
+        if (this._tearingDown || this._paused || !active) return;
         if (this.gameOver) return;
-        if (this._paused) {
-            // timers/tweens are already frozen via timeScale=0 in togglePause()
-            return;
+
+        // --- (re)arm the spawner after any resume/home cycle ---
+        if (!this._spawnArmed) {
+            this._spawnArmed = true;
+            this._waveActive = false;
+            this._pendingSpawns = 0;
+            // schedule a first spawn window shortly after we become active again
+            this._nextSpawnAt = time + (this._betweenWaveDelayMs ?? 700);
+            this._idleWatchStart = time;
         }
 
-        // ensure an active target exists without needing a keypress
+        // --- SAFETY: if board is idle for >3s after start/resume, force a spawn
+        if (!this._idleWatchStart) this._idleWatchStart = time;
+        const idleMs = time - this._idleWatchStart;
+        const noActors = this.germs.length === 0 && this._pendingSpawns === 0;
+        if (noActors && idleMs > 3000) {
+            try {
+                console.warn("[SoapSplash] idle watchdog spawning a germ");
+                systems.soapsplash.spawn.spawnGerm(this);
+                const cap = (CONFIG.soapSplash?.waveCap ?? CONFIG.soapSplash?.maxGerms ?? 5);
+                this._pendingSpawns = Math.max(0, cap - 1);
+                this._nextSpawnAt = time + (CONFIG.soapSplash?.spawnIntervalMs ?? 1200);
+                this._waveActive = true;
+            } catch (e) {
+                console.error("Watchdog spawn failed:", e);
+            }
+            this._idleWatchStart = time; // reset watchdog
+        }
+
+        // ensure a typing target if germs exist but none selected
         if (this.germs.length && (!this.typing || !this.typing.activeId)) {
             systems.soapsplash.typing.pickNearest(this);
         }
 
-        const SS = CONFIG.soapSplash;
+        const SS = CONFIG.soapSplash || {};
         if (this.gameStartAt == null) this.gameStartAt = time;
 
-        // drive our Chewy countdown (visual only)
-        this._updateCountdown(delta);
+        // countdown / timer housekeeping
+        this._updateCountdown?.(delta);
 
-        const base   = SS.spawnIntervalMs ?? 1200;
-        const jitter = SS.spawnJitterMs ?? 0;
+        const base   = SS.spawnIntervalMs ?? SS.spawnEveryMs ?? 1200;
+        const jitter = SS.spawnJitterMs ?? 140;
         const cap    = SS.waveCap ?? SS.maxGerms ?? 5;
 
-        // start a new wave if none active and field is clear
+        // start a new wave when board is clear
         if (!this._waveActive && this.germs.length === 0) {
             this._waveActive = true;
             this._pendingSpawns = cap;
-            this._nextSpawnAt = time + (this._betweenWaveDelayMs ?? 900);
+            // if a resume just happened, _nextSpawnAt was primed above; otherwise prime now
+            this._nextSpawnAt = this._nextSpawnAt ?? (time + (this._betweenWaveDelayMs ?? 900));
         }
 
-        // spawn germs one by one
-        if (this._waveActive && time >= this._nextSpawnAt && this._pendingSpawns > 0) {
-            try { systems.soapsplash.spawn.spawnGerm(this); }
-            catch (err) { console.error("Spawn error:", err); }
+        // spawn loop
+        if (this._waveActive && time >= (this._nextSpawnAt ?? 0) && this._pendingSpawns > 0) {
+            try {
+                // (optional) warn once if word bank is empty; spawn has its own fallback anyway
+                if (!SS.words || Object.values(SS.words).every(arr => !arr?.length)) {
+                    if (!this._warnedEmptyWB) {
+                        console.warn("[SoapSplash] Word bank empty — using fallback.");
+                        this._warnedEmptyWB = true;
+                    }
+                }
+                systems.soapsplash.spawn.spawnGerm(this);
+            } catch (err) {
+                console.error("Spawn error:", err);
+            }
             this._pendingSpawns--;
             const j = Phaser.Math.Between(-jitter, jitter);
             this._nextSpawnAt = time + base + j;
         }
 
-        // finish wave when all spawned and cleared
+        // end wave when finished
         if (this._waveActive && this._pendingSpawns <= 0 && this.germs.length === 0) {
             this._waveActive = false;
+            // schedule the next wave window
+            this._nextSpawnAt = time + (this._betweenWaveDelayMs ?? 900);
         }
 
-        // movement + collisions + rules
+        // movement + rules
         systems.soapsplash.movement.moveGerms(this, delta);
         systems.soapsplash.rules.checkBreaches(this);
 
-        // keep original systems HUD update (drives old Game Over logic)
-        systems.soapsplash.timer.updateHUD(this, this.time.now);
+        // HUD timer
+        systems.soapsplash.timer.updateHUD(this, time);
 
-        // toasts:
-        if (this.breaches > this._lastSadAtBreaches) {
+        // Kiko reactions
+        if (this.breaches > (this._lastSadAtBreaches ?? -1)) {
             this._lastSadAtBreaches = this.breaches;
-            this.showKikoSad();
+            this.showKikoSad?.();
         }
         const curStreak = this.streakSys?.streak ?? this.typing?.streak ?? 0;
         if (curStreak > (this._lastEncouragementAt ?? 0) && curStreak >= 1) {
             this._lastEncouragementAt = curStreak;
-            this.showKikoEncouragement();
+            this.showKikoEncouragement?.();
         }
+
+        // --- DEBUG TICK (once/sec)
+        if (!this._debugTick || time - this._debugTick > 1000) {
+            this._debugTick = time;
+            console.log("[SS update]", {
+                paused: this._paused,
+                tearing: this._tearingDown,
+                active: this.sys?.isActive?.(),
+                waveActive: this._waveActive,
+                pending: this._pendingSpawns,
+                germs: this.germs.length,
+                nextSpawnIn: Math.round((this._nextSpawnAt ?? time) - time)
+            });
+        }
+    }
+
+    // NEW: shared teardown used by Home-reset and lifecycle events
+    _teardown() {
+        try { this.time?.removeAllEvents?.(); } catch {}
+        try { this.tweens?.killAll?.(); } catch {}
+        try { this.input?.keyboard?.removeAllListeners?.(); } catch {}
+        try { this._pauseUi?.destroy?.(); } catch {}
+        this._pauseUi = null;
+        this._paused = false;
+
+        try {
+            this.germs?.slice().forEach((g, i) => systems.movement?.removeGermByIndex?.(this, i));
+            this.germs = [];
+        } catch {}
     }
 
     // (optional) clean up overlay and listeners on shutdown
     shutdown() {
-        // destroy pause UI if present
-        if (this._pauseUi) {
-            this._pauseUi.destroy();
-            this._pauseUi = null;
-        }
-
-        // stop background video (saves resources across scene swaps)
+        // call the robust teardown instead of partial manual cleanup
+        this._teardown();
         this.bgVideo?.stop?.();
     }
 }

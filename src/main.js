@@ -29,81 +29,93 @@ DB.init();
  * or:
  *   { WordBank: [ ... ] }
  *
- * Set path in CONFIG.assets.wordBank (recommended), else falls back to "assets/data/WordBank.json".
+ * Set path in CONFIG.assets.wordBank (recommended), else falls back to common locations.
  */
 // main.js (near the top, before new Phaser.Game(config))
 
 async function loadWordBankToConfig() {
-    const url = "assets/data/WordBank.json"; // <- ensure this path exists (fix 404)
-    try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-        const data = await res.json();
+    // NEW: try multiple common paths with no-store to avoid stale caches
+    const candidates = [
+        "assets/data/WordBank.json",
+        "assets/WordBank.json",
+        "data/WordBank.json",
+        "/WordBank.json"
+    ];
+    let data = null, lastErr = null;
 
-        // Word array can be plain [] or {WordBank:[...]}
-        const WB = Array.isArray(data) ? data
-            : Array.isArray(data?.WordBank) ? data.WordBank
-                : [];
-
-        const mapStrToNum = (v) => {
-            if (typeof v === "number") return Phaser.Math.Clamp(Math.round(v), 1, 3);
-            const m = { easy: 1, normal: 2, medium: 2, hard: 3 };
-            return m[String(v ?? "").toLowerCase()] ?? null;
-        };
-
-        // Strict “Good” words per difficulty
-        const buckets = { 1: [], 2: [], 3: [] };
-        for (const w of WB) {
-            if (!w || !w.word) continue;
-            if (w.type !== "Good") continue;
-            const d = mapStrToNum(w.difficulty ?? w.level ?? w.tier);
-            if (d == null) continue;
-            buckets[d].push(String(w.word).trim());
-        }
-
-        // CleanCatch good/bad (optional here, but you asked earlier)
-        const ccGood = [];
-        const ccBad  = [];
-        for (const w of WB) {
-            if (!w || !w.word) continue;
-            if (w.type === "Good") ccGood.push(String(w.word).trim());
-            if (w.type === "Bad")  ccBad.push(String(w.word).trim());
-        }
-
-        // Dedup + shuffle so you start with variety
-        const uniqShuffle = (arr) => Phaser.Utils.Array.Shuffle([...new Set(arr.filter(Boolean))]);
-
-        CONFIG.soapSplash = CONFIG.soapSplash || {};
-        CONFIG.soapSplash.words = {
-            1: uniqShuffle(buckets[1]),
-            2: uniqShuffle(buckets[2]),
-            3: uniqShuffle(buckets[3]),
-        };
-
-        CONFIG.cleanCatch = CONFIG.cleanCatch || {};
-        CONFIG.cleanCatch.words = {
-            good: uniqShuffle(ccGood),
-            bad:  uniqShuffle(ccBad),
-        };
-
-        // Helpful logs
-        console.log("[WordBank] SoapSplash counts:",
-            { easy: CONFIG.soapSplash.words[1]?.length || 0,
-                normal: CONFIG.soapSplash.words[2]?.length || 0,
-                hard: CONFIG.soapSplash.words[3]?.length || 0 });
-
-        console.log("[WordBank] CleanCatch counts:",
-            { good: CONFIG.cleanCatch.words.good?.length || 0,
-                bad: CONFIG.cleanCatch.words.bad?.length || 0 });
-
-    } catch (err) {
-        console.error("[WordBank] load failed:", err);
-        // If it fails, don’t leave a single default like ["wash"].
-        CONFIG.soapSplash = CONFIG.soapSplash || {};
-        CONFIG.soapSplash.words = { 1: [], 2: [], 3: [] };
-        CONFIG.cleanCatch = CONFIG.cleanCatch || {};
-        CONFIG.cleanCatch.words = { good: [], bad: [] };
+    for (const url of candidates) {
+        try {
+            const res = await fetch(url, { cache: "no-store" });
+            if (res.ok) { data = await res.json(); break; }
+            lastErr = new Error(`HTTP ${res.status} for ${url}`);
+        } catch (e) { lastErr = e; }
     }
+
+    if (!data) {
+        console.error("[WordBank] load failed:", lastErr);
+        // minimal safe fallback so the game still runs
+        data = { WordBank: [
+                { id:1, word:"soap",  definition:"", type:"Good", difficulty:1 },
+                { id:2, word:"clean", definition:"", type:"Good", difficulty:1 },
+                { id:3, word:"germ",  definition:"", type:"Bad",  difficulty:1 }
+            ]};
+    }
+
+    // Word array can be plain [] or {WordBank:[...]}
+    const WB = Array.isArray(data) ? data
+        : Array.isArray(data?.WordBank) ? data.WordBank
+            : [];
+
+    const mapStrToNum = (v) => {
+        if (typeof v === "number") return Phaser.Math.Clamp(Math.round(v), 1, 3);
+        const m = { easy: 1, normal: 2, medium: 2, hard: 3 };
+        return m[String(v ?? "").toLowerCase()] ?? null;
+    };
+
+    // Strict “Good” words per difficulty
+    const buckets = { 1: [], 2: [], 3: [] };
+    for (const w of WB) {
+        if (!w || !w.word) continue;
+        if (w.type !== "Good") continue;
+        const d = mapStrToNum(w.difficulty ?? w.level ?? w.tier);
+        if (d == null) continue;
+        buckets[d].push(String(w.word).trim());
+    }
+
+    // CleanCatch good/bad
+    const ccGood = [];
+    const ccBad  = [];
+    for (const w of WB) {
+        if (!w || !w.word) continue;
+        if (w.type === "Good") ccGood.push(String(w.word).trim());
+        if (w.type === "Bad")  ccBad.push(String(w.word).trim());
+    }
+
+    // Dedup + shuffle so you start with variety
+    const uniqShuffle = (arr) => Phaser.Utils.Array.Shuffle([...new Set(arr.filter(Boolean))]);
+
+    CONFIG.soapSplash = CONFIG.soapSplash || {};
+    CONFIG.soapSplash.words = {
+        1: uniqShuffle(buckets[1]),
+        2: uniqShuffle(buckets[2]),
+        3: uniqShuffle(buckets[3]),
+    };
+
+    CONFIG.cleanCatch = CONFIG.cleanCatch || {};
+    CONFIG.cleanCatch.words = {
+        good: uniqShuffle(ccGood),
+        bad:  uniqShuffle(ccBad),
+    };
+
+    // Helpful logs
+    console.log("[WordBank] SoapSplash counts:",
+        { easy: CONFIG.soapSplash.words[1]?.length || 0,
+            normal: CONFIG.soapSplash.words[2]?.length || 0,
+            hard: CONFIG.soapSplash.words[3]?.length || 0 });
+
+    console.log("[WordBank] CleanCatch counts:",
+        { good: CONFIG.cleanCatch.words.good?.length || 0,
+            bad:  CONFIG.cleanCatch.words.bad?.length || 0 });
 }
 
 

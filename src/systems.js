@@ -375,7 +375,7 @@ const ui = {
             return { btn, txt };
         };
         const y0 = height / 2 + 40;
-        const homeBtn = mkBtn("Main Menu", y0, () => onHome?.());
+        const homeBtn = mkBtn("Play Again", y0, () => onHome?.());
 
         function destroyAll() {
             overlay.destroy(); panel.destroy(); title.destroy(); stats.destroy();
@@ -399,14 +399,8 @@ const ui = {
 
             // build the rich pause overlay from systems.js
             this._pauseUi = systems.ui.pauseOverlay(this, {
-                onResume: () => this.togglePause(),
-                onHome: () => {
-                    // wrap up the round politely, then bounce to your hub/menu scene
-                    this.finalizeRound?.("Paused → Main Menu");
-                    const playerName = this.registry.get("playerName");
-                    this.scene.start("GameScene", { playerName });
-                }
-            });
+                onResume: () => this.togglePause()
+                });
         }
     }
 
@@ -784,12 +778,19 @@ const soapsplash = (() => {
             );
         },
         // update remaining time label every frame from start time
-            updateHUD(scene, now) {
-                if (scene.gameStartAt == null) return;
-                if (!scene.timerHud) return;        // ← add this guard
+        // update remaining time label every frame from start time
+        updateHUD(scene, now) {
+            if (!scene?.gameStartAt) return;
+            const hud = scene?.timerHud;
+            if (!hud || !hud.active || !hud.scene?.sys?.isActive()) return;
+            try {
                 const remaining = Math.max(0, (SS.gameDurationMin * 60 * 1000) - (now - scene.gameStartAt));
-                scene.timerHud.setText(`Time: ${helpers.mmss(remaining)}`);
-            },
+                hud.setText(`Time: ${helpers.mmss(remaining)}`);
+            } catch (_) {
+                // ignore one-frame teardown races
+            }
+        },
+
 
         endGame(scene, reason = SS.reason || "Game over") {
             if (scene.gameOver) return;

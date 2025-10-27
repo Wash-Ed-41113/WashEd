@@ -23,6 +23,36 @@ export default class GameScene extends Phaser.Scene {
         // read player name once (fallback to default)
         const playerName = this.registry.get("playerName") || "Player";
 
+        // ─────────────────────────────────────────────────────────────
+        // (3) BYPASS OLD DIFFICULTY WHEN ASKED → jump straight to hub
+        // ─────────────────────────────────────────────────────────────
+        const skipDifficulty = !!data?.skipDifficulty;
+        if (skipDifficulty || data?.route === "hub") {
+            // ensure a session exists
+            if (!window.__SESSION_ID__) {
+                window.__SESSION_ID__ = DB.beginSession(playerName);
+            }
+            // use existing difficulty or sensible default
+            const difficulty = this.registry.get("difficulty") || 2;
+
+            // Prefer a dedicated hub/menu builder if you have one
+            if (typeof this.showHubMenu === "function") {
+                this.showHubMenu();
+                return;
+            }
+
+            // If your hub is the mode selector in this scene, call it directly
+            if (typeof this.showModePanel === "function") {
+                this.showModePanel(difficulty);
+                return;
+            }
+
+            // Fallback: jump to Playground hub scene if no local hub method exists
+            this.scene.start("PlaygroundScene", { playerName, difficulty });
+            return;
+        }
+        // ─────────────────────────────────────────────────────────────
+
         // ---- keep mute state in sync (Phaser Audio <-> HTMLAudio <-> registry) ----
         const initialMute = !!this.registry.get("mute");
         if (this.sound) this.sound.mute = initialMute;

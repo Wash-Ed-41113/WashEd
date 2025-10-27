@@ -138,6 +138,20 @@ export default class PlaygroundScene extends Phaser.Scene {
     create() {
         const { width, height } = this.scale;
 
+        // ---- HARD RESET so replays start clean ----
+        this._leaving = false;
+        this._dialogStep = 0;
+        this._castleStage = -1;        // reset build stage
+        this.canTap = true;            // allow taps again
+        if (this._castleImage) { this._castleImage.destroy(); this._castleImage = null; }
+        this.input.enabled = true;
+        this.tweens.killAll();
+        this.cameras.main.resetFX();
+        this.input.topOnly = false;    // don't let any UI eat the global pointerdown
+
+        this.scene.get('MenuScene')?.scene.stop(); // ensure menu not still alive
+        this.registry.remove('playground_done');   // optional, remove any leftover markers
+
         // Sand area
         this.sandArea = new Phaser.Geom.Rectangle(width * 0.15, height * 0.65, width * 0.70, height * 0.25);
 
@@ -183,8 +197,6 @@ export default class PlaygroundScene extends Phaser.Scene {
         const name = (this.registry.get("playerName") || "friend");
         this.speech.say(`Hello, ${name}! My name is Kiko.\nLook! Let's make sandcastle!\nTap the sand!`);
 
-
-
         // Build handler
         const buildNext = () => {
             // advance stage index (0..3)
@@ -219,8 +231,10 @@ export default class PlaygroundScene extends Phaser.Scene {
             }
         };
 
-        // Tap to build (debounced)
-        this.input.on("pointerdown", (pointer) => {
+        // === Handle reflow and pointer listeners safely ===
+
+        // 1. Pointer tap handler (single source of truth)
+        const onPointer = (pointer) => {
             const { worldX: x, worldY: y } = pointer;
             if (!this.canTap) return;
             if (!Phaser.Geom.Rectangle.Contains(this.sandArea, x, y)) return;
@@ -228,13 +242,14 @@ export default class PlaygroundScene extends Phaser.Scene {
             this.canTap = false;
 
             // Cheer swap (quick)
-            if (this._castleStage < CASTLE_FRAMES.length - 1) {
-                if (this.textures.exists(KIKO_CHEER_KEY) && kiko.setTexture) {
-                    kiko.setTexture(KIKO_CHEER_KEY).setDisplaySize(600, 600);
-                    this.time.delayedCall(220, () =>
-                        kiko.setTexture(KIKO_BASE_KEY).setDisplaySize(600, 600)
-                    );
-                }
+            if (this._castleStage < CASTLE_FRAMES.length - 1 &&
+                this.textures.exists(KIKO_CHEER_KEY) && kiko.setTexture) {
+                kiko.setTexture(KIKO_CHEER_KEY).setDisplaySize(600, 600);
+                this.time.delayedCall(220, () =>
+                    (this.textures.exists(KIKO_BASE_KEY) && kiko.setTexture)
+                        ? kiko.setTexture(KIKO_BASE_KEY).setDisplaySize(600, 600)
+                        : null
+                );
             }
 
             buildNext();
@@ -243,9 +258,9 @@ export default class PlaygroundScene extends Phaser.Scene {
             if (this._castleStage < CASTLE_FRAMES.length - 1) {
                 this.time.delayedCall(220, () => (this.canTap = true));
             }
-        });
+        };
 
-        // Resize: keep background/sand aligned; bubble stays fixed by design
+        // 2. Reflow handler
         const reflow = (w, h) => {
             bg.setPosition(w / 2, h / 2).setScale(Math.max(w / bg.width, h / bg.height));
             this.sandArea.setTo(w * 0.15, h * 0.65, w * 0.70, h * 0.25);
@@ -256,8 +271,28 @@ export default class PlaygroundScene extends Phaser.Scene {
             if (kiko?.setPosition) kiko.setPosition(cx + 220, cy);
             if (this._castleImage) this._castleImage.setPosition(cx - 220, cy);
         };
-        this.scale.on("resize", ({ width: w, height: h }) => reflow(w, h));
+
+        // 2b. Resize wrapper (needed for the .on call)
+        const onResize = ({ width: w, height: h }) => reflow(w, h);
+
+        // 3. Attach listeners
+        this.input.on("pointerdown", onPointer);
+        this.scale.on(Phaser.Scale.Events.RESIZE, onResize);
+
+        // Initial layout
         reflow(width, height);
+
+        // 4. Cleanup on shutdown so re-entry is fresh
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            this.input.off("pointerdown", onPointer);
+            this.scale.off(Phaser.Scale.Events.RESIZE, onResize);
+            this.speech?.destroy();
+            this._castleImage?.destroy();
+            this.speech = null;
+            this._castleImage = null;
+            this.canTap = true;
+            this._castleStage = -1;
+        });
     }
 
     /** Move toward the door with bounce + shrink, then go to bathroom scene. */
@@ -298,7 +333,11 @@ export default class PlaygroundScene extends Phaser.Scene {
             ease: "Sine.easeInOut",
             onComplete: () => {
                 walkBob.stop();
-                this.scene.start("SchoolBathroomScene");
+                this.input.enabled = false;
+                this.cameras.main.once("camerafadeoutcomplete", () => {
+                    this.scene.start("SchoolBathroomScene");
+                });
+                this.cameras.main.fadeOut(300, 0, 0, 0);
             },
         });
     }

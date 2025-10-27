@@ -174,7 +174,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
                 () => {
                     // turning off hints is optional here; next scene is starting anyway
                     this._clearHints();
-                    this._fadeTo("SoapSplash");
+                    this._fadeTo("SoapSplash"); // keep fade logic; actual start happens on fadeout
                 }
             );
         });
@@ -187,7 +187,12 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             // cleanup hints when leaving
             this._clearHints();
             if (this.nextSceneKey) {
-                this.scene.start(this.nextSceneKey);
+                if (this.nextSceneKey === "SoapSplash") {
+                    // Start SoapSplash with explicit difficulty and belt-and-braces stop
+                    this.startSoapSplash();
+                } else {
+                    this.scene.start(this.nextSceneKey);
+                }
             } else {
                 this.cameras.main.fadeIn(300, 0, 0, 0); // safety
             }
@@ -203,7 +208,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             // S = jump straight to SoapSplash (bypass Clean Catcher)
             this.input.keyboard.on("keydown-S", () => {
                 this._clearHints?.();
-                this.scene.start("SoapSplash");
+                this.startSoapSplash();
             });
 
             // L = open leaderboard screen directly (bypass minis)
@@ -218,11 +223,16 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             this._showEntryDialog();
         }
 
-
-
         // Also clean up hints on shutdown
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this._clearHints());
         this.events.once(Phaser.Scenes.Events.DESTROY, () => this._clearHints());
+    }
+
+    // NEW: start SoapSplash cleanly with explicit difficulty and belt-and-braces stop
+    startSoapSplash() {
+        const difficulty = this.registry.get("difficulty") ?? 1;
+        this.scene.stop("SoapSplash"); // ensure no lingering instance
+        this.scene.start("SoapSplash", { difficulty, fromHub: true });
     }
 
     _fadeTo(sceneKey) {
