@@ -123,31 +123,32 @@ export default class MenuScene extends Phaser.Scene {
         }
 
         // START → ask name → go Playground (DIFFICULTY PICKER REMOVED)
+        // START → ask name → choose difficulty → Playground
         const startFlow = () => {
             const cachedName = this.registry.get("playerName");
 
-            const goPlay = (playerName) => {
-                // default to Easy=1
-                const difficulty = 1;
-                // create a session if we don't already have one
-                window.__SESSION_ID__ = window.__SESSION_ID__ ?? DB.beginSession(playerName);
-                this.registry.set("difficulty", difficulty);
-                this.goToPlaygroundSmooth(playerName, difficulty, 600);
-            };
-
-            const afterName = (playerName) => {
-                const name = (playerName || "").trim() || "Player";
+            const proceedAfterName = (rawName) => {
+                const name = (rawName || "").trim() || "Player";
                 this.registry.set("playerName", name);
-                goPlay(name);
+
+                // use the existing difficulty picker (returns numeric 1/2/3)
+                this.openDifficultyDialog((lvl) => {
+                    // create a session only if one doesn't already exist
+                    window.__SESSION_ID__ = window.__SESSION_ID__ ?? DB.beginSession(name);
+
+                    this.registry.set("difficulty", lvl);          // lvl is 1, 2, or 3
+                    this.goToPlaygroundSmooth(name, lvl, 600);     // pass numeric difficulty through
+                });
             };
 
             if (!cachedName) {
-                // ask name only AFTER pressing Start
-                this.openNameDialog(afterName);
+                // ask for name only AFTER pressing Start
+                this.openNameDialog(proceedAfterName);
             } else {
-                goPlay(cachedName);
+                proceedAfterName(cachedName);
             }
         };
+
 
         // --- QUICK RESTART FLAGS (must appear BEFORE we wire the Start button) ---
         this._quickRestart = !!data?.quickRestart;

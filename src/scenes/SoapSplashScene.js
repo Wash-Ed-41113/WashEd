@@ -131,7 +131,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.load.image("KikoJump", CONFIG.assets.kiko.jump);
         this.load.image("KikoCheer", CONFIG.assets.kiko.cheer);
         this.load.image("KikoSad", CONFIG.assets.kiko.sad);
-        this.load.image("ui_close_button", CONFIG.assets.ui.closeBut);
+        // this.load.image("ui_close_button", CONFIG.assets.ui.closeBut);
         this.load.image("DialogPanel", CONFIG.assets.ui.dialogPanel);
         this.load.image("ui_home", CONFIG.assets.ui.homeBut); // kept for other scenes if needed
         this.load.image("ui_pause", CONFIG.assets.ui.pauseBut);
@@ -140,6 +140,7 @@ export default class SoapSplashScene extends Phaser.Scene {
     _buildPauseOverlay() {
         const { width: W, height: H } = this.scale;
         const g = this.add.container(0, 0).setDepth(99_999); // guaranteed top layer
+        const origDestroy = g.destroy.bind(g);
 
         // backdrop
         const overlay = this.add.rectangle(0, 0, W, H, 0xffffff, 0.45)
@@ -150,11 +151,11 @@ export default class SoapSplashScene extends Phaser.Scene {
         // panel
         let panel; let panelGeom = null;
         if (this.textures.exists("DialogPanel")) {
-            panel = this.add.image(W/2, H/2, "DialogPanel").setOrigin(0.5).setDepth(10_001);
+            panel = this.add.image(W/2, H/2, "DialogPanel").setOrigin(0.5);
             const targetW = Math.min(W * 0.8, 980);
             panel.setDisplaySize(targetW, targetW * 0.58);
         } else {
-            const gfx = this.add.graphics().setDepth(10_001);
+            const gfx = this.add.graphics();
             const pw = Math.min(W * 0.8, 980), ph = Math.min(H * 0.6, 520);
             const px = (W - pw) / 2, py = (H - ph) / 2;
             gfx.fillStyle(0xffffff, 1);
@@ -171,7 +172,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             fontSize: "72px",
             color: "#000000",
             align: "center"
-        }).setOrigin(0.5).setDepth(10_002);
+        }).setOrigin(0.5);
         g.add(title);
 
         const score    = this.streakSys?.totalScore ?? this.typing?.score ?? 0;
@@ -185,7 +186,7 @@ export default class SoapSplashScene extends Phaser.Scene {
                 color: "#000000",
                 align: "center",
                 lineSpacing: 12
-            }).setOrigin(0.5).setDepth(10_002);
+            }).setOrigin(0.5);
         g.add(stats);
 
         // compute panel corners for placing buttons
@@ -197,28 +198,24 @@ export default class SoapSplashScene extends Phaser.Scene {
             px = panel.x - pw/2; py = panel.y - ph/2;
         }
 
-        // 🔧 CLOSE (top-right)
-        const closeX = px + pw - 26, closeY = py + 26;
-        const closeImg = this.add.image(closeX, closeY, "ui_close_button")
-            .setDisplaySize(70, 70)
-            .setOrigin(0.5)
-            .setDepth(10_003)
-            .setInteractive({ useHandCursor: true });
-
-        closeImg.on("pointerover", () => closeImg.setTint(0xcde3ff));
-        closeImg.on("pointerout",  () => closeImg.clearTint());
-
-        // unpause logic
+        // define unpause first so handlers can call it
         const unpause = () => {
             this._paused = false;
+
+            // destroy our overlay safely
             if (this._pauseUi?.destroy) {
-                this._pauseUi.destroy();
-                this._pauseUi = null;
+                const ui = this._pauseUi;
+                this._pauseUi = null; // break reference early
+                try { ui.destroy(); } catch {}
             }
+
+            // restore legacy systems overlay (if we masked it)
             if (this._origSysPauseOverlay) {
                 systems.ui.pauseOverlay = this._origSysPauseOverlay;
                 this._origSysPauseOverlay = null;
             }
+
+            // fully resume clocks/audio/physics
             this.time.timeScale = 1;
             this.tweens.timeScale = 1;
             if (this.physics?.world) this.physics.world.isPaused = false;
@@ -226,10 +223,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             this.sound.resumeAll();
         };
 
-        closeImg.on("pointerup", () => {
-            unpause();
-            destroyAll();
-        });
+        // (CLOSE BUTTON REMOVED — per your request)
 
         // ---- BUTTON ROW (Mute only, centered) ----
         const rowY   = Math.min(py + ph - 90, (H/2) + 160);
@@ -240,7 +234,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             const hoverFill = 0xAEEAB7;
             const stroke    = 0x6DAE7F;
 
-            const c = this.add.container(x, y).setDepth(10_003);
+            const c = this.add.container(x, y);
             c.setSize(w, h).setInteractive({ useHandCursor: true });
 
             const gfx = this.add.graphics();
@@ -256,7 +250,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             const txt = this.add.text(0, 0, label, {
                 fontFamily: "Montserrat",
                 fontSize: "44px",
-                color: "#1d4330",
+                color: "#1d4330", // readable on light panel
             }).setOrigin(0.5);
 
             c.add([ gfx, txt ]);
@@ -268,6 +262,15 @@ export default class SoapSplashScene extends Phaser.Scene {
             return { c, txt };
         };
 
+        // “Press Esc to continue…” hint below Mute/Unmute (Montserrat)
+        const escHint = this.add.text(W / 2, rowY + 56, "Press Esc to continue…", {
+            fontFamily: "Montserrat",
+            fontSize: "28px",
+            color: "#1d4330",  // readable on light panel; switch to #ffffff if your panel is dark
+            align: "center"
+        }).setOrigin(0.5);
+        g.add(escHint);
+
         const muteLabel = (this.registry.get("mute") === true || this.sound?.mute) ? "Unmute" : "Mute";
         const muteBtn = makePillBtn(muteLabel, W / 2, rowY, () => {
             if (this.sound) {
@@ -277,31 +280,43 @@ export default class SoapSplashScene extends Phaser.Scene {
             }
         });
 
-        // DEBUG: row locator
-        this.add.circle(W/2, rowY, 3, 0xff00ff, 1).setDepth(10_010);
-        console.log("[Pause] mute row at", { rowY });
 
+
+        // // DEBUG dot should also be a child of g so it disappears with the overlay
+        // const debugDot = this.add.circle(W/2, rowY, 3, 0xff00ff, 1);
+        // g.add(debugDot);
+        // console.log("[Pause] mute row at", { rowY });
+
+        // === ROBUST DESTROY (exposed via g.destroy) ===========================
         const destroyAll = () => {
-            if (g?.destroy) g.destroy(true);
-            panel?.destroy();
-            title?.destroy();
-            stats?.destroy();
-            closeImg?.destroy();
-            overlay?.destroy();
-            muteBtn?.c?.destroy?.();
-            muteBtn?.txt?.destroy?.();
-            this._pauseUi = null;
-            this._paused = false;
-            this.time.timeScale = 1;
-            this.tweens.timeScale = 1;
-            if (this.physics?.world) this.physics.world.isPaused = false;
-            this.bgVideo?.resume?.();
-            this.sound?.resumeAll?.();
-            if (this._origSysPauseOverlay) {
-                systems.ui.pauseOverlay = this._origSysPauseOverlay;
-                this._origSysPauseOverlay = null;
+            try {
+                console.log("[pauseOverlay@SoapSplash] destroyAll()");
+                // use the original destroy to avoid recursion
+                origDestroy(true);
+                panel?.destroy(); title?.destroy(); stats?.destroy();
+                muteBtn?.c?.destroy?.(); muteBtn?.txt?.destroy?.();
+                escHint?.destroy?.();
+            } catch (e) {
+                console.warn("[pauseOverlay@SoapSplash] destroy error", e);
+            } finally {
+                this._pauseUi = null;
+                this._paused = false;
+                this.time.timeScale   = 1;
+                this.tweens.timeScale = 1;
+                if (this.physics?.world) this.physics.world.isPaused = false;
+                this.sound?.resumeAll?.();
+                this.input?.keyboard && (this.input.keyboard.enabled = true);
+                // restore legacy overlay if we had masked it
+                if (this._origSysPauseOverlay) {
+                    systems.ui.pauseOverlay = this._origSysPauseOverlay;
+                    this._origSysPauseOverlay = null;
+                }
             }
         };
+
+        // override default to ensure callers use the robust destroy
+        g.destroy = destroyAll;
+        this._pauseUi = g;
 
         return g;
     }
@@ -311,7 +326,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             // --- resume game ---
             this._paused = false;
 
-            // destroy our custom pause UI
+            // destroy our custom pause UI (now calls robust destroyAll)
             this._pauseUi?.destroy();
             this._pauseUi = null;
 
@@ -375,7 +390,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.events.on("resume", _fullUnpause);
 
         // ── Difficulty: normalise to 1..3 and expose ─────────────────────────────
-        const raw = this.registry.get("difficulty"); // may be "easy"/"normal"/"hard" or 1/2/3
+        const raw = this.registry.get("difficulty");
         const map = { easy: 1, normal: 2, medium: 2, hard: 3 };
         const levelNum = (typeof raw === "number")
             ? Phaser.Math.Clamp(Math.round(raw), 1, 3)
@@ -527,16 +542,36 @@ export default class SoapSplashScene extends Phaser.Scene {
         this._lastSadAtBreaches = 0;
         this._lastEncouragementAt = 0;
 
-        // DB round — NEW: always start a new round on entry (same as before, explicit intent)
+        // DB round — NEW: always start a new round on entry
         const difficulty = this.registry.get("difficulty");
         this.roundId = DB.beginRound(window.__SESSION_ID__, "SoapSplasher", String(difficulty));
 
-        // ── Top-right PAUSE icon only (no home/settings in this scene) ───────────
+        // ── Top-right PAUSE icon only ────────────────────────────────────────────
         const T = CONFIG.ui.topbar;
         const pause = this.add.image(this.scale.width - T.padding - T.iconSize/2, T.padding + T.iconSize/2, "ui_pause")
             .setOrigin(0.5).setDisplaySize(T.iconSize, T.iconSize).setDepth(200).setScrollFactor(0)
             .setInteractive({ useHandCursor: true });
         pause.on("pointerup", () => this.togglePause());
+
+        // NEW: global overlay exits (ESC + scene lifecycle)
+        this.input.keyboard?.on("keydown-ESC", () => {
+            if (this._paused && this._pauseUi?.destroy) {
+                console.log("[pause] ESC -> destroyAll");
+                this._pauseUi.destroy();
+            }
+        });
+        this.events.once("shutdown", () => {
+            if (this._pauseUi?.destroy) {
+                console.log("[pause] shutdown -> destroyAll");
+                this._pauseUi.destroy();
+            }
+        });
+        this.events.once("destroy", () => {
+            if (this._pauseUi?.destroy) {
+                console.log("[pause] destroy -> destroyAll");
+                this._pauseUi.destroy();
+            }
+        });
 
         // Hide generic systems timer text if exposed (remove small white timer)
         this.topbar?.timerText?.setVisible(false);
@@ -547,7 +582,7 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         // typing + original systems timer start after Explain overlay resumes
         this.events.once(Phaser.Scenes.Events.RESUME, () => {
-            systems.soapsplash.timer.init(this); // ← keep old system
+            systems.soapsplash.timer.init(this);
             this.gameStartAt = this.time.now;
             systems.soapsplash.typing.init(this);
         });
@@ -881,7 +916,6 @@ export default class SoapSplashScene extends Phaser.Scene {
         // spawn loop
         if (this._waveActive && time >= (this._nextSpawnAt ?? 0) && this._pendingSpawns > 0) {
             try {
-                // (optional) warn once if word bank is empty; spawn has its own fallback anyway
                 if (!SS.words || Object.values(SS.words).every(arr => !arr?.length)) {
                     if (!this._warnedEmptyWB) {
                         console.warn("[SoapSplash] Word bank empty — using fallback.");
@@ -900,7 +934,6 @@ export default class SoapSplashScene extends Phaser.Scene {
         // end wave when finished
         if (this._waveActive && this._pendingSpawns <= 0 && this.germs.length === 0) {
             this._waveActive = false;
-            // schedule the next wave window
             this._nextSpawnAt = time + (this._betweenWaveDelayMs ?? 900);
         }
 
@@ -954,7 +987,6 @@ export default class SoapSplashScene extends Phaser.Scene {
 
     // (optional) clean up overlay and listeners on shutdown
     shutdown() {
-        // call the robust teardown instead of partial manual cleanup
         this._teardown();
         this.bgVideo?.stop?.();
     }

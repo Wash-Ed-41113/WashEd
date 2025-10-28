@@ -13,6 +13,7 @@ export const DB = (() => {
         ],
         sessions: [],  // { session_id, player_name, started_at, ended_at? }
         rounds: []     // { round_id, session_id, game_key, started_at, ended_at, score, best_streak, breaches, base_score, bonus_score, reason }
+        // _telemetry: [] // optional; created on demand if you enable it in logTyping
     };
 
     // ---------- persistence ----------
@@ -103,6 +104,23 @@ export const DB = (() => {
         save();
     }
 
+    // ---------- telemetry (safe no-op by default) ----------
+    /**
+     * Logs typing-related events from systems.js (mistake/complete/keypress/etc).
+     * This is intentionally a no-op to avoid any gameplay side-effects.
+     * To persist telemetry, uncomment the lines below.
+     */
+    function logTyping(event, payload = {}) {
+        try {
+            // // OPTIONAL: enable if you want to persist telemetry
+            // state._telemetry = state._telemetry || [];
+            // state._telemetry.push({ event, ...payload, at: now() });
+            // save();
+        } catch (_) {
+            // never throw from telemetry
+        }
+    }
+
     // ---------- queries ----------
     function players() {
         // unique player list with counts
@@ -187,6 +205,9 @@ export const DB = (() => {
             players, roundsBySession, topRoundsBySession, sessionTotal, topTotals,
             sessionGameTotal, bestSessionTotals
         },
+        // telemetry
+        logTyping,
+        // debug
         dump
     };
 })();
