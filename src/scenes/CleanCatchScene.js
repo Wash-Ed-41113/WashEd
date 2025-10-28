@@ -29,9 +29,7 @@ export default class CleanCatchScene extends Phaser.Scene {
             );
         }
 
-        // Safety net: load the same audio file under a fallback key
-        // In most flows, explain scene has already loaded/started "cleanCatchExplainMusic".
-        // If user jumps directly here, we still have something to play ("cleanCatchMusic").
+        // Safety net BGM
         if (!this.cache.audio.exists("cleanCatchMusic")) {
             this.load.audio("cleanCatchMusic", "assets/sounds/soap splasher.mp3");
         }
@@ -58,23 +56,16 @@ export default class CleanCatchScene extends Phaser.Scene {
         this.sound.get("kikos_day")?.stop();
 
         // === BGM CONTINUITY LOGIC ===
-        // Try to re-use the explain-scene BGM instance so playback continues seamlessly.
-        // Primary key used by explain scene: "cleanCatchExplainMusic"
-        // Fallback to "cleanCatchMusic" if coming directly here.
         const reuse =
             this.sound.get("cleanCatchExplainMusic") ||
             this.sound.get("cleanCatchMusic");
 
         if (reuse) {
-            // Reuse the already-playing instance; do NOT restart so the timeline continues.
             this._bgm = reuse;
-            // Sync mute state to registry if needed
             const wantMute = !!this.registry.get("mute");
             if (this._bgm.mute !== wantMute) this._bgm.setMute(wantMute);
-            // If for some reason it's not playing, start it
             if (!this._bgm.isPlaying) this._bgm.play({ loop: true });
         } else {
-            // Extremely rare: no instance found and nothing loaded/playing — create one now
             const playMiniBgm = () => {
                 if (!this._bgm) {
                     this._bgm = this.sound.add("cleanCatchMusic", {
@@ -93,25 +84,43 @@ export default class CleanCatchScene extends Phaser.Scene {
         }
         // === END BGM CONTINUITY LOGIC ===
 
+        // === WORD SUPPLIERS (single source from main.js) =======================
+        // Fresh no-repeat decks every time this scene starts/restarts.
+        if (CONFIG?.cleanCatch?.resetDecks && CONFIG?.cleanCatch?.nextGood && CONFIG?.cleanCatch?.nextBad) {
+            CONFIG.cleanCatch.resetDecks();
+            // expose convenience suppliers on the scene (optional – handy if your runtime reads from scene)
+            this.nextGoodLabel = () => CONFIG.cleanCatch.nextGood() || "clean";
+            this.nextBadLabel  = () => CONFIG.cleanCatch.nextBad() || "germ";
+        } else {
+            console.warn("[CleanCatch] Deck APIs missing; falling back to static labels.");
+            this.nextGoodLabel = () => "clean";
+            this.nextBadLabel  = () => "germ";
+        }
+        // ======================================================================
+
         // DOM canvas host for the mini-game's offscreen canvas runtime
         const rootEl = document.createElement("div");
         const root = this.add.dom(0, 0, rootEl).setOrigin(0, 0).setDepth(1);
 
         const canvas = document.createElement("canvas");
         canvas.style.display = "block";
-        // CSS size (what the user sees)
         canvas.style.width = `${width}px`;
         canvas.style.height = `${height}px`;
-        // Internal drawing resolution (what ctx draws to) — MUST match the Phaser size
         canvas.width = width;
         canvas.height = height;
-
         root.node.appendChild(canvas);
 
         const difficulty = this.registry.get("difficulty") || "easy";
+
+        // If your cleancatcher runtime supports passing suppliers, you can hand them in:
+        // systems.cleancatcher.create(this, canvas, difficulty, {
+        //   nextGood: this.nextGoodLabel,
+        //   nextBad: this.nextBadLabel
+        // });
+        // Otherwise it can read CONFIG.cleanCatch.nextGood/nextBad directly.
         this._runtime = systems.cleancatcher.create(this, canvas, difficulty);
 
-        // Top bar (home / pause) — pause uses our unified overlay; Home returns to hub
+        // Top bar (home / pause)
         systems.ui.topbar(this, {
             onHome: () => {
                 const playerName = this.registry.get("playerName") || "Player";
@@ -135,15 +144,14 @@ export default class CleanCatchScene extends Phaser.Scene {
         };
         this.scale.on(Phaser.Scale.Events.RESIZE, onResize);
 
-        // Cleanup (do NOT force-stop music here to allow continuity into a results scene, etc.)
+        // Cleanup (do NOT force-stop music here to allow continuity)
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             this.scale.off(Phaser.Scale.Events.RESIZE, onResize);
             this._runtime?.destroy?.();
             root.destroy();
             this._pauseUi?.destroy?.();
             this._pauseUi = null;
-            // Intentionally NOT stopping/destroying this._bgm on shutdown,
-            // so the next scene can continue the same track if desired.
+            // Intentionally not stopping this._bgm
         });
     }
 

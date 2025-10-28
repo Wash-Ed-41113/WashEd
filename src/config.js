@@ -53,6 +53,7 @@ window.CONFIG = {
 
     // file paths for all images used in the game
     assets: {
+        logo : "assets/images/washed_day_UI-Logo__WashEd.png",
         kiko: {
             base: "assets/images/Kiko/WashEd_kiko_sprite_base.png",
             cheer: "assets/images/Kiko/WashEd_kiko_sprite_thumbs-up.png",

@@ -17,107 +17,135 @@ import HandwashAnimationScene from "./scenes/HandwashAnimationScene.js";
 import { DB } from "./db.js";
 DB.init();
 
-/**
- * Load WordBank.json and populate:
- * - CONFIG.soapSplash.words = { 1:[], 2:[], 3:[] }  // Good words grouped by difficulty
- * - CONFIG.cleanCatcher.words = { good:[], bad:[] }
- * - CONFIG.words = flat original array (legacy/back-compat)
- * - CONFIG.soapslasher.words = alias to soapSplash.words (spelling safety)
- *
- * It accepts either:
- *   [ { word, type, difficulty }, ... ]
- * or:
- *   { WordBank: [ ... ] }
- *
- * Set path in CONFIG.assets.wordBank (recommended), else falls back to common locations.
- */
-// main.js (near the top, before new Phaser.Game(config))
+// === Single source of truth for WordBank.json ===
+// (Add/replace this whole block after CONFIG is created and before starting Phaser)
 
-async function loadWordBankToConfig() {
-    // NEW: try multiple common paths with no-store to avoid stale caches
-    const candidates = [
-        "assets/data/WordBank.json",
-        "assets/WordBank.json",
-        "data/WordBank.json",
-        "/WordBank.json"
-    ];
-    let data = null, lastErr = null;
+window.CONFIG.wordsReady = false;
+window.CONFIG.soapSplash = window.CONFIG.soapSplash || {};
+window.CONFIG.cleanCatch = window.CONFIG.cleanCatch || {};
 
-    for (const url of candidates) {
-        try {
-            const res = await fetch(url, { cache: "no-store" });
-            if (res.ok) { data = await res.json(); break; }
-            lastErr = new Error(`HTTP ${res.status} for ${url}`);
-        } catch (e) { lastErr = e; }
-    }
+// helpers
+const byDifficulty = () => ({ 1: [], 2: [], 3: [] });
+const shuffle = (arr) => Phaser.Utils.Array.Shuffle(arr.slice()); // pure shuffle copy
 
-    if (!data) {
-        console.error("[WordBank] load failed:", lastErr);
-        // minimal safe fallback so the game still runs
-        data = { WordBank: [
-                { id:1, word:"soap",  definition:"", type:"Good", difficulty:1 },
-                { id:2, word:"clean", definition:"", type:"Good", difficulty:1 },
-                { id:3, word:"germ",  definition:"", type:"Bad",  difficulty:1 }
-            ]};
-    }
-
-    // Word array can be plain [] or {WordBank:[...]}
-    const WB = Array.isArray(data) ? data
-        : Array.isArray(data?.WordBank) ? data.WordBank
-            : [];
-
-    const mapStrToNum = (v) => {
-        if (typeof v === "number") return Phaser.Math.Clamp(Math.round(v), 1, 3);
-        const m = { easy: 1, normal: 2, medium: 2, hard: 3 };
-        return m[String(v ?? "").toLowerCase()] ?? null;
+// build a no-repeat deck iterator
+function makeDeck(array) {
+    const base = Array.isArray(array) ? array.filter(Boolean) : [];
+    let bag = shuffle(base);
+    let i = 0;
+    return () => {
+        if (!bag.length) return "";        // fail-safe if empty
+        const w = bag[i++];
+        if (i >= bag.length) { bag = shuffle(base); i = 0; }
+        return w;
     };
-
-    // Strict “Good” words per difficulty
-    const buckets = { 1: [], 2: [], 3: [] };
-    for (const w of WB) {
-        if (!w || !w.word) continue;
-        if (w.type !== "Good") continue;
-        const d = mapStrToNum(w.difficulty ?? w.level ?? w.tier);
-        if (d == null) continue;
-        buckets[d].push(String(w.word).trim());
-    }
-
-    // CleanCatch good/bad
-    const ccGood = [];
-    const ccBad  = [];
-    for (const w of WB) {
-        if (!w || !w.word) continue;
-        if (w.type === "Good") ccGood.push(String(w.word).trim());
-        if (w.type === "Bad")  ccBad.push(String(w.word).trim());
-    }
-
-    // Dedup + shuffle so you start with variety
-    const uniqShuffle = (arr) => Phaser.Utils.Array.Shuffle([...new Set(arr.filter(Boolean))]);
-
-    CONFIG.soapSplash = CONFIG.soapSplash || {};
-    CONFIG.soapSplash.words = {
-        1: uniqShuffle(buckets[1]),
-        2: uniqShuffle(buckets[2]),
-        3: uniqShuffle(buckets[3]),
-    };
-
-    CONFIG.cleanCatch = CONFIG.cleanCatch || {};
-    CONFIG.cleanCatch.words = {
-        good: uniqShuffle(ccGood),
-        bad:  uniqShuffle(ccBad),
-    };
-
-    // Helpful logs
-    console.log("[WordBank] SoapSplash counts:",
-        { easy: CONFIG.soapSplash.words[1]?.length || 0,
-            normal: CONFIG.soapSplash.words[2]?.length || 0,
-            hard: CONFIG.soapSplash.words[3]?.length || 0 });
-
-    console.log("[WordBank] CleanCatch counts:",
-        { good: CONFIG.cleanCatch.words.good?.length || 0,
-            bad:  CONFIG.cleanCatch.words.bad?.length || 0 });
 }
 
+async function loadWordBankOnce() {
+    try {
+        // prefer explicit config path if provided
+        const tryPaths = [
+            window.CONFIG?.assets?.wordBank,          // e.g., "assets/data/WordBank.json"
+            "assets/WordBank.json",
+            "assets/data/WordBank.json",
+            "WordBank.json",
+            "/WordBank.json"
+        ].filter(Boolean);
+
+        let json = null;
+        let lastErr = null;
+
+        for (const p of tryPaths) {
+            try {
+                const r = await fetch(p, { cache: "no-store" });
+                if (r.ok) { json = await r.json(); break; }
+                lastErr = new Error(`HTTP ${r.status} for ${p}`);
+            } catch (e) { lastErr = e; }
+        }
+
+        if (!json) {
+            console.warn("[WordBank] Missing JSON; using empty pools. Last error:", lastErr);
+            json = { WordBank: [] };
+        }
+
+        // Support either plain array or { WordBank: [...] }
+        const rows = Array.isArray(json) ? json
+            : Array.isArray(json?.WordBank) ? json.WordBank
+                : [];
+
+        // buckets
+        const ss = byDifficulty();     // SoapSplash uses Good words by difficulty
+        const ccGood = [];
+        const ccBad  = [];
+
+        for (const row of rows) {
+            if (!row) continue;
+            const word = (row.word ?? row.Word ?? "").toString().trim();
+            const type = (row.type ?? row.Type ?? "").toString().trim().toLowerCase();
+
+            // normalise difficulty: accept number or strings like easy/medium/hard
+            let diff = row.difficulty ?? row.Difficulty ?? row.level ?? row.Level ?? row.tier ?? row.Tier;
+            if (typeof diff === "string") {
+                const m = { easy: 1, normal: 2, medium: 2, hard: 3 };
+                diff = m[diff.toLowerCase()];
+            } else {
+                diff = Number(diff);
+            }
+
+            if (!word) continue;
+
+            if (type === "good") {
+                if ([1, 2, 3].includes(diff)) ss[diff].push(word);
+                ccGood.push(word);
+            } else if (type === "bad") {
+                ccBad.push(word);
+            }
+        }
+
+        // expose raw pools
+        window.CONFIG.soapSplash.words = ss;                 // {1:[],2:[],3:[]}
+        window.CONFIG.cleanCatch.words = { good: ccGood, bad: ccBad };
+
+        // expose per-game deck APIs (no-repeat suppliers) for SoapSplash
+        window.CONFIG.soapSplash._decks = {};                // keyed by difficulty number
+        window.CONFIG.soapSplash.getDeck = (levelNum) => {
+            const lvl = Number(levelNum) || 1;
+            if (!window.CONFIG.soapSplash._decks[lvl]) {
+                window.CONFIG.soapSplash._decks[lvl] = makeDeck(window.CONFIG.soapSplash.words[lvl] || []);
+            }
+            return window.CONFIG.soapSplash._decks[lvl];
+        };
+        window.CONFIG.soapSplash.resetDeck = (levelNum) => {
+            const lvl = Number(levelNum) || 1;
+            window.CONFIG.soapSplash._decks[lvl] = makeDeck(window.CONFIG.soapSplash.words[lvl] || []);
+        };
+
+        // CleanCatch: separate suppliers for good and bad
+        window.CONFIG.cleanCatch._goodDeck = makeDeck(ccGood);
+        window.CONFIG.cleanCatch._badDeck  = makeDeck(ccBad);
+        window.CONFIG.cleanCatch.nextGood  = () => window.CONFIG.cleanCatch._goodDeck();
+        window.CONFIG.cleanCatch.nextBad   = () => window.CONFIG.cleanCatch._badDeck();
+        window.CONFIG.cleanCatch.resetDecks = () => {
+            window.CONFIG.cleanCatch._goodDeck = makeDeck(ccGood);
+            window.CONFIG.cleanCatch._badDeck  = makeDeck(ccBad);
+        };
+
+        // ready flag
+        window.CONFIG.wordsReady = true;
+
+        // quick visibility in DevTools
+        console.log("[WordBank] SoapSplash counts:", {
+            easy: ss[1].length, normal: ss[2].length, hard: ss[3].length
+        });
+        console.log("[WordBank] CleanCatch counts:", {
+            good: ccGood.length, bad: ccBad.length
+        });
+
+    } catch (e) {
+        console.error("[WordBank] Fatal load error:", e);
+        window.CONFIG.wordsReady = true; // let the game proceed (with empty decks)
+    }
+}
 
 // phaser game configuration object
 const config = {
@@ -147,7 +175,9 @@ const config = {
     ],
     dom: { createContainer: true },
 };
+
+// boot: load words once, then start Phaser
 (async () => {
-    await loadWordBankToConfig();     // <-- IMPORTANT
+    await loadWordBankOnce();   // <-- IMPORTANT (single source of truth)
     new Phaser.Game(config);
 })();

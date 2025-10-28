@@ -2,6 +2,8 @@
 const WASH1_KEY = "wash_step_bg_1";
 const WASH1_PATH = "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_02_bathroom_wash-hands.png";
 
+import systems from "../systems.js";
+
 const WASH2_KEY = "wash_step_bg_2";
 const WASH2_PATH = "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_03_bathroom_sparkle.png";
 
@@ -19,6 +21,9 @@ export default class HandwashAnimationScene extends Phaser.Scene {
 
     create() {
         const { width, height } = this.scale;
+
+        systems.ui.placeLogo(this);
+
 
         // helper to add a full-screen image (keeps aspect)
         const fitScreen = (key) => {

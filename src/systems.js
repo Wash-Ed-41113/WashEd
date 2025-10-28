@@ -142,6 +142,48 @@ const telemetry = {
 // immediate mode ui helpers built on phaser primitives
 // -----------------------------
 const ui = {
+
+    // bottom-right sticky logo (fixed to screen, auto-resizes, easy cleanup)
+    placeLogo(scene, opts = {}) {
+        const key     = opts.key ?? "app_logo";
+        const margin  = opts.margin ?? 16;
+        const maxW    = opts.maxWidth ?? 220;  // cap visual width so it stays tidy
+        const depth   = opts.depth ?? 199;     // under topbar (which is ~200), above bg
+        const alpha   = opts.alpha ?? 0.95;
+
+        if (!scene.textures.exists(key)) return null;
+
+        const { width, height } = scene.scale;
+
+        // create
+        const img = scene.add.image(width - margin, height - margin, key)
+            .setOrigin(1, 1)
+            .setDepth(depth)
+            .setScrollFactor(0)
+            .setAlpha(alpha);
+
+        // scale to maxW while keeping aspect
+        const src = scene.textures.get(key).getSourceImage();
+        const scale = Math.min(1, maxW / (src?.width || maxW));
+        img.setScale(scale);
+
+        // keep in the corner on resize
+        const onResize = (gameSize) => {
+            img.setPosition(gameSize.width - margin, gameSize.height - margin);
+        };
+        scene.scale.on(Phaser.Scale.Events.RESIZE, onResize);
+
+        // clean up on shutdown
+        scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            scene.scale.off(Phaser.Scale.Events.RESIZE, onResize);
+            img.destroy();
+        });
+
+        return img; // (optional) if you want to keep a reference
+    },
+
+
+
     // draw a rectangle button with a text label and a click handler
     button(scene, x, y, label, onClick) {
         const B = CONFIG.ui.button;
@@ -262,6 +304,7 @@ const ui = {
             gap: 40 * scaleFactor,
             top: 140 * scaleFactor,
         };
+        T.padding = 24 * scaleFactor; // define padding used below
 
         const B = CONFIG.ui.button || { width: 520, height: 64 }; // fallback
 
@@ -270,7 +313,7 @@ const ui = {
 
         // helper to spawn each icon safely
         const makeIcon = (key, cb) => {
-            if (!scene.textures.exists(key)|| !cb) return null; // avoid missing sprite
+            if (!scene.textures.exists(key) || !cb) return null; // avoid missing sprite
             x -= T.iconSize / 2;
             const img = scene.add.image(x, y, key)
                 .setOrigin(0.5)
@@ -278,13 +321,9 @@ const ui = {
                 .setScale(1)
                 .setDepth(200)
                 .setScrollFactor(0)
-                .setInteractive({ useHandCursor: true })
-            ;
+                .setInteractive({ useHandCursor: true });
 
-// fix hover bounce — lock scale instead of tween
-//             img.on("pointerover", () => img.setTint(0xcde3ff));
-//             img.on("pointerout", () => img.clearTint());
-
+            // lock scale; just click
             img.on("pointerup", cb);
             x -= T.iconSize + T.gap;
             return img;
@@ -337,7 +376,6 @@ const ui = {
             muteTxt.on("pointerup", toggleMute);
         }
 
-        // clean up utility if you need to destroy later
         const destroy = () => {
             home?.destroy();
             pause?.destroy();
@@ -380,15 +418,16 @@ const ui = {
             // re-enable your game loop, timers etc if you pause them elsewhere
         });
 
-        // Live stats (optional)
+        // Live stats (engine is the single source of truth)
         const base  = scene.streakSys?.baseScore ?? 0;
-        const mult  = scene.streakSys?.multiplier?.() ?? 0;
-        const total = scene.streakSys?.totalScore ?? scene.typing?.score ?? 0;
-        const s     = scene.streakSys?.streak ?? scene.typing?.streak ?? 0;
-        const best  = scene.streakSys?.bestStreak ?? scene.typing?.bestStreak ?? 0;
+        const mult  = scene.streakSys?.multiplier?.() ?? 1.0; // correct fallback
+        const total = scene.streakSys?.totalScore ?? 0;
+        const s     = scene.streakSys?.streak ?? 0;
+        const best  = scene.streakSys?.bestStreak ?? 0;
 
-        const stats = scene.add.text(width / 2, height / 2 - 70,
-            `Score: ${total}  (base ${base} × x${mult.toFixed(1)})\n` +
+        const stats = scene.add.text(
+            width / 2, height / 2 - 70,
+            `Score: ${total}  (base ${base} × ${mult.toFixed(1)})\n` + // remove “x” duplication
             `Streak: ${s}   Best: ${best}`,
             { fontFamily: CONFIG.ui.fontFamily, fontSize: "24px", color: "#ffffff", align: "center" }
         ).setOrigin(0.5).setDepth(1001);
@@ -422,9 +461,9 @@ const ui = {
             }
         }
 
-
         return { destroy: destroyAll };
     },
+
 
     togglePause() {
         // if already paused, unpause and clean up
@@ -518,10 +557,12 @@ const streakScore = (() => {
                 this._recompute();
             },
 
-            multiplier() { return this.streak * 0.5; },
+            // Multiplier now has a base 1.0 so the first clean word scores visibly.
+            // 1st clean: 1.0x, 2nd: 1.5x, 3rd: 2.0x, etc.
+            multiplier() { return 1 + this.streak * 0.5; },
 
             _recompute() {
-                // spec: total = (streak * 0.5) * baseScore
+                // total = baseScore * multiplier
                 this.totalScore = Math.floor(this.baseScore * this.multiplier());
             }
         };
@@ -740,6 +781,12 @@ const soapsplash = (() => {
 
     // ---------------- movement ----------------
     const movement = {
+        removeGermById(scene, id) {
+            if (id == null) return;
+            const i = scene.germs.findIndex(g => g?.id === id);
+            if (i >= 0) removeGermByIndex(scene, i);
+        },
+
         // move germs toward sink with small wobble and update their labels and effects
         moveGerms(scene, delta) {
             const base = SS.germBaseSpeed ?? 110;
@@ -815,7 +862,11 @@ const soapsplash = (() => {
 
                     if (scene.streakSys) {
                         // Deduct from BASE so total recomputes with the (streak * 0.5) multiplier
-                        scene.streakSys.addBase(-penalty);
+                        // Flat penalty in TOTAL points (not scaled by multiplier)
+                        const P = SS.breachPenalty ?? 100;
+                        const m = scene.streakSys?.multiplier?.() ?? 1;
+                        scene.streakSys.addBase(-(P / Math.max(1, m)));
+
 
                         // Sync legacy fields used by overlay & any other UI
                         scene.typing.score = scene.streakSys.totalScore;
@@ -873,8 +924,9 @@ const soapsplash = (() => {
             for (let i = scene.germs.length - 1; i >= 0; i--) { removeGermByIndex(scene, i); }
 
             // Finalize timer + score
-            const score = scene.streakSys?.totalScore ?? scene.typing?.score ?? 0;
-            const bestStreak = scene.streakSys?.bestStreak ?? scene.typing?.bestStreak ?? 0;
+            const score = scene.streakSys ? scene.streakSys.totalScore : 0;
+            const bestStreak = scene.streakSys ? scene.streakSys.bestStreak : 0;
+
             scene.timerHud?.setText("Time: 00:00");
             scene.endEvent?.remove(false);
 
@@ -1015,44 +1067,31 @@ const soapsplash = (() => {
 
     };
 
-    function showStreakPopup(scene, value, x, y) {
-        const msg = `+${value}`;
-        const t = scene.add.text(x, y, msg, {
-            fontFamily: SS.fontFamily,
-            fontSize: "22px",
-            color: "#ffffff",
-            fontStyle: "bold",
-            backgroundColor: "#2aa84a",
-            padding: { left: 10, right: 10, top: 6, bottom: 6 },
-            align: "center"
-        }).setOrigin(0.5).setDepth(200);
 
-        // small scale pop + float up + fade
-        t.setScale(0.8);
-        scene.tweens.add({
-            targets: t,
-            y: y - 35,
-            alpha: { from: 1, to: 0 },
-            scale: { from: 0.95, to: 1.05 },
-            duration: 750,
-            ease: "Cubic.Out",
-            onComplete: () => t.destroy()
-        });
-    }
 
-    // ---------------- typing ----------------
     const typing = {
         // initialize typing state create measurement helper and keyboard handler
         init(scene) {
             scene.typing = {
                 activeId: null, keystrokes: 0, mistakes: 0, startedAt: null, locked: false,
-                // score shown on the “summary” must still live here for compatibility
-                score: 0, streak: 0, bestStreak: 0, wordClean: true, wordsCompleted: 0,
-                streakPops: 0, // include here on first (and only) assignment
+                // legacy mirrors kept for back-compat (UI must NOT read these)
+                score: 0, streak: 0, bestStreak: 0,
+                wordClean: true, wordsCompleted: 0,
+                streakPops: 0,
             };
 
             // attach reusable streak/score engine
+            // Spec note (matches code): totalScore = baseScore * (1 + 0.5 * streak)
             scene.streakSys = streakScore.create();
+
+            // --- one place to mirror legacy fields (write-through only) ---
+            scene.typing.syncLegacy = () => {
+                const s = scene.streakSys;
+                if (!s) return;
+                scene.typing.score      = s.totalScore;
+                scene.typing.streak     = s.streak;
+                scene.typing.bestStreak = s.bestStreak; // s.bestStreak already tracks the max
+            };
 
             // hidden text for measuring caret etc (unchanged)
             scene.typing._measure = scene.add.text(-9999, -9999, "", {
@@ -1098,7 +1137,10 @@ const soapsplash = (() => {
             g.active = true;
             g.sprite.clearTint();
 
-            // soft outer glow using postfx if available and pulsing over time
+            // start each NEW word as “clean”
+            scene.typing.wordClean = true;
+
+            // soft outer glow…
             if (F.useGlow && g.sprite?.postFX?.addGlow) {
                 const baseOuter = (F.glowOuter ?? 6);
                 g._glow = g.sprite.postFX.addGlow(
@@ -1119,7 +1161,7 @@ const soapsplash = (() => {
                 }
             }
 
-            // additive duplicate sprite for a bright focus aura
+            // additive duplicate sprite…
             if (F.additiveSprite !== false) {
                 const baseAlpha = F.addAlpha ?? 0.18;
                 const addScale  = F.addScale ?? 1.10;
@@ -1143,18 +1185,16 @@ const soapsplash = (() => {
                 });
             }
 
-            // show caret underline with a slow pulse
+            // show caret underline…
             if (g.curBox) {
                 g.curBox.setVisible(true);
                 scene.tweens.add({ targets: g.curBox, alpha: 0.05, duration: 500, yoyo: true, repeat: -1 });
             }
 
-            // mark as active and lay out labels and caret
             scene.typing.activeId = g.id;
             typing.renderTarget(g, scene);
         },
 
-        // choose a random target or the nearest to the sink depending on strategy
         pickRandom(scene) {
             if (!scene.germs.length) { scene.typing.activeId = null; return; }
             const idx = Math.floor(Math.random() * scene.germs.length);
@@ -1174,7 +1214,6 @@ const soapsplash = (() => {
         },
 
         // lay out typed and remaining strings and position caret box
-        // systems.js → typing.renderTarget(g, scene)
         renderTarget(g, scene) {
             const sc = scene || g.labelTyped?.scene || g.labelRemain?.scene;
 
@@ -1186,7 +1225,7 @@ const soapsplash = (() => {
             g.labelTyped.setText(typedStr);
             g.labelRemain.setText(remainStr);
 
-            // Hide caret once the word is fully typed to avoid any "jump"
+            // hide caret once fully typed
             if (g.typedIdx >= theWord.length) {
                 if (g.curBox) {
                     if (g._caretPulse) { g._caretPulse.remove(); g._caretPulse = null; }
@@ -1235,13 +1274,11 @@ const soapsplash = (() => {
             }
         },
 
-
         // key handling for typing game including backspace correct and incorrect letters
         onKey(e, scene) {
             if (scene.gameOver || scene._paused) return;
             if (!scene.typing.startedAt) scene.typing.startedAt = scene.time.now;
 
-            // if no target yet, pick one
             if (!scene.typing.activeId) typing.pickNearest(scene);
 
             // self-heal stale/removed target
@@ -1255,7 +1292,7 @@ const soapsplash = (() => {
 
             const key = e.key;
 
-            // handle backspace
+            // handle backspace (no engine change)
             if (key === "Backspace") {
                 if (g.typedIdx > 0) g.typedIdx--;
                 typing.renderTarget(g, scene);
@@ -1276,7 +1313,7 @@ const soapsplash = (() => {
             if (!expected) return;
 
             if (ch.toLowerCase() === expected.toLowerCase()) {
-                // 👉 clamp so we never overshoot
+                // clamp so we never overshoot
                 g.typedIdx = Math.min(g.typedIdx + 1, g.word.length);
 
                 // reset error tint once user gets back on track
@@ -1286,92 +1323,126 @@ const soapsplash = (() => {
 
                 typing.renderTarget(g, scene);
 
-                // 👉 if complete, end immediately
+                // if complete, score immediately
                 if (g.typedIdx >= g.word.length) {
-                    typing.onWordComplete(scene, g);
+                    const perWord   = (CONFIG.soapSplash?.pointsPerWord ?? 10);
+                    const perLetter = (CONFIG.soapSplash?.pointsPerLetter ?? 1);
+                    const addBase   = perWord + perLetter * (g.word?.length || 0);
+
+                    if (scene.streakSys) {
+                        scene.streakSys.addBase(addBase);
+                        scene.streakSys.onWord(!!scene.typing.wordClean);
+                        scene.typing.syncLegacy?.();
+                    }
+
+                    // small “+N” popup
+                    try { systems.helpers.streakPopup?.(scene, addBase, g.sprite.x, g.sprite.y - 28); } catch {}
+
+                    // telemetry (generic; keep soapsplash.* if you actually implement it)
+                    try { systems.telemetry?.onWordComplete?.(scene, g, !!scene.typing.wordClean); } catch {}
+
+
+                    // remove the germ
+                    if (systems?.soapsplash?.movement?.removeGermById && g?.id != null) {
+                        systems.soapsplash.movement.removeGermById(scene, g.id);
+                    } else if (systems?.soapsplash?.movement?.removeGermByIndex) {
+                        const i = scene.germs.indexOf(g);
+                        if (i >= 0) systems.soapsplash.movement.removeGermByIndex(scene, i);
+                    } else {
+                        try { g.labelTyped?.destroy(); g.labelRemain?.destroy(); g.sprite?.destroy(); } catch {}
+                        const i2 = scene.germs.indexOf(g);
+                        if (i2 >= 0) scene.germs.splice(i2, 1);
+                    }
+
+                    // next target starts clean
+                    scene.typing.activeId = null;
+                    scene.typing.wordClean = true;
+
+                    // pick a new target if any remain
+                    if (scene.germs.length) typing.pickNearest(scene);
+
+                    typing.updateHud(scene);
                     return;
                 }
             } else {
+                // wrong character
                 g.errors++;
                 scene.typing.mistakes++;
-                scene.typing.wordClean = false;
-                scene.streakSys.onMistake();
-                telemetry.onMistake(scene);
+                scene.typing.wordClean = false; // this word is no longer “clean”
 
                 const C = CONFIG.soapSplash.colors || {};
-                g.labelRemain.setColor(C.errorRemain ?? "#ff4d4d");
+                g.labelRemain.setColor(C.errorRemain ?? C.error ?? "#bb2222");
                 g.labelTyped.setColor(C.errorTyped ?? g.labelTyped.style.color);
 
-                scene.tweens.add({
-                    targets: g.labelRemain,
-                    x: g.labelRemain.x + 4,
-                    duration: 40,
-                    yoyo: true,
-                    repeat: 2
-                });
+                // shake feedback
+                scene.tweens.add({ targets: g.labelRemain, x: g.labelRemain.x + 4, duration: 40, yoyo: true, repeat: 2 });
+
+                // Streak policy (intended): Any keystroke error instantly resets streak.
+                if (scene.streakSys) {
+                    scene.streakSys.onMistake();
+                    scene.typing.syncLegacy?.();
+                }
+
+                typing.renderTarget(g, scene);
             }
 
             typing.updateHud(scene);
         },
 
-        // when a word is completed remove germ update score and streak and retarget
+        // NOTE: legacy convenience for callers that auto-finish a word
         onWordComplete(scene, g) {
-            if (!g || g._removed) return;  // 👉 guard repeated calls
-            g._removed = true;
+            try {
+                const perWord   = (CONFIG.soapSplash?.pointsPerWord ?? 10);
+                const perLetter = (CONFIG.soapSplash?.pointsPerLetter ?? 1);
+                const addBase   = perWord + perLetter * (g?.word?.length || 0);
 
-            // cache anything needed for popup BEFORE removal
-            const px = g.sprite?.x ?? (SS.width / 2);
-            const py = (g.sprite?.y ?? (SS.height / 2)) - 10;
+                scene.streakSys?.addBase?.(addBase);
+                scene.streakSys?.onWord?.(!!scene.typing.wordClean);
+                scene.typing.syncLegacy?.();
 
-            // scoring & telemetry
-            const oldStreak = scene.streakSys?.streak ?? 0;
-            scene.typing.wordsCompleted++;
-            const clean = !!scene.typing.wordClean;
-            scene.streakSys.addBase(100);
-            scene.streakSys.onWord(clean);
+                try { systems?.helpers?.streakPopup?.(scene, addBase, g?.sprite?.x ?? 0, (g?.sprite?.y ?? 0) - 28); } catch {}
+                try { systems?.telemetry?.onWordComplete?.(scene, g, !!scene.typing.wordClean); } catch {}
 
-            // keep legacy fields in sync
-            scene.typing.streak = scene.streakSys.streak;
-            scene.typing.bestStreak = Math.max(scene.typing.bestStreak, scene.streakSys.bestStreak);
-            scene.typing.score = scene.streakSys.totalScore;
 
-            telemetry.onWordComplete(scene, g, clean);
-
-            if (scene.typing.streak > oldStreak && scene.typing.streak >= 1) {
-                helpers.streakPopup(scene, scene.typing.streak, px, py);
-                scene.typing.streakPops += 1;
+                if (systems?.soapsplash?.movement?.removeGermById && g?.id != null) {
+                    systems.soapsplash.movement.removeGermById(scene, g.id);
+                } else {
+                    const idx = scene.germs.indexOf(g);
+                    if (idx >= 0 && systems?.soapsplash?.movement?.removeGermByIndex) {
+                        systems.soapsplash.movement.removeGermByIndex(scene, idx);
+                    } else {
+                        try { g.labelTyped?.destroy(); g.labelRemain?.destroy(); g.sprite?.destroy(); } catch {}
+                        const i2 = scene.germs.indexOf(g);
+                        if (i2 >= 0) scene.germs.splice(i2, 1);
+                    }
+                }
+            } finally {
+                scene.typing.wordClean = true;
+                try { systems?.soapsplash?.typing?.updateHud?.(scene); } catch {}
+                if (scene.germs.length) {
+                    systems?.soapsplash?.typing?.pickNearest?.(scene);
+                } else {
+                    scene.typing.activeId = null;
+                }
             }
-
-            // reset cleanliness for the NEXT word
-            scene.typing.wordClean = true;
-
-            // 👉 ensure caret is gone before destroy
-            if (g._caretPulse) { g._caretPulse.remove(); g._caretPulse = null; }
-            g.curBox?.setVisible(false);
-
-            // 👉 remove by id (safer than indexOf reference)
-            const idx = scene.germs.findIndex(x => x && x.id === g.id);
-            if (idx !== -1) removeGermByIndex(scene, idx);
-
-            scene.typing.activeId = null;
-
-            // HUD + next target
-            typing.updateHud(scene);
-            typing.pickNearest(scene);
         },
 
         // refresh the score and streak hud text
         updateHud(scene) {
-            const base = scene.streakSys?.baseScore ?? 0;
-            const mult = scene.streakSys?.multiplier?.() ?? 0;
+            // UI must read from streakSys only (no legacy fallbacks)
+            const base  = scene.streakSys?.baseScore ?? 0;
+            const mult  = scene.streakSys?.multiplier?.() ?? 1.0; // fallback fixed
             const total = scene.streakSys?.totalScore ?? 0;
-            const s = scene.streakSys?.streak ?? 0;
+            const s     = scene.streakSys?.streak ?? 0;
 
+            // Show a single multiply symbol (no “× x” duplication)
             scene.typeHud?.setText(
-                `Score: ${total}  (base ${base} × x${mult.toFixed(1)})   Streak: ${s}`
+                `Score: ${total}  (base ${base} × ${mult.toFixed(1)})   Streak: ${s}`
             );
         },
     };
+
+
 
 
     // expose all namespaces to scenes through systems so they can call systems.soapsplash.whatever

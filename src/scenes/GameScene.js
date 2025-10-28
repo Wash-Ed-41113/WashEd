@@ -23,6 +23,9 @@ export default class GameScene extends Phaser.Scene {
         // read player name once (fallback to default)
         const playerName = this.registry.get("playerName") || "Player";
 
+        systems.ui.placeLogo(this);
+
+
         // ─────────────────────────────────────────────────────────────
         // (3) BYPASS OLD DIFFICULTY WHEN ASKED → jump straight to hub
         // ─────────────────────────────────────────────────────────────

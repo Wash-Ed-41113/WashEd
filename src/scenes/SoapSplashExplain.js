@@ -1,4 +1,7 @@
 // src/scenes/SoapSplashExplain.js
+import systems from "../systems.js";
+
+
 export default class SoapSplashExplain extends Phaser.Scene {
     constructor() {
         super("SoapSplashExplain");
@@ -18,6 +21,9 @@ export default class SoapSplashExplain extends Phaser.Scene {
     create() {
         const { width: W, height: H } = this.scale;
         const username = this.registry.get("playerName") || "friend";
+
+        systems.ui.placeLogo(this);
+
 
         // translucent overlay
         this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.5);

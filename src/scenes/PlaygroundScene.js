@@ -6,6 +6,8 @@
 
 const KI = CONFIG.assets.kiko;
 
+import systems from "../systems.js";
+
 const SAND_KEY  = "school_yard";
 const SAND_PATH = "assets/images/background/school-yard.png";
 
@@ -148,6 +150,9 @@ export default class PlaygroundScene extends Phaser.Scene {
         this.tweens.killAll();
         this.cameras.main.resetFX();
         this.input.topOnly = false;    // don't let any UI eat the global pointerdown
+
+        systems.ui.placeLogo(this);
+
 
         this.scene.get('MenuScene')?.scene.stop(); // ensure menu not still alive
         this.registry.remove('playground_done');   // optional, remove any leftover markers

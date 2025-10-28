@@ -5,11 +5,70 @@ import { DB } from "../db.js";
 // Safe default for where "Replay" starts (override via CONFIG.flow.replayStartScene)
 const REPLAY_START_SCENE = (window.CONFIG?.flow?.replayStartScene) || "PlaygroundScene";
 
+// === NEW: define the actual entry scene (mp4 background + Start button lives here) ===
+// Change to "MenuScene" if your video/start is there instead of PreloadScene.
+const ENTRY_SCENE = (window.CONFIG?.flow?.entryScene) || "PreloadScene";
+
+/** NEW: do a complete state refresh and jump back to the very start */
+async function fullResetAndGotoStart(scene) {
+    try {
+        // 1) End/reset current DB session safely (ignore if stubs)
+        try {
+            const sid =
+                window.__SESSION_ID__ ||
+                DB?.getSessionId?.() ||
+                scene.registry.get("sessionId");
+            if (sid && DB?.endSession) await DB.endSession(sid);
+        } catch (e) {
+            console.warn("[EndingScene] endSession failed (non-fatal):", e);
+        }
+        try {
+            await DB.resetCurrentSession?.(
+                DB?.getSessionId?.() ?? scene.registry.get("sessionId")
+            );
+        } catch (e) {
+            // ok if unsupported
+            // console.warn("[EndingScene] resetCurrentSession not supported:", e);
+        }
+
+        // 2) Clear runtime/flow flags so BOTH minis are playable again
+        try {
+            scene.registry.set("completedSoapSplash", false);
+            scene.registry.set("completedCleanCatch", false);
+            scene.registry.set("bathroomPlayed", false);
+            scene.registry.set("playgroundPlayed", false);
+            scene.registry.set("playerName", null);
+        } catch (e) {}
+
+        // clear global JS session id, too
+        try { window.__SESSION_ID__ = null; } catch (e) {}
+
+        // 3) Freshen the word decks for next run (no-repeat feeling)
+        try {
+            CONFIG.cleanCatch?.resetDecks?.();
+            CONFIG.soapSplash?.resetDeck?.(1);
+            CONFIG.soapSplash?.resetDeck?.(2);
+            CONFIG.soapSplash?.resetDeck?.(3);
+        } catch (e) {
+            console.warn("[EndingScene] deck reset error:", e);
+        }
+
+        // 4) Stop audio and timers cleanly
+        try { scene.sound?.stopAll?.(); } catch (e) {}
+        try { scene.tweens?.killAll?.(); } catch (e) {}
+        try { scene.time?.removeAllEvents?.(); } catch (e) {}
+    } finally {
+        // 5) Hard jump to the app's *first* scene (mp4 + Start)
+        try { scene.scene.stop(); } catch (e) {}
+        scene.scene.start(ENTRY_SCENE);
+    }
+}
+
 export default class EndingScene extends Phaser.Scene {
     constructor() {
         super("EndingScene");
         this._nameUi = null;
-        this._btnReplay = null;
+        // this._btnReplay = null;
         this._btnNewPlayer = null;
         this.music = null;
         this._confettiCancelled = false;
@@ -55,59 +114,6 @@ export default class EndingScene extends Phaser.Scene {
         return { rect, txt };
     }
 
-    _openNameDialog(onSubmit) {
-        this._closeNameDialog();
-        const { width, height } = this.scale;
-
-        const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.35)
-            .setDepth(98).setInteractive();
-        let panel = this.add.image(width / 2, height / 2, "dialogPanel")
-            .setOrigin(0.5).setDepth(100);
-        const s = Math.min((width * 0.62) / panel.width, (height * 0.48) / panel.height);
-        panel.setScale(s);
-
-        const title = this.add.text(
-            width / 2, (height / 2) - (panel.displayHeight * 0.35),
-            "Enter Your Name",
-            { fontFamily: CONFIG?.ui?.fontFamily ?? "Montserrat", fontSize: "30px", color: "#102040" }
-        ).setOrigin(0.5).setDepth(101);
-
-        const innerW = Math.min(520, panel.displayWidth * 0.85);
-        const dom = this.add.dom(width / 2, height / 2 + 10).createFromHTML(`
-      <div style="width:${innerW}px; display:flex; flex-direction:column; align-items:center; gap:14px; font-family:${CONFIG?.ui?.fontFamily || "Montserrat"}, sans-serif;">
-        <input id="playerNameInput" type="text" maxlength="24" autofocus
-          style="width:100%; font-size:20px; padding:10px 12px; border-radius:12px; border:2px solid #1d2b52; outline:none; text-align:center;"
-          placeholder="Type your name" />
-        <div style="display:flex; gap:14px;">
-          <button id="okBtn" style="font-size:18px; padding:10px 18px; border-radius:10px; border:2px solid #fff; background:#142038; color:#fff; cursor:pointer;">OK</button>
-          <button id="cancelBtn" style="font-size:18px; padding:10px 18px; border-radius:10px; border:2px solid #142038; background:#ffffff; color:#142038; cursor:pointer;">Cancel</button>
-        </div>
-      </div>
-    `).setOrigin(0.5).setDepth(101);
-
-        const node = dom.node;
-        const input = node.querySelector("#playerNameInput");
-        const okBtn = node.querySelector("#okBtn");
-        const cancelBtn = node.querySelector("#cancelBtn");
-
-        const submit = () => {
-            const raw = (input?.value || "").trim();
-            const name = raw || "Player";
-            onSubmit?.(name);
-            this._closeNameDialog();
-        };
-        const cancel = () => this._closeNameDialog();
-
-        okBtn?.addEventListener("click", submit);
-        cancelBtn?.addEventListener("click", cancel);
-        input?.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") submit();
-            if (e.key === "Escape") cancel();
-        });
-
-        this._nameUi = { overlay, panel, title, dom };
-    }
-
     _closeNameDialog() {
         const ui = this._nameUi; if (!ui) return;
         ui.overlay?.destroy?.(); ui.panel?.destroy?.(); ui.title?.destroy?.(); ui.dom?.destroy?.();
@@ -121,36 +127,23 @@ export default class EndingScene extends Phaser.Scene {
         const gap = Math.max(18, Math.round(width * 0.012));
         const BW = (CONFIG?.ui?.button?.width ?? 360);
 
-        // Replay (same player/session)
-        const replayBtn = this._darkButton(
-            Math.round(width * 0.62), btnAreaY, "Replay",
-            () => {
-                this._confettiCancelled = true;
-                this.cameras.main.fadeOut(450, 0, 0, 0);
-                this.cameras.main.once("camerafadeoutcomplete", () => {
-                    try { this.music?.stop(); } catch(_) {}
-                    this.scene.start(REPLAY_START_SCENE);
-                });
-            }
-        );
+        // Replay was intentionally removed per your flow. If you re-add it later,
+        // just call fullResetAndGotoStart(this) in its handler.
 
-        // New Player (go to MenuScene; ask name again)
+        // New Player ⇒ go to the TRUE start (mp4 + Start) with a clean slate
         const newPlayerBtn = this._darkButton(
             Math.round(width * 0.62) + BW + gap, btnAreaY, "New Player",
-            () => {
+            async () => {
                 this._confettiCancelled = true;
                 this.cameras.main.fadeOut(450, 0, 0, 0);
-                this.cameras.main.once("camerafadeoutcomplete", () => {
+                this.cameras.main.once("camerafadeoutcomplete", async () => {
                     try { this.music?.stop(); } catch(_) {}
-                    try { this.registry.set("playerName", null); } catch(_) {}
-                    try { const sidNow = window.__SESSION_ID__; if (sidNow && DB?.endSession) DB.endSession(sidNow); } catch(_) {}
-                    window.__SESSION_ID__ = null;
-                    this.scene.start("MenuScene");
+                    await fullResetAndGotoStart(this);
                 });
             }
         );
 
-        this._btnReplay = replayBtn;
+        // this._btnReplay = replayBtn;
         this._btnNewPlayer = newPlayerBtn;
     }
 
@@ -191,12 +184,7 @@ export default class EndingScene extends Phaser.Scene {
         };
         const selectedMessage = dialogueSets[tier][Math.floor(Math.random() * dialogueSets[tier].length)];
 
-        // Background
-        if (this.textures.exists("classroom_bg")) {
-            this.add.image(width / 2, height / 2, "classroom_bg").setDisplaySize(width, height);
-        } else {
-            this.add.rectangle(0, 0, width, height, 0x1b2a3a).setOrigin(0, 0);
-        }
+        this.add.image(width / 2, height / 2, "classroom_bg").setDisplaySize(width, height);
 
         // Dialogue panel + text
         const dialogY = height * 0.97;
@@ -261,7 +249,7 @@ export default class EndingScene extends Phaser.Scene {
             }
         });
 
-        // Home / Reset
+        // Home / Reset (now routes to fullResetAndGotoStart)
         const baseScale = 0.1;
         const btn = this.add.image(width * 0.95, height * 0.1, "homeResetButton")
             .setOrigin(0.5).setScale(baseScale).setDepth(20)
@@ -274,16 +262,19 @@ export default class EndingScene extends Phaser.Scene {
             this.cameras.main.fadeOut(500, 0, 0, 0);
         });
 
-        this.cameras.main.once("camerafadeoutcomplete", () => {
+        this.cameras.main.once("camerafadeoutcomplete", async () => {
             this._confettiCancelled = true;
-            if (this.music) {
-                this.tweens.add({
-                    targets: this.music, volume: 0, duration: 600, ease: "Sine.easeOut",
-                    onComplete: () => { this.music && this.music.stop(); this.scene.start("MenuScene"); }
-                });
-            } else {
-                this.scene.start("MenuScene");
-            }
+            try {
+                if (this.music) {
+                    await new Promise((res) => {
+                        this.tweens.add({
+                            targets: this.music, volume: 0, duration: 600, ease: "Sine.easeOut",
+                            onComplete: () => { this.music?.stop(); res(); }
+                        });
+                    });
+                }
+            } catch {}
+            await fullResetAndGotoStart(this);
         });
 
         this.cameras.main.fadeIn(600, 0, 0, 0);
@@ -296,12 +287,12 @@ export default class EndingScene extends Phaser.Scene {
             this._confettiCancelled = true;
             try { this.music?.stop(); } catch(_) {}
             this.music?.destroy?.(); this.music = null;
-            this._btnReplay?.rect?.destroy?.();  this._btnReplay?.txt?.destroy?.();  this._btnReplay = null;
+            // this._btnReplay?.rect?.destroy?.();  this._btnReplay?.txt?.destroy?.();  this._btnReplay = null;
             this._btnNewPlayer?.rect?.destroy?.(); this._btnNewPlayer?.txt?.destroy?.(); this._btnNewPlayer = null;
             this._closeNameDialog();
         });
         this.events.once(Phaser.Scenes.Events.DESTROY, () => {
-            this._btnReplay?.rect?.destroy?.();  this._btnReplay?.txt?.destroy?.();  this._btnReplay = null;
+            // this._btnReplay?.rect?.destroy?.();  this._btnReplay?.txt?.destroy?.();  this._btnReplay = null;
             this._btnNewPlayer?.rect?.destroy?.(); this._btnNewPlayer?.txt?.destroy?.(); this._btnNewPlayer = null;
             this._closeNameDialog();
         });

@@ -3,6 +3,8 @@
 const BG_KEY = "washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png";
 const BG_PATH = "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png";
 
+import systems from "../systems.js";
+
 const TAP_KEY = "washed_day_UI_LEVEL_01_scene_02_bathroom__Tap.png";
 const TAP_PATH = "assets/images/UI/washed_day_UI_LEVEL_01_scene_02_bathroom__Tap.png";
 
@@ -56,6 +58,9 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             }
             fn();
         };
+
+        systems.ui.placeLogo(this);
+
 
 
         // Background

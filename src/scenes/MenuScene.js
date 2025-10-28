@@ -59,6 +59,11 @@ export default class MenuScene extends Phaser.Scene {
             window.__SESSION_ID__ = null;
         }
 
+
+        systems.ui.placeLogo(this);
+
+
+
         const {width, height} = this.scale;
 
         this._leaving = false;
