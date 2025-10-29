@@ -62,7 +62,59 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
         systems.ui.placeLogo(this);
 
+        // ─────────────────────────────────────────────────────────────
+        // AUDIO: Hub (bathroom) re-entry should bring back the menu BGM.
+        // - Stop/clear any minigame track (game group / window.__MINI_BGM__)
+        // - Prefer resuming the exact MenuScene instance (window.__GLOBAL_BGM__ or sound key "kikos_day")
+        // - If none exists, safely add+play it without double-starting
+        // ─────────────────────────────────────────────────────────────
+        try {
+            // Stop any minigame group audio first
+            AudioManager.stopGroup?.("game");
 
+            // If you kept a direct Phaser Sound handle for the minigame, stop it as well
+            const mini = (typeof window !== "undefined") ? window.__MINI_BGM__ : null;
+            if (mini?.isPlaying) {
+                try { mini.stop(); } catch (_) {}
+            }
+        } catch (_) {}
+
+        try {
+            // Make sure the audio context is alive
+            this.sound.context?.resume?.();
+
+            // Prefer the exact instance started by MenuScene
+            let globalBgm = (typeof window !== "undefined") ? window.__GLOBAL_BGM__ : null;
+
+            // If not cached, try to find by key ("kikos_day" from MenuScene)
+            if (!globalBgm) globalBgm = this.sound.get("kikos_day");
+
+            if (globalBgm) {
+                // If it's a Phaser Sound instance, resume or (if somehow stopped) play
+                if (globalBgm.isPaused) {
+                    try { globalBgm.resume(); } catch (_) {}
+                } else if (!globalBgm.isPlaying) {
+                    try { globalBgm.play({ loop: true, volume: 0.6 }); } catch (_) {}
+                }
+
+                if (typeof window !== "undefined") window.__GLOBAL_BGM__ = globalBgm;
+            } else {
+                // Fallback: if there's no instance at all, create one now.
+                // First try raw Phaser (keeps things simple/consistent with MenuScene style).
+                let s = this.sound.get("kikos_day");
+                if (!s) s = this.sound.add("kikos_day", { loop: true, volume: 0.6 });
+                if (!s.isPlaying) s.play();
+                if (typeof window !== "undefined") window.__GLOBAL_BGM__ = s;
+
+                // As an alternative (if your project strictly uses AudioManager groups), you could:
+                // AudioManager.play(this, "kikos_day", { group: "global", volume: 0.6, loop: true });
+            }
+
+            // Unpause the global group if your AudioManager tracks pause state there
+            AudioManager.resumeGroup?.("global");
+        } catch (e) {
+            console.warn("[SchoolBathroomScene] Failed to resume menu BGM:", e);
+        }
 
         // Background
         const bg = this.add.image(width / 2, height / 2, BG_KEY).setOrigin(0.5, 0.5);
@@ -98,10 +150,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             .setInteractive({ useHandCursor: true });
         fitH(soapBottle, pos.soapBottle.h);
 
-        AudioManager.stopGroup("game");       // ← ensure no Clean Catch / Soap Splash track lives
-        AudioManager.resumeGroup("global");   // ← if we came back, fade global back in
-        AudioManager.play(this, "global_bg", { group: "global", volume: 0.6 });
-
+        // (Removed previous AudioManager.play(..., "global_bg")) — we only want the menu track back.
 
         try {
             this.scene.stop("CleanCatchScene");
@@ -114,7 +163,6 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             AudioManager.stopGroup?.("game");
             AudioManager.resumeGroup?.("global");
         } catch {}
-
 
         // Hover pulse
         const makeHover = (img, factor = 1.06, dur = 120) => {
@@ -156,7 +204,6 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             // white glow on soaps in step 2
             this._enableStep2Hints(soapBar, soapBottle);
         }
-
 
         // Click routing (blocked until dialog closes)
         // TAP is the FIRST correct step
@@ -241,7 +288,6 @@ export default class SchoolBathroomScene extends Phaser.Scene {
                 this.scene.start("EndingScene");
             });
         }
-
 
         if (!skipIntro) {
             this._showEntryDialog();
@@ -481,11 +527,9 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         this._hints.soapBottle = this._makeGlow(soapBottleImg, { color: 0xffffff, alpha: 0.35, scale: 1, pulseMs: 1600 });
     }
 
-
     _enableStep2Hints(soapBarImg, soapBottleImg) {
         this._clearHints();
         this._hints.soapBar    = this._makeGlow(soapBarImg,    { color: 0xffffff, alpha: 0.35, scale: 1 });
         this._hints.soapBottle = this._makeGlow(soapBottleImg, { color: 0xffffff, alpha: 0.35, scale: 1 });
-
     }
 }
