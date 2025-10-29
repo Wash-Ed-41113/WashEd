@@ -63,13 +63,7 @@ export default class CleanCatchScene extends Phaser.Scene {
         const { width, height } = this.scale;
 
         // --- AUDIO OWNERSHIP: this scene owns the "game" group BGM ---
-        AudioManager.pauseGroup("global"); // pause story/menu bg
-        AudioManager.stopGroup("game");    // kill any leftover game track (e.g., Explain)
-        AudioManager.play(this, "clean_catch_music", {
-            group: "game",
-            volume: 0.6,
-            loop: true
-        });
+        AudioManager.pauseGroup("global");
 
         // Safety hooks – stop this scene’s sounds + game group; resume global on exit
         const killGameAudio = () => {
