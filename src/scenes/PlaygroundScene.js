@@ -9,8 +9,6 @@ const KI = CONFIG.assets.kiko;
 import systems from "../systems.js";
 import { AudioManager } from "../systems.js";
 
-
-
 const SAND_KEY  = "school_yard";
 const SAND_PATH = "assets/images/background/school-yard.png";
 
@@ -43,16 +41,9 @@ const DOOR_X_FRAC = 0.65;
 const DOOR_Y_OFFSET = 0;
 
 /** ----------------------------------------------------------------------------
- * Stationary speech bubble:
- * - Positioned once above the anchor's head at creation time.
- * - Does NOT follow on update/resize.
+ * Stationary speech bubble (placed once, does not follow on update/resize)
  * -------------------------------------------------------------------------- */
 class SpeechBubble extends Phaser.GameObjects.Container {
-    /**
-     * @param {Phaser.Scene} scene
-     * @param {Phaser.GameObjects.GameObject} anchor  Used only to compute initial position.
-     * @param {{maxWidth?:number, fontSize?:number, gap?:number, x?:number, y?:number}} opts
-     */
     constructor(scene, anchor, opts = {}) {
         super(scene, 0, 0);
         scene.add.existing(this);
@@ -91,7 +82,6 @@ class SpeechBubble extends Phaser.GameObjects.Container {
 
     /** Typewriter + optional auto-hide (pass null/0 to keep visible). */
     say(text, duration = 0) {
-        // Clear previous typewriter
         if (this._typeEvt) this._typeEvt.remove(false);
 
         const chars = [...text];
@@ -114,9 +104,7 @@ class SpeechBubble extends Phaser.GameObjects.Container {
     }
 
     hide() {
-        this.scene.tweens.add({
-            targets: this, alpha: 0, duration: 180, ease: "Sine.easeOut",
-        });
+        this.scene.tweens.add({ targets: this, alpha: 0, duration: 180, ease: "Sine.easeOut" });
     }
 }
 
@@ -131,10 +119,10 @@ export default class PlaygroundScene extends Phaser.Scene {
     }
 
     preload() {
-        if (!this.textures.exists(SAND_KEY))         this.load.image(SAND_KEY, SAND_PATH);
-        if (!this.textures.exists(KIKO_CHEER_KEY))   this.load.image(KIKO_CHEER_KEY, KIKO_CHEER_PATH);
-        if (!this.textures.exists(KIKO_ENTER_KEY))   this.load.image(KIKO_ENTER_KEY, KIKO_ENTER_PATH);
-        if (!this.textures.exists(BUBBLE_KEY))       this.load.image(BUBBLE_KEY, BUBBLE_PATH);
+        if (!this.textures.exists(SAND_KEY))       this.load.image(SAND_KEY, SAND_PATH);
+        if (!this.textures.exists(KIKO_CHEER_KEY)) this.load.image(KIKO_CHEER_KEY, KIKO_CHEER_PATH);
+        if (!this.textures.exists(KIKO_ENTER_KEY)) this.load.image(KIKO_ENTER_KEY, KIKO_ENTER_PATH);
+        if (!this.textures.exists(BUBBLE_KEY))     this.load.image(BUBBLE_KEY, BUBBLE_PATH);
         for (const f of CASTLE_FRAMES) {
             if (!this.textures.exists(f.key)) this.load.image(f.key, f.path);
         }
@@ -146,13 +134,13 @@ export default class PlaygroundScene extends Phaser.Scene {
         // ---- HARD RESET so replays start clean ----
         this._leaving = false;
         this._dialogStep = 0;
-        this._castleStage = -1;        // reset build stage
-        this.canTap = true;            // allow taps again
+        this._castleStage = -1;
+        this.canTap = true;
         if (this._castleImage) { this._castleImage.destroy(); this._castleImage = null; }
         this.input.enabled = true;
         this.tweens.killAll();
         this.cameras.main.resetFX();
-        this.input.topOnly = false;    // don't let any UI eat the global pointerdown
+        this.input.topOnly = false;
 
         systems.ui.placeLogo(this);
         try {
@@ -162,14 +150,34 @@ export default class PlaygroundScene extends Phaser.Scene {
             this.scene.stop("SoapSplashExplain");
         } catch {}
 
+        // === BGM keep-alive from Menu (NO RESTART) ============================
         try {
-            AudioManager.stopGroup?.("game");
-            AudioManager.resumeGroup?.("global");
+            AudioManager.stopGroup?.("game");     // stop any minigame tracks
+            AudioManager.resumeGroup?.("global"); // keep/resume global bgm group
         } catch {}
 
+        // Prefer the exact instance that MenuScene started
+        let bgm =
+            (typeof window !== "undefined" && window.__GLOBAL_BGM__) ||
+            this.sound.get("kikos_day");
 
-        this.scene.get('MenuScene')?.scene.stop(); // ensure menu not still alive
-        this.registry.remove('playground_done');   // optional, remove any leftover markers
+        // Cache it globally for later scenes
+        if (bgm && typeof window !== "undefined") window.__GLOBAL_BGM__ = bgm;
+
+        // If audio context got suspended (tab switch), just resume the context.
+        try { this.sound.context?.resume?.(); } catch {}
+
+        // ✅ 절대 play()로 다시 시작하지 않음!
+        if (bgm) {
+            if (bgm.isPaused) {
+                try { bgm.resume(); } catch {}
+            }
+            // if (bgm.isPlaying) do nothing
+        }
+        // =====================================================================
+
+        this.scene.get("MenuScene")?.scene.stop(); // ensure menu isn't running
+        this.registry.remove("playground_done");
 
         // Sand area
         this.sandArea = new Phaser.Geom.Rectangle(width * 0.15, height * 0.65, width * 0.70, height * 0.25);
@@ -210,15 +218,13 @@ export default class PlaygroundScene extends Phaser.Scene {
             ease: "Sine.easeInOut",
         });
 
-        // Stationary speech bubble: pinned once above Kiko's head
+        // Speech bubble
         this.speech = new SpeechBubble(this, kiko, { maxWidth: 700, fontSize: 30, gap: -10 });
-        // Intro line – waits for user tap (no auto-advance)
         const name = (this.registry.get("playerName") || "friend");
         this.speech.say(`Hello, ${name}! My name is Kiko.\nLook! Let's make sandcastle!\nTap the sand!`);
 
         // Build handler
         const buildNext = () => {
-            // advance stage index (0..3)
             this._castleStage = Math.min(this._castleStage + 1, CASTLE_FRAMES.length - 1);
             const { key } = CASTLE_FRAMES[this._castleStage];
 
@@ -235,7 +241,6 @@ export default class PlaygroundScene extends Phaser.Scene {
             this._castleImage.setScale(CASTLE_SIZE - 0.1);
             this.tweens.add({ targets: this._castleImage, scale: CASTLE_SIZE, duration: 180, ease: "Back.Out" });
 
-            // Stage-specific prompt for the NEXT action
             if (this._castleStage === 0) {
                 this.speech.say(`It's so much fun! Tap again!`);
             } else if (this._castleStage === 1) {
@@ -243,16 +248,12 @@ export default class PlaygroundScene extends Phaser.Scene {
             } else if (this._castleStage === 2) {
                 this.speech.say(`Last one!`);
             } else if (this._castleStage === 3) {
-                // Completed
                 this.speech.say(`Oh no... my hands have gotten dirty.`);
-                // Small pause before walking animation
                 this.time.delayedCall(900, () => this._enterDoor(kiko));
             }
         };
 
-        // === Handle reflow and pointer listeners safely ===
-
-        // 1. Pointer tap handler (single source of truth)
+        // Pointer tap handler
         const onPointer = (pointer) => {
             const { worldX: x, worldY: y } = pointer;
             if (!this.canTap) return;
@@ -260,7 +261,6 @@ export default class PlaygroundScene extends Phaser.Scene {
 
             this.canTap = false;
 
-            // Cheer swap (quick)
             if (this._castleStage < CASTLE_FRAMES.length - 1 &&
                 this.textures.exists(KIKO_CHEER_KEY) && kiko.setTexture) {
                 kiko.setTexture(KIKO_CHEER_KEY).setDisplaySize(600, 600);
@@ -273,13 +273,12 @@ export default class PlaygroundScene extends Phaser.Scene {
 
             buildNext();
 
-            // Re-enable tap after short feedback window unless finished
             if (this._castleStage < CASTLE_FRAMES.length - 1) {
                 this.time.delayedCall(220, () => (this.canTap = true));
             }
         };
 
-        // 2. Reflow handler
+        // Reflow
         const reflow = (w, h) => {
             bg.setPosition(w / 2, h / 2).setScale(Math.max(w / bg.width, h / bg.height));
             this.sandArea.setTo(w * 0.15, h * 0.65, w * 0.70, h * 0.25);
@@ -290,18 +289,14 @@ export default class PlaygroundScene extends Phaser.Scene {
             if (kiko?.setPosition) kiko.setPosition(cx + 220, cy);
             if (this._castleImage) this._castleImage.setPosition(cx - 220, cy);
         };
-
-        // 2b. Resize wrapper (needed for the .on call)
         const onResize = ({ width: w, height: h }) => reflow(w, h);
 
-        // 3. Attach listeners
         this.input.on("pointerdown", onPointer);
         this.scale.on(Phaser.Scale.Events.RESIZE, onResize);
 
-        // Initial layout
         reflow(width, height);
 
-        // 4. Cleanup on shutdown so re-entry is fresh
+        // Cleanup
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             this.input.off("pointerdown", onPointer);
             this.scale.off(Phaser.Scale.Events.RESIZE, onResize);
@@ -314,34 +309,30 @@ export default class PlaygroundScene extends Phaser.Scene {
         });
     }
 
-    /** Move toward the door with bounce + shrink, then go to bathroom scene. */
+    /** Move toward the door, then go to bathroom scene. */
     _enterDoor(kiko) {
-        // Disable further taps
         this.canTap = false;
 
-        // Switch to side-jump & face left (toward the door)
         if (kiko.setTexture && this.textures.exists(KIKO_ENTER_KEY)) {
             kiko.setTexture(KIKO_ENTER_KEY).setDisplaySize(600, 600);
             kiko.setFlipX(true);
             kiko.setAngle(8);
         }
 
-        // Walking bounce
         const walkBob = this.tweens.add({
             targets: kiko,
-            y: '+=10',
+            y: "+=10",
             yoyo: true,
             duration: 180,
             repeat: -1,
             ease: "Sine.easeInOut",
         });
 
-        // Door target (center-right, near baseline)
         const doorX = this.scale.width * DOOR_X_FRAC;
         const doorY = this.sandArea.bottom - 150 + DOOR_Y_OFFSET;
 
         const startScale = kiko.scale;
-        const endScale   = startScale * 0.55;
+        const endScale = startScale * 0.55;
 
         this.tweens.add({
             targets: kiko,
