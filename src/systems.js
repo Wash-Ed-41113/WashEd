@@ -140,8 +140,9 @@ export const AudioManager = (() => {
         }
     }
 
-    return { play, stop, pauseGroup, resumeGroup };
+    return { play, stop, pauseGroup, resumeGroup, stopGroup, hardReset };
 })();
+
 
 
 // short names for config sections used throughout

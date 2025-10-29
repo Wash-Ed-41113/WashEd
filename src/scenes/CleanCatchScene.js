@@ -9,10 +9,13 @@ export default class CleanCatchScene extends Phaser.Scene {
         this._runtime = null;
         this._paused = false;
         this._pauseUi = null;
+        this._leaving = false; // guard against double transitions
     }
 
     // ---- helper: ALWAYS use this to leave CleanCatch ----
     leaveTo(targetKey, data) {
+        if (this._leaving) return;
+        this._leaving = true;
         try {
             // 1) stop any sounds owned by THIS scene, and the whole "game" group
             AudioManager.stop(this);
@@ -24,7 +27,7 @@ export default class CleanCatchScene extends Phaser.Scene {
         // 3) stop THIS scene before starting the next one
         this.scene.stop(this.scene.key);
 
-        // 4) now start the next scene (FIX: don't recurse!)
+        // 4) now start the next scene
         if (targetKey) this.scene.start(targetKey, data);
     }
 
@@ -59,24 +62,16 @@ export default class CleanCatchScene extends Phaser.Scene {
 
         const { width, height } = this.scale;
 
-        // --- AUDIO: kill stale game BGM then start Clean Catch music under "game" ---
-        AudioManager.stopGroup("game");                         // nuke leftovers from any previous game
-        AudioManager.play(this, "clean_catch_music", {          // start this scene's bgm in "game"
-            group: "game",
-            volume: 0.6,
-            loop: true
-        });
-
-        // --- AUDIO: menus off, game on ---
-        AudioManager.pauseGroup("global");
-        AudioManager.stopGroup("game");
+        // --- AUDIO OWNERSHIP: this scene owns the "game" group BGM ---
+        AudioManager.pauseGroup("global"); // pause story/menu bg
+        AudioManager.stopGroup("game");    // kill any leftover game track (e.g., Explain)
         AudioManager.play(this, "clean_catch_music", {
             group: "game",
             volume: 0.6,
             loop: true
         });
 
-// Safety hooks – stop this scene’s sounds + game group; resume global on exit
+        // Safety hooks – stop this scene’s sounds + game group; resume global on exit
         const killGameAudio = () => {
             try {
                 AudioManager.stop(this);
@@ -87,7 +82,7 @@ export default class CleanCatchScene extends Phaser.Scene {
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, killGameAudio);
         this.events.once(Phaser.Scenes.Events.SLEEP,    killGameAudio);
         this.events.once(Phaser.Scenes.Events.DESTROY,  killGameAudio);
-// NOTE: no PAUSE handler – pausing shouldn't kill BGM
+        // NOTE: no PAUSE handler – pausing shouldn't kill BGM
 
         // --- DOM canvas host for the mini-game runtime ---
         const rootEl = document.createElement("div");

@@ -5,6 +5,8 @@ import { AudioManager } from "../systems.js";
 export default class CleanCatchExplain extends Phaser.Scene {
     constructor() {
         super("CleanCatchExplain");
+        this._starting = false; // guard against double-starts
+        this._unbinders = [];
     }
 
     preload() {
@@ -12,16 +14,13 @@ export default class CleanCatchExplain extends Phaser.Scene {
         const A = (CONFIG.assets && CONFIG.assets.cleanCatch) || {};
         const ui = (CONFIG.assets && CONFIG.assets.ui) || {};
 
-        // Kiko art (load only if not already in cache)
         if (!this.textures.exists("KikoBase")  && explain.base)  this.load.image("KikoBase",  explain.base);
         if (!this.textures.exists("KikoCheer") && explain.cheer) this.load.image("KikoCheer", explain.cheer);
 
-        // Dialog panel (optional custom UI)
         if (!this.textures.exists("DialogPanel") && ui.dialogPanel) {
             this.load.image("DialogPanel", ui.dialogPanel);
         }
 
-        // Background image for explain scene
         if (!this.textures.exists("backgroundFullLives")) {
             this.load.image("backgroundFullLives", (A.background || "assets/images/CleanCatcher/1.jpg"));
         }
@@ -31,26 +30,25 @@ export default class CleanCatchExplain extends Phaser.Scene {
         const { width: W, height: H } = this.scale;
         const username   = this.registry.get("playerName") || "friend";
         const difficulty = data?.difficulty || this.registry.get("difficulty") || "easy";
-// --- AUDIO: menus off, game on ---
-        AudioManager.pauseGroup("global");
-        AudioManager.stopGroup("game");
-        AudioManager.play(this, "clean_catch_music", { group: "game", volume: 0.4, loop: true });
 
-// Stop only this scene’s own sounds when it ends (CleanCatchScene will manage group)
+        // --- AUDIO: menus off, game on (explain uses same vibe as game) ---
+        AudioManager.pauseGroup("global");
+        AudioManager.stopGroup("game"); // ensure clean channel if we re-enter explain
+        AudioManager.play(this, "clean_catch_music", { group: "game", volume: 0.4, loop: true /*, fadeIn: 400 */ });
+
+        // Stop only this scene’s own sounds when it ends (CleanCatchScene manages the group)
         const stopSceneAudio = () => { try { AudioManager.stop(this); } catch (_) {} };
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, stopSceneAudio);
         this.events.once(Phaser.Scenes.Events.SLEEP,    stopSceneAudio);
         this.events.once(Phaser.Scenes.Events.DESTROY,  stopSceneAudio);
 
-        // Background image
+        // Background + overlay
         if (this.textures.exists("backgroundFullLives")) {
             this.add.image(W / 2, H / 2, "backgroundFullLives").setDisplaySize(W, H).setDepth(0);
         }
-
-        // Translucent overlay
         this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.4).setDepth(1);
 
-        // Kiko sprite (start with Cheer if available)
+        // Kiko
         const kikoStartKey = this.textures.exists("KikoCheer") ? "KikoCheer" :
             (this.textures.exists("KikoBase") ? "KikoBase" : null);
         if (kikoStartKey) {
@@ -60,7 +58,7 @@ export default class CleanCatchExplain extends Phaser.Scene {
                 .setDepth(2);
         }
 
-        // Dialog panel (fallback shape if missing)
+        // Dialog panel
         let panel;
         if (this.textures.exists("DialogPanel")) {
             panel = this.add.image(W / 2, H * 0.75, "DialogPanel").setOrigin(0.5).setScale(0.5).setDepth(2);
@@ -110,14 +108,13 @@ export default class CleanCatchExplain extends Phaser.Scene {
             fontFamily: "Chewy", fontSize: "34px", color: "#ffffff",
         }).setOrigin(0.5).setVisible(false).setDepth(3);
 
+        // Next line logic (+ small expression swap)
         const nextLine = () => {
             currentLine++;
-            // Toggle expression if we have both textures
             if (this.kiko) {
                 if (currentLine % 2 === 0 && this.textures.exists("KikoCheer")) this.kiko.setTexture("KikoCheer");
                 else if (this.textures.exists("KikoBase")) this.kiko.setTexture("KikoBase");
             }
-
             if (currentLine < lines.length - 1) {
                 text.setText(lines[currentLine]);
             } else {
@@ -127,16 +124,40 @@ export default class CleanCatchExplain extends Phaser.Scene {
                 playBtn.setVisible(true);  playText.setVisible(true);
             }
         };
-        nextBtn.on("pointerdown", nextLine);
-        this.input.keyboard.on("keydown-SPACE", nextLine);
 
+        // Bindings + easy unbinders (prevents double fire)
+        nextBtn.on("pointerdown", nextLine);
+        nextText.on("pointerdown", nextLine);
+        const spaceHandler = (e) => { if (e.code === "Space") nextLine(); };
+        this.input.keyboard.on("keydown", spaceHandler);
+        this._unbinders.push(() => this.input.keyboard.off("keydown", spaceHandler));
+        this._unbinders.push(() => nextBtn.removeAllListeners());
+        this._unbinders.push(() => nextText.removeAllListeners());
+
+        // Start game (single source of truth)
         const startGame = () => {
+            if (this._starting) return;     // guard double starts
+            this._starting = true;
+
+            // unbind before we transition
+            try { this._unbinders.forEach(f => f && f()); } catch (_) {}
+            this._unbinders = [];
+
             // Do NOT stop the "game" group here; let CleanCatchScene own it.
             const playerName = this.registry.get("playerName");
             this.scene.stop("CleanCatchExplain");
             this.scene.start("CleanCatch", { playerName, difficulty });
         };
+
         skipBtn.on("pointerdown", startGame);
+        skipText.on("pointerdown", startGame);
         playBtn.on("pointerdown", startGame);
+        playText.on("pointerdown", startGame);
+
+        // Clean button listeners on shutdown just in case
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            try { this._unbinders.forEach(f => f && f()); } catch (_) {}
+            this._unbinders = [];
+        });
     }
 }

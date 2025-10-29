@@ -1,8 +1,6 @@
 import systems from "../systems.js";
 import { DB } from "../db.js";
 
-const soapSplashMusic = new Audio("assets/sounds/soap splasher.mp3");
-soapSplashMusic.loop = true;
 
 // define the main hub scene for the game flow
 export default class GameScene extends Phaser.Scene {
