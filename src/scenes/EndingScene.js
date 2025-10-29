@@ -126,32 +126,91 @@ export default class EndingScene extends Phaser.Scene {
         this._nameUi = null;
     }
 
+    /** Ensure we have the same rounded button texture used for "Easy" in MenuScene. */
+    _ensureEasyBtnTexture(scaleHint = 1) {
+        const key = "btn_diff_easy";
+        if (this.textures.exists(key)) return key;
+
+        // Dimensions close to MenuScene’s easy button (auto-scales fine on hi-DPI)
+        const btnW = Math.min(this.scale.width  * 0.22, 360) * scaleHint;
+        const btnH = Math.min(this.scale.height * 0.12, 120) * scaleHint;
+        const radius = Math.round(btnH * 0.28);
+
+        const g = this.add.graphics();
+        g.fillStyle(0xB9FBC0, 1); // same green fill as Easy
+        g.fillRoundedRect(0, 0, btnW, btnH, radius);
+        g.lineStyle(Math.max(3, Math.round(3 * scaleHint)), 0x073b4c, 0.35);
+        g.strokeRoundedRect(0, 0, btnW, btnH, radius);
+        g.generateTexture(key, btnW, btnH);
+        g.destroy();
+
+        return key;
+    }
+
+    /** Always-visible end buttons (no leaderboard dependency). */
     /** Always-visible end buttons (no leaderboard dependency). */
     _addEndButtons() {
         const { width, height } = this.scale;
-        const btnAreaY = Math.round(height * 0.88);
-        const gap = Math.max(18, Math.round(width * 0.012));
-        const BW = (CONFIG?.ui?.button?.width ?? 360);
 
-        // Replay was intentionally removed per your flow. If you re-add it later,
-        // just call fullResetAndGotoStart(this) in its handler.
+        // Position a little higher and to the right so it does not overlap the dialogue panel
+        const posX = Math.round(width * 0.84);   // shifted right
+        const posY = Math.round(height * 0.82);  // a bit above the bottom dialog
 
-        // New Player ⇒ go to the TRUE start (mp4 + Start) with a clean slate
-        const newPlayerBtn = this._darkButton(
-            Math.round(width * 0.62) + BW + gap, btnAreaY, "New Player",
-            async () => {
-                this._confettiCancelled = true;
-                this.cameras.main.fadeOut(450, 0, 0, 0);
-                this.cameras.main.once("camerafadeoutcomplete", async () => {
-                    try { this.music?.stop(); } catch(_) {}
-                    await fullResetAndGotoStart(this);
-                });
-            }
-        );
+        // Make sure we have the Easy-style texture (or reuse if already created in MenuScene)
+        const texKey = this._ensureEasyBtnTexture(1);
 
-        // this._btnReplay = replayBtn;
-        this._btnNewPlayer = newPlayerBtn;
+        // Create the button image
+        const img = this.add.image(posX, posY, texKey)
+            .setOrigin(0.5)
+            .setDepth(300)
+            .setInteractive({ useHandCursor: true });
+
+        // Label (same vibe as difficulty dialog)
+        const uiFont = (window.CONFIG?.ui?.fontFamily) || "Montserrat";
+        const label = this.add.text(posX, posY, "Play Again", {
+            fontFamily: uiFont,
+            color: "#073B4C",
+            align: "center"
+        })
+            .setOrigin(0.5, 0.55)
+            .setDepth(301);
+
+        // Scale label to the button height
+        const btnH = img.displayHeight || 100;
+        label.setFontSize(Math.round(btnH * 0.35));
+
+        // Simple hover/tap feedback (matches difficulty dialog motion)
+        const base = { y: img.y, ly: label.y, sI: img.scale, sL: label.scale };
+        img.on("pointerover", () => {
+            this.tweens.add({ targets: img,   scale: base.sI * 1.04, y: base.y  - 4, duration: 120, ease: "Sine.easeOut" });
+            this.tweens.add({ targets: label, scale: base.sL * 1.04, y: base.ly - 4, duration: 120, ease: "Sine.easeOut" });
+        });
+        img.on("pointerout", () => {
+            this.tweens.add({ targets: img,   scale: base.sI, y: base.y,   duration: 120, ease: "Sine.easeOut" });
+            this.tweens.add({ targets: label, scale: base.sL, y: base.ly,  duration: 120, ease: "Sine.easeOut" });
+        });
+
+        // Click handler — fade then full reset to entry scene
+        const go = async () => {
+            // Prevent double-activations
+            img.disableInteractive(); label.disableInteractive();
+            this._confettiCancelled = true;
+
+            this.cameras.main.fadeOut(450, 0, 0, 0);
+            this.cameras.main.once("camerafadeoutcomplete", async () => {
+                try { this.music?.stop(); } catch (_) {}
+                await fullResetAndGotoStart(this);
+            });
+        };
+
+        // Use pointerup to avoid colliding with any global gesture-gates
+        img.on("pointerup", go);
+        label.on("pointerup", go);
+
+        // Keep refs if you need to clean them up on shutdown
+        this._btnNewPlayer = { rect: img, txt: label };
     }
+
 
     // ===== Scene =====
 
