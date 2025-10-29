@@ -7,6 +7,9 @@
 const KI = CONFIG.assets.kiko;
 
 import systems from "../systems.js";
+import { AudioManager } from "../systems.js";
+
+
 
 const SAND_KEY  = "school_yard";
 const SAND_PATH = "assets/images/background/school-yard.png";
@@ -152,6 +155,17 @@ export default class PlaygroundScene extends Phaser.Scene {
         this.input.topOnly = false;    // don't let any UI eat the global pointerdown
 
         systems.ui.placeLogo(this);
+        try {
+            this.scene.stop("CleanCatchScene");
+            this.scene.stop("CleanCatchExplain");
+            this.scene.stop("SoapSplashScene");
+            this.scene.stop("SoapSplashExplain");
+        } catch {}
+
+        try {
+            AudioManager.stopGroup?.("game");
+            AudioManager.resumeGroup?.("global");
+        } catch {}
 
 
         this.scene.get('MenuScene')?.scene.stop(); // ensure menu not still alive

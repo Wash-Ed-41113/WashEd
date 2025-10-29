@@ -2,6 +2,147 @@
 // scenes import this module as systems to access these features
 // everything below is inline documented so you can read top to bottom and understand the flow
 import { DB } from "./db.js";
+// === AudioManager ============================================================
+// Groups:
+//  - "global": your story bg (Bathroom → Handwash → Ending)
+//  - "game": per-mini-game music (CleanCatch / SoapSplash)
+// Behavior:
+//  - When any "game" track starts, we PAUSE the "global" group (with fade).
+//  - When the game scene shuts down, we RESUME the "global" group (with fade).
+export const AudioManager = (() => {
+    const SCENE_OWNERS = new Map(); // scene => Set(Phaser.Sound.BaseSound)
+    const GROUPS = new Map();       // group => Set(sound)
+    const CURRENT = new Map();      // key => sound
+
+    const FADE_MS = 400;
+
+    function _ensureSets(scene, group) {
+        if (!SCENE_OWNERS.has(scene)) SCENE_OWNERS.set(scene, new Set());
+        if (group && !GROUPS.has(group)) GROUPS.set(group, new Set());
+    }
+
+    function _fadeTo(sound, vol, ms = FADE_MS, onComplete) {
+        if (!sound || !sound.scene?.tweens) return onComplete?.();
+        try {
+            sound.scene.tweens.add({
+                targets: sound,
+                volume: vol,
+                duration: ms,
+                onComplete
+            });
+        } catch { onComplete?.(); }
+    }
+
+    function _addToGroup(sound, group) {
+        if (!group) return;
+        const set = GROUPS.get(group);
+        if (set) set.add(sound);
+        sound._amGroup = group;
+    }
+
+    function _remove(sound) {
+        try {
+            const g = sound._amGroup;
+            if (g && GROUPS.has(g)) GROUPS.get(g).delete(sound);
+            CURRENT.forEach((s, k) => { if (s === sound) CURRENT.delete(k); });
+            sound.destroy();
+        } catch {}
+    }
+
+    function _trackScene(scene, sound) {
+        SCENE_OWNERS.get(scene)?.add(sound);
+        // Auto-clean on SHUTDOWN
+        scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            stop(scene); // stop everything this scene owns
+            // If this was a game scene ending, resume the global bg
+            resumeGroup("global");
+        });
+    }
+
+    function play(scene, key, opts = {}) {
+        const { loop = true, volume = 1, group = "global", fadeIn = FADE_MS } = opts;
+        if (!scene?.sound || !scene.cache.audio.exists(key)) {
+            console.warn("[AudioManager] missing key:", key);
+            return null;
+        }
+        _ensureSets(scene, group);
+
+        // If same key already playing, just ensure it’s in the right state
+        let snd = CURRENT.get(key);
+        if (!snd || !snd.isPlaying) {
+            snd = scene.sound.add(key, { loop, volume: 0 });
+            CURRENT.set(key, snd);
+            _addToGroup(snd, group);
+            _trackScene(scene, snd);
+            snd.play();
+            _fadeTo(snd, volume, fadeIn);
+        } else {
+            // bring volume up if it’s mid-paused/faded
+            _fadeTo(snd, volume, fadeIn);
+        }
+
+        // If a game track began, duck/pause global
+        if (group === "game") pauseGroup("global");
+
+        return snd;
+    }
+
+    function stop(scene) {
+        const set = SCENE_OWNERS.get(scene);
+        if (!set) return;
+        for (const snd of Array.from(set)) {
+            try {
+                _fadeTo(snd, 0, FADE_MS, () => _remove(snd));
+            } catch { _remove(snd); }
+            set.delete(snd);
+        }
+    }
+
+    function pauseGroup(group, fadeMs = FADE_MS) {
+        const set = GROUPS.get(group); if (!set) return;
+        for (const s of set) {
+            if (!s || !s.isPlaying) continue;
+            _fadeTo(s, 0, fadeMs, () => { try { s.pause(); } catch {} });
+        }
+    }
+
+    function stopGroup(group, fadeMs = 150) {
+        const set = GROUPS.get(group); if (!set) return;
+        for (const s of Array.from(set)) {
+            try { _fadeTo(s, 0, fadeMs, () => _remove(s)); }
+            catch { _remove(s); }
+        }
+    }
+
+    function hardReset() {
+        // Brutal safety: stop EVERYTHING we’re tracking
+        for (const [group] of GROUPS) stopGroup(group, 0);
+        GROUPS.clear();
+        CURRENT.clear();
+        SCENE_OWNERS.clear();
+    }
+
+    return { play, stop, pauseGroup, resumeGroup, stopGroup, hardReset };
+
+
+    function resumeGroup(group, fadeMs = FADE_MS, toVol = 1) {
+        const set = GROUPS.get(group); if (!set) return;
+        for (const s of set) {
+            if (!s) continue;
+            try {
+                if (s.isPaused) {
+                    s.resume(); s.setVolume(0);
+                    _fadeTo(s, toVol, fadeMs);
+                } else if (s.isPlaying) {
+                    _fadeTo(s, toVol, fadeMs);
+                }
+            } catch {}
+        }
+    }
+
+    return { play, stop, pauseGroup, resumeGroup };
+})();
+
 
 // short names for config sections used throughout
 const SS = CONFIG.soapSplash;   // soap splash game config values
@@ -89,28 +230,36 @@ const helpers = {
         return `${two(mm)}:${two(ss)}`;
     },
     // show a simple floating "+N" streak popup
-    streakPopup(scene, value, x, y) {
-        const t = scene.add.text(x, y, `+${value}`, {
-            fontFamily: SS.fontFamily,
-            fontSize: "22px",
-            color: "#ffffff",
-            fontStyle: "bold",
-            backgroundColor: "#2aa84a",
-            padding: { left: 10, right: 10, top: 6, bottom: 6 },
-            align: "center"
-        }).setOrigin(0.5).setDepth(200);
+    // show a clean "+N" streak popup (Chewy, light purple, no bg/outline)
+    streakPopup(scene, _ignored, x, y) {
+        const s = scene.streakSys?.streak ?? 0;
+        if (s < 1) return;
 
-        t.setScale(0.9);
+        const t = scene.add.text(x, y, `+${s}`, {
+            fontFamily: (CONFIG.soapSplash?.fontFamily || "Chewy, Arial, sans-serif"),
+            fontSize: "36px",
+            fontStyle: "bold",
+            color: "#BD66C9",           // Germ Scrubber pink-purple
+            align: "center",
+            padding: { left: 8, right: 8, top: 4, bottom: 4 },
+        })
+            .setOrigin(0.5)
+            .setDepth(200)
+            .setShadow(0, 2, "#BD66C955", 6); // subtle soft purple shadow
+
         scene.tweens.add({
             targets: t,
-            y: y - 35,
+            y: y - 40,
             alpha: { from: 1, to: 0 },
-            scale: { from: 0.95, to: 1.07 },
-            duration: 750,
+            scale: { from: 1.0, to: 1.08 },
+            duration: 800,
             ease: "Cubic.Out",
             onComplete: () => t.destroy()
         });
     },
+
+
+
 
 
 };
@@ -1058,6 +1207,10 @@ const soapsplash = (() => {
             });
 
             const goBack = () => {
+                try {
+                    AudioManager.stopGroup?.("game");
+                    AudioManager.resumeGroup?.("global");
+                } catch {}
                 dialogRoot.destroy(true);
                 scene.scene.start("HandwashAnimationScene", { skipIntro: true });
             };

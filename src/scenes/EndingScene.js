@@ -2,8 +2,12 @@
 import systems from "../systems.js";
 import { DB } from "../db.js";
 
+import { AudioManager } from "../systems.js";
+
+
 // Safe default for where "Replay" starts (override via CONFIG.flow.replayStartScene)
 const REPLAY_START_SCENE = (window.CONFIG?.flow?.replayStartScene) || "PlaygroundScene";
+
 
 // === NEW: define the actual entry scene (mp4 background + Start button lives here) ===
 // Change to "MenuScene" if your video/start is there instead of PreloadScene.
@@ -28,7 +32,6 @@ async function fullResetAndGotoStart(scene) {
             );
         } catch (e) {
             // ok if unsupported
-            // console.warn("[EndingScene] resetCurrentSession not supported:", e);
         }
 
         // 2) Clear runtime/flow flags so BOTH minis are playable again
@@ -184,9 +187,68 @@ export default class EndingScene extends Phaser.Scene {
         };
         const selectedMessage = dialogueSets[tier][Math.floor(Math.random() * dialogueSets[tier].length)];
 
+        // Background
         this.add.image(width / 2, height / 2, "classroom_bg").setDisplaySize(width, height);
 
-        // Dialogue panel + text
+        // ====== SCOREBOARD on the classroom chalkboard ======
+        {
+            const { width: W, height: H } = this.scale;
+
+            DB.init?.();
+
+// Use the exact session your rounds wrote to
+            let sessionId =
+                (typeof window !== "undefined" && window.__SESSION_ID__) ||
+                this.registry.get("sessionId");
+
+// If still no session (e.g., someone jumped straight here), create one
+            if (!sessionId) {
+                const name = this.registry.get("playerName") || "Player";
+                sessionId = DB.beginSession?.(name);
+                this.registry.set("sessionId", sessionId);
+                try { window.__SESSION_ID__ = sessionId; } catch (_) {}
+            }
+
+// Totals per game (keys must match what was saved during rounds)
+            const soapSplashTotal = DB?.query?.sessionGameTotal?.(sessionId, "SoapSplash") ?? 0;
+            const cleanCatchTotal = DB?.query?.sessionGameTotal?.(sessionId, "CleanCatch") ?? 0;
+            // Chalkboard safe area (tweak to your art)
+            const board = { x: W * 0.56, y: H * 0.14, w: W * 0.36, h: H * 0.30 };
+            const clip = this.add.graphics().fillStyle(0x000000, 0).fillRect(board.x, board.y, board.w, board.h);
+            const mask = clip.createGeometryMask();
+
+            const styleTitle = {
+                fontFamily: "Chewy, Arial, sans-serif",
+                fontSize: "48px",
+                color: "#F3F0E6",
+                align: "left",
+                wordWrap: { width: board.w - 20 }
+            };
+            const styleLine = {
+                fontFamily: "Chewy, Arial, sans-serif",
+                fontSize: "34px",
+                color: "#F3F0E6",
+                align: "left",
+                wordWrap: { width: board.w - 20 }
+            };
+
+            const chalkName = this.registry.get("playerName") || "Player";
+            const c = this.add.container(board.x, board.y).setDepth(5).setMask(mask);
+
+            const tTitle = this.add.text(0, 0, "Scoreboard", styleTitle).setOrigin(0, 0);
+            const tName  = this.add.text(0, 60, chalkName, styleLine).setOrigin(0, 0);
+
+            // Your labels: Germ Scrubber = SoapSplash, Soap Splasher = CleanCatch
+            const tGS = this.add.text(0, 60 + 44, `Germ Scrubber : ${soapSplashTotal}`, styleLine).setOrigin(0, 0);
+            const tSS = this.add.text(0, 60 + 44 + 38, `Soap Splasher : ${cleanCatchTotal}`, styleLine).setOrigin(0, 0);
+
+            c.add([tTitle, tName, tGS, tSS]);
+            [tTitle, tName, tGS, tSS].forEach(t => t.setShadow(0, 1, "#FFFFFF22", 2));
+        }
+// ====== END SCOREBOARD ======
+
+
+        // Dialogue panel + text (kept AFTER scoreboard as requested)
         const dialogY = height * 0.97;
         const dialoguePanel = this.add.image(width * 0.50, dialogY, "dialogPanel")
             .setOrigin(0.5, 1).setAlpha(0).setDepth(25).setScale(0.5);
@@ -207,6 +269,22 @@ export default class EndingScene extends Phaser.Scene {
         this.DELAY_MAX = 1200;
         this._confettiCancelled = false;
         this.startConfettiLoop();
+
+        AudioManager.resumeGroup("global");
+        AudioManager.play(this, "global_bg", { group: "global", volume: 0.6 });
+
+        try {
+            this.scene.stop("CleanCatchScene");
+            this.scene.stop("CleanCatchExplain");
+            this.scene.stop("SoapSplashScene");
+            this.scene.stop("SoapSplashExplain");
+        } catch {}
+
+        try {
+            AudioManager.stopGroup?.("game");
+            AudioManager.resumeGroup?.("global");
+        } catch {}
+
 
         // Kiko sprite motion
         const baseY = height * 0.9;

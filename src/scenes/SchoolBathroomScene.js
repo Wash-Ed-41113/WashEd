@@ -4,6 +4,7 @@ const BG_KEY = "washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png"
 const BG_PATH = "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png";
 
 import systems from "../systems.js";
+import { AudioManager } from "../systems.js";
 
 const TAP_KEY = "washed_day_UI_LEVEL_01_scene_02_bathroom__Tap.png";
 const TAP_PATH = "assets/images/UI/washed_day_UI_LEVEL_01_scene_02_bathroom__Tap.png";
@@ -96,6 +97,24 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             .setDepth(5)
             .setInteractive({ useHandCursor: true });
         fitH(soapBottle, pos.soapBottle.h);
+
+        AudioManager.stopGroup("game");       // ← ensure no Clean Catch / Soap Splash track lives
+        AudioManager.resumeGroup("global");   // ← if we came back, fade global back in
+        AudioManager.play(this, "global_bg", { group: "global", volume: 0.6 });
+
+
+        try {
+            this.scene.stop("CleanCatchScene");
+            this.scene.stop("CleanCatchExplain");
+            this.scene.stop("SoapSplashScene");
+            this.scene.stop("SoapSplashExplain");
+        } catch {}
+
+        try {
+            AudioManager.stopGroup?.("game");
+            AudioManager.resumeGroup?.("global");
+        } catch {}
+
 
         // Hover pulse
         const makeHover = (img, factor = 1.06, dur = 120) => {

@@ -14,6 +14,12 @@ export default class PreloadScene extends Phaser.Scene {
         const BG = CONFIG.assets.backgrounds;
         const UI = CONFIG.assets.ui;
 
+        // PreloadScene.js → preload()
+        this.load.audio("global_bg",        "assets/sounds/kikos_day.mp3");   // overall bg
+        this.load.audio("clean_catch_music","assets/sounds/cleanCatcher.mp3");     // game
+        this.load.audio("soap_splash_music","assets/sounds/germ-scrubber.mp3");   // game
+
+
         // preload the global logo
         this.load.image("app_logo", CONFIG.assets.logo);
 

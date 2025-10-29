@@ -6,6 +6,9 @@
 import systems from "../systems.js";
 import { DB } from "../db.js";
 
+import { AudioManager } from "../systems.js";
+
+
 export default class SoapSplashScene extends Phaser.Scene {
     constructor() {
         super("SoapSplash");
@@ -70,6 +73,19 @@ export default class SoapSplashScene extends Phaser.Scene {
         // NEW: per-run deck supplier (function) set in create()
         this._nextWord = null;
     }
+
+    // Helper to end SoapSplash then switch scenes without audio leaks
+    leaveTo(targetKey, data) {
+        try {
+            AudioManager.stop(this);
+            AudioManager.stopGroup("game");
+            AudioManager.resumeGroup("global");
+        } catch (_) {}
+
+        this.scene.stop(this.scene.key);
+        if (targetKey) this.scene.start(targetKey, data);
+    }
+
 
     // NEW: restart-safe reset of volatile state each time we enter this scene
     init(data) {
@@ -355,6 +371,22 @@ export default class SoapSplashScene extends Phaser.Scene {
     create() {
         const SS = CONFIG.soapSplash;
 
+
+        // --- AUDIO: menus off, game on ---
+        AudioManager.pauseGroup("global");                // pause menu/story music
+        AudioManager.stopGroup("game");                   // clear any leftover game music
+        AudioManager.play(this, "soap_splash_music", {    // start Soap Splash BGM
+            group: "game",
+            volume: 0.6,
+            loop: true
+        });
+
+// Safety hooks – stop this scene’s sounds + game group; resume global on exit
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { AudioManager.stop(this); AudioManager.stopGroup("game"); AudioManager.resumeGroup("global"); });
+        this.events.once(Phaser.Scenes.Events.SLEEP,    () => { AudioManager.stop(this); AudioManager.stopGroup("game"); AudioManager.resumeGroup("global"); });
+        this.events.once(Phaser.Scenes.Events.DESTROY,  () => { AudioManager.stop(this); AudioManager.stopGroup("game"); AudioManager.resumeGroup("global"); });
+
+
         systems.ui.placeLogo(this);
 
         // NEW: ensure global audio isn’t stuck paused from previous scene
@@ -540,7 +572,8 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         // DB round — NEW: always start a new round on entry
         const difficulty = this.registry.get("difficulty");
-        this.roundId = DB.beginRound(window.__SESSION_ID__, "SoapSplasher", String(difficulty));
+        this.roundId = DB.beginRound(window.__SESSION_ID__, "SoapSplash", String(difficulty));
+
 
         // ── Top-right PAUSE icon only ────────────────────────────────────────────
         const T = CONFIG.ui.topbar;
@@ -626,9 +659,45 @@ export default class SoapSplashScene extends Phaser.Scene {
         });
     }
 
+    // <<< ADDED: small helper to compute + write the final tally once
+    _commitFinalScore(reason = "finalize") {
+        try {
+            // Make sure totals are current even on death/fail.
+            this.streakSys?._recompute?.(); // <<< ADDED
+
+            const final = this.streakSys?.totalScore ?? 0;
+            const best  = this.streakSys?.bestStreak ?? 0;
+
+            // Telemetry + simple round append for any UI that reads DB.rounds
+            DB.logTyping?.("SoapSplash_end", { totalScore: final, bestStreak: best, reason }); // <<< ADDED
+            DB.saveRound?.("SoapSplash", final, best);                                         // <<< ADDED
+        } catch (e) {
+            console.warn("[SoapSplash] _commitFinalScore failed:", e);
+        }
+    }
+
+    // <<< ADDED: Call this before any manual scene jump/stop from this scene
+    endGameAndGoto(nextSceneKey, data = {}, reason = "scene-change") {
+        if (this.gameOver) return;
+        this.finalizeRound(reason);                // will call _commitFinalScore inside
+        try {
+            // Safe stop this scene and start the next as requested by caller
+            this.scene.stop("SoapSplash");
+            if (nextSceneKey) this.scene.start(nextSceneKey, data);
+        } catch (e) {
+            console.warn("[SoapSplash] endGameAndGoto error:", e);
+        }
+    }
+
     finalizeRound(reason = "Time up", overrides = {}) {
         if (this.gameOver) return;
         this.gameOver = true;
+
+        // <<< ADDED: ensure totals reflect the last moment (e.g., death/timeout)
+        this.streakSys?._recompute?.();
+
+        // <<< ADDED: one-time write-back for score + telemetry
+        this._commitFinalScore(reason);
 
         if (this.roundId) {
             DB.finalizeRound(this.roundId, {

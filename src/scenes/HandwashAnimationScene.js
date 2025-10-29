@@ -3,6 +3,7 @@ const WASH1_KEY = "wash_step_bg_1";
 const WASH1_PATH = "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_02_bathroom_wash-hands.png";
 
 import systems from "../systems.js";
+import { AudioManager } from "../systems.js";
 
 const WASH2_KEY = "wash_step_bg_2";
 const WASH2_PATH = "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_03_bathroom_sparkle.png";
@@ -21,6 +22,23 @@ export default class HandwashAnimationScene extends Phaser.Scene {
 
     create() {
         const { width, height } = this.scale;
+
+
+        AudioManager.stopGroup("game");     // ← ensures Soap/CC are OFF before story bg
+        AudioManager.resumeGroup("global");
+        AudioManager.play(this, "global_bg", { group: "global", volume: 0.6 });
+
+        try {
+            this.scene.stop("CleanCatchScene");
+            this.scene.stop("CleanCatchExplain");
+            this.scene.stop("SoapSplashScene");
+            this.scene.stop("SoapSplashExplain");
+        } catch {}
+
+        try {
+            AudioManager.stopGroup?.("game");
+            AudioManager.resumeGroup?.("global");
+        } catch {}
 
         systems.ui.placeLogo(this);
 

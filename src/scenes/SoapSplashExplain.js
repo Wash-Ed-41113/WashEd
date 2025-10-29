@@ -1,5 +1,6 @@
 // src/scenes/SoapSplashExplain.js
 import systems from "../systems.js";
+import { AudioManager } from "../systems.js";
 
 
 export default class SoapSplashExplain extends Phaser.Scene {
@@ -23,6 +24,16 @@ export default class SoapSplashExplain extends Phaser.Scene {
         const username = this.registry.get("playerName") || "friend";
 
         systems.ui.placeLogo(this);
+
+        // --- AUDIO: menus off, game on ---
+        AudioManager.pauseGroup("global");
+        AudioManager.stopGroup("game");
+        AudioManager.play(this, "soap_splash_music", { group: "game", volume: 0.5, loop: true });
+
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { try { AudioManager.stop(this); } catch (_) {} });
+        this.events.once(Phaser.Scenes.Events.SLEEP,    () => { try { AudioManager.stop(this); } catch (_) {} });
+        this.events.once(Phaser.Scenes.Events.DESTROY,  () => { try { AudioManager.stop(this); } catch (_) {} });
+
 
 
         // translucent overlay
@@ -72,7 +83,7 @@ export default class SoapSplashExplain extends Phaser.Scene {
 
         // --- NEXT button (image from config, fallback to rectangle+text) ---
         let nextBtn, nextText = null;
-        const nx = W * 0.88;
+        const nx = W * 0.74;
         const ny = H * 0.9;
 
         if (this.textures.exists("UI_Next")) {

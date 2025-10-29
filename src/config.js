@@ -88,6 +88,8 @@ window.CONFIG = {
             ],
             backgroundVid: "assets/images/SopaSplash/hands_alpha.webm",
             backgroundAud: "assets/sounds/germ_scrubber.mp3",
+            correctAud: "assets/sounds/typed-correctly-Germ-Scrubber.mp3",
+            incorrectAud: "assets/sounds/Typed-incorrectly-Germ-scrubber.mp3",
 
         },
         cleanCatch: {
