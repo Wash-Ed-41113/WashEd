@@ -11,7 +11,7 @@ const REPLAY_START_SCENE = (window.CONFIG?.flow?.replayStartScene) || "Playgroun
 
 // === NEW: define the actual entry scene (mp4 background + Start button lives here) ===
 // Change to "MenuScene" if your video/start is there instead of PreloadScene.
-const ENTRY_SCENE = (window.CONFIG?.flow?.entryScene) || "PreloadScene";
+const ENTRY_SCENE = "MenuScene";
 
 /** NEW: do a complete state refresh and jump back to the very start */
 async function fullResetAndGotoStart(scene) {
@@ -40,7 +40,9 @@ async function fullResetAndGotoStart(scene) {
             scene.registry.set("completedCleanCatch", false);
             scene.registry.set("bathroomPlayed", false);
             scene.registry.set("playgroundPlayed", false);
-            scene.registry.set("playerName", null);
+            scene.registry.set("playerName", null)
+            scene.registry.set("difficulty", null);
+
         } catch (e) {}
 
         // clear global JS session id, too
@@ -63,7 +65,8 @@ async function fullResetAndGotoStart(scene) {
     } finally {
         // 5) Hard jump to the app's *first* scene (mp4 + Start)
         try { scene.scene.stop(); } catch (e) {}
-        scene.scene.start(ENTRY_SCENE);
+        scene.scene.start(ENTRY_SCENE, { resetSession: true });
+
     }
 }
 

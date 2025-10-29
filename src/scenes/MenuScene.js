@@ -18,6 +18,13 @@ export default class MenuScene extends Phaser.Scene {
         this.startShadow = null;
         this.startLabel = null;
 
+        // inside constructor()
+        this._leaving = false;      // avoid double transition
+        this._audioEnsured = false; // guard for one-time audio unlock (DOM-first)
+        this._gateArmed = false;    // NEW: gesture gate armed?
+        this._uiBlocker = null;     // NEW: transparent blocker while gating
+
+
         this._leaving = false;     // avoid double transition
         this._audioEnsured = false; // guard for one-time audio unlock (DOM-first)
     }
@@ -61,71 +68,81 @@ export default class MenuScene extends Phaser.Scene {
         } catch {}
 
         // ─────────────────────────────────────────────
-        // AUDIO: gesture-gated start and KEEP the BGM instance for later scenes
-        // ─────────────────────────────────────────────
+// AUDIO: gesture-gated start (idempotent, safe)
+// ─────────────────────────────────────────────
         try {
             const KEY = "kikos_day";
             const VOL = 0.6;
 
             const playNow = () => {
-                // Tidy audio groups (optional)
                 try { AudioManager.stopGroup?.("game"); } catch {}
                 try { AudioManager.resumeGroup?.("global"); } catch {}
 
-                // If already playing, do nothing
                 let s = this.sound.get(KEY);
                 if (!(s?.isPlaying)) {
                     s = s || this.sound.add(KEY, { loop: true, volume: VOL });
                     s.play();
                 }
 
-                // Cache globally so the next scene resumes the exact same WebAudio source
                 if (typeof window !== "undefined") {
                     window.__GLOBAL_BGM__ = s;
-                    // If this sound ever gets destroyed elsewhere, clear the global handle
                     s.once?.("destroy", () => {
                         if (window.__GLOBAL_BGM__ === s) window.__GLOBAL_BGM__ = null;
                     });
                 }
-
-                // IMPORTANT: Do NOT stop/destroy BGM on Menu shutdown
-                // (So we intentionally do not attach a SHUTDOWN handler that stops it.)
             };
 
-            // Full-canvas invisible gate — guarantees we start inside a user gesture callstack
-            const gate = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0)
-                .setOrigin(0, 0)
-                .setScrollFactor(0)
-                .setDepth(9999)
-                .setInteractive({ useHandCursor: true });
+            // prevent double-arming across re-entries
+            if (!this._gateArmed) {
+                this._gateArmed = true;
 
-            const onFirstGesture = () => {
-                // Unlock/resume context IN the same gesture callstack (required by browsers)
-                try { if (this.sound.locked) this.sound.unlock(); } catch {}
-                try { this.sound.context?.resume?.(); } catch {}
-                playNow();
-                gate.disableInteractive();
-                gate.destroy();
-            };
+                // keep a reference for safe teardown
+                this._uiBlocker = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0)
+                    .setOrigin(0, 0)
+                    .setScrollFactor(0)
+                    .setDepth(9999)
+                    .setInteractive({ useHandCursor: true });
 
-            // Canvas input
-            gate.once("pointerdown", onFirstGesture);
-            this.input.keyboard?.once("keydown", onFirstGesture);
+                const safeKillGate = () => {
+                    const g = this._uiBlocker;
+                    this._uiBlocker = null;
+                    if (g && g.scene) {
+                        // removeInteractive() avoids touching scene.sys
+                        try { g.removeInteractive?.(); } catch {}
+                        try { g.destroy?.(); } catch {}
+                    }
+                };
 
-            // DOM-first path (e.g., if Start button is a DOM node)
-            this.events.once("menu:startPressed", onFirstGesture);
+                const onFirstGesture = () => {
+                    // Only run once (protect against multiple sources)
+                    if (!this._gateArmed) return;
+                    this._gateArmed = false;
 
-            // If already unlocked by now, try starting next tick (safe)
-            if (!this.sound.locked) {
-                this.time.delayedCall(0, playNow);
+                    try { if (this.sound.locked) this.sound.unlock(); } catch {}
+                    try { this.sound.context?.resume?.(); } catch {}
+
+                    playNow();
+                    // gate may already be gone if Start emitted first — guard it
+                    safeKillGate();
+                };
+
+                // Use pointer *up* so the gate doesn't eat Start’s click
+                this._uiBlocker.once("pointerup", onFirstGesture);
+                this.input.keyboard?.once("keydown", onFirstGesture);
+
+                // DOM/other paths can emit this:
+                this.events.once("menu:startPressed", onFirstGesture);
+
+                // If already unlocked, kick on next tick
+                if (!this.sound.locked) this.time.delayedCall(0, onFirstGesture);
             }
 
-            // Keep audio alive when tab loses focus; honor mute flag
             this.sound.pauseOnBlur = false;
             this.sound.mute = this.registry.get("mute") === true;
         } catch (e) {
             console.warn("[MenuScene] audio bootstrap error:", e);
         }
+
 
         // Also ensure DOM-only interactions emit the start signal at least once
         this.ensureAudioStartOnce();
@@ -236,6 +253,15 @@ export default class MenuScene extends Phaser.Scene {
 
     // Smoothly leave this scene (fade-out) then start PlaygroundScene
     goToPlaygroundSmooth(playerName, difficulty, dur = 600) {
+
+        // kill any leftover blocker safely
+        if (this._uiBlocker) {
+            try { this._uiBlocker.removeInteractive?.(); this._uiBlocker.destroy?.(); } catch {}
+            this._uiBlocker = null;
+        }
+        this._gateArmed = false;
+
+
         if (this._leaving) return;
         this._leaving = true;
 

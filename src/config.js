@@ -8,6 +8,7 @@ window.CONFIG = {
     width: 1920,
     height: 1080,
 
+
     isLeaderboardsSwas: false,
 
     // ui related defaults for fonts buttons topbar and pause overlayy
