@@ -1,6 +1,7 @@
 // src/scenes/CleanCatchScene.js
-// import the shared systems module
+// Clean Catch mini-game scene
 import systems from "../systems.js";
+import { AudioManager } from "../systems.js";
 
 export default class CleanCatchScene extends Phaser.Scene {
     constructor() {
@@ -8,7 +9,26 @@ export default class CleanCatchScene extends Phaser.Scene {
         this._runtime = null;
         this._paused = false;
         this._pauseUi = null;
-        this._bgm = null; // mini-game BGM handle (may be re-used from explain scene)
+        this._leaving = false; // guard against double transitions
+    }
+
+    // ---- helper: ALWAYS use this to leave CleanCatch ----
+    leaveTo(targetKey, data) {
+        if (this._leaving) return;
+        this._leaving = true;
+        try {
+            // 1) stop any sounds owned by THIS scene, and the whole "game" group
+            AudioManager.stop(this);
+            AudioManager.stopGroup("game");
+            // 2) bring back story/global bg if it was paused
+            AudioManager.resumeGroup("global");
+        } catch (_) {}
+
+        // 3) stop THIS scene before starting the next one
+        this.scene.stop(this.scene.key);
+
+        // 4) now start the next scene
+        if (targetKey) this.scene.start(targetKey, data);
     }
 
     preload() {
@@ -23,20 +43,10 @@ export default class CleanCatchScene extends Phaser.Scene {
         // Background image for the sink area
         if (!this.textures.exists("cc_sink_bg")) {
             const A = (CONFIG.assets && CONFIG.assets.cleanCatch) || {};
-            this.load.image(
-                "cc_sink_bg",
-                A.background || "assets/images/CleanCatcher/1.jpg"
-            );
+            this.load.image("cc_sink_bg", A.background || "assets/images/CleanCatcher/1.jpg");
         }
 
-        // Safety net: load the same audio file under a fallback key
-        // In most flows, explain scene has already loaded/started "cleanCatchExplainMusic".
-        // If user jumps directly here, we still have something to play ("cleanCatchMusic").
-        if (!this.cache.audio.exists("cleanCatchMusic")) {
-            this.load.audio("cleanCatchMusic", "assets/sounds/soap splasher.mp3");
-        }
-
-        // SFX
+        // Safety-net SFX
         if (!this.cache.audio.exists("sfx_goodCatch"))
             this.load.audio("sfx_goodCatch", "assets/sounds/bubble pop Soap Splasher.wav");
         if (!this.cache.audio.exists("sfx_badCatch"))
@@ -46,54 +56,29 @@ export default class CleanCatchScene extends Phaser.Scene {
     }
 
     create(data) {
-        // Persist basic data
+        // Persist basics
         if (data?.difficulty) this.registry.set("difficulty", data.difficulty);
         if (data?.playerName) this.registry.set("playerName", data.playerName);
-        console.log("[CleanCatchScene] Final difficulty:", this.registry.get("difficulty"));
 
         const { width, height } = this.scale;
 
-        // Ensure any main/menu BGM is stopped
-        this.sound.get("bgm_kiko")?.stop();
-        this.sound.get("kikos_day")?.stop();
+        // --- AUDIO OWNERSHIP: this scene owns the "game" group BGM ---
+        AudioManager.pauseGroup("global");
 
-        // === BGM CONTINUITY LOGIC ===
-        // Try to re-use the explain-scene BGM instance so playback continues seamlessly.
-        // Primary key used by explain scene: "cleanCatchExplainMusic"
-        // Fallback to "cleanCatchMusic" if coming directly here.
-        const reuse =
-            this.sound.get("cleanCatchExplainMusic") ||
-            this.sound.get("cleanCatchMusic");
+        // Safety hooks – stop this scene’s sounds + game group; resume global on exit
+        const killGameAudio = () => {
+            try {
+                AudioManager.stop(this);
+                AudioManager.stopGroup("game");
+                AudioManager.resumeGroup("global");
+            } catch (_) {}
+        };
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, killGameAudio);
+        this.events.once(Phaser.Scenes.Events.SLEEP,    killGameAudio);
+        this.events.once(Phaser.Scenes.Events.DESTROY,  killGameAudio);
+        // NOTE: no PAUSE handler – pausing shouldn't kill BGM
 
-        if (reuse) {
-            // Reuse the already-playing instance; do NOT restart so the timeline continues.
-            this._bgm = reuse;
-            // Sync mute state to registry if needed
-            const wantMute = !!this.registry.get("mute");
-            if (this._bgm.mute !== wantMute) this._bgm.setMute(wantMute);
-            // If for some reason it's not playing, start it
-            if (!this._bgm.isPlaying) this._bgm.play({ loop: true });
-        } else {
-            // Extremely rare: no instance found and nothing loaded/playing — create one now
-            const playMiniBgm = () => {
-                if (!this._bgm) {
-                    this._bgm = this.sound.add("cleanCatchMusic", {
-                        loop: true,
-                        volume: 0.55,
-                        mute: !!this.registry.get("mute"),
-                    });
-                }
-                if (!this._bgm.isPlaying) this._bgm.play();
-            };
-            if (this.sound.locked) {
-                this.sound.once(Phaser.Sound.Events.UNLOCKED, playMiniBgm);
-            } else {
-                playMiniBgm();
-            }
-        }
-        // === END BGM CONTINUITY LOGIC ===
-
-        // DOM canvas host for the mini-game's offscreen canvas runtime
+        // --- DOM canvas host for the mini-game runtime ---
         const rootEl = document.createElement("div");
         const root = this.add.dom(0, 0, rootEl).setOrigin(0, 0).setDepth(1);
 
@@ -101,26 +86,28 @@ export default class CleanCatchScene extends Phaser.Scene {
         canvas.style.display = "block";
         canvas.style.width = `${width}px`;
         canvas.style.height = `${height}px`;
+        canvas.width = width;
+        canvas.height = height;
         root.node.appendChild(canvas);
 
         const difficulty = this.registry.get("difficulty") || "easy";
-        this._runtime = systems.cleancatcher.create(this, canvas, difficulty);
 
-        // Top bar (home / pause)
-        systems.ui.topbar(this, {
-            onHome: () => {
-                // If going home, it's OK to stop BGM
-                this._runtime?.destroy?.();
-                if (this._bgm) { this._bgm.stop(); /* destroy is optional here */ }
-                const playerName = this.registry.get("playerName");
-                this.scene.start("GameScene", { playerName });
-            },
-            onPause: () => this.togglePause(),
-        });
+        // Word suppliers (single source from CONFIG.cleanCatch)
+        if (CONFIG?.cleanCatch?.resetDecks && CONFIG?.cleanCatch?.nextGood && CONFIG?.cleanCatch?.nextBad) {
+            CONFIG.cleanCatch.resetDecks();
+            this.nextGoodLabel = () => CONFIG.cleanCatch.nextGood() || "clean";
+            this.nextBadLabel  = () => CONFIG.cleanCatch.nextBad()  || "germ";
+        } else {
+            console.warn("[CleanCatch] Deck APIs missing; falling back to static labels.");
+            this.nextGoodLabel = () => "clean";
+            this.nextBadLabel  = () => "germ";
+        }
 
-        // Pause shortcuts
-        this.input.keyboard.on("keydown-ESC", () => this.togglePause());
-        this.input.keyboard.on("keydown-P",   () => this.togglePause());
+        // If runtime supports suppliers, pass them; else create with default path
+        const opts = { nextGood: this.nextGoodLabel, nextBad: this.nextBadLabel };
+        const rt = systems.cleancatcher.create?.(this, canvas, difficulty, opts)
+            || systems.cleancatcher.create?.(this, canvas, difficulty);
+        this._runtime = rt;
 
         // Responsive canvas
         const onResize = (gameSize) => {
@@ -130,36 +117,19 @@ export default class CleanCatchScene extends Phaser.Scene {
         };
         this.scale.on(Phaser.Scale.Events.RESIZE, onResize);
 
-        // Cleanup (do NOT force-stop music here to allow continuity into a results scene, etc.)
+        // Cleanup
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             this.scale.off(Phaser.Scale.Events.RESIZE, onResize);
             this._runtime?.destroy?.();
             root.destroy();
             this._pauseUi?.destroy?.();
             this._pauseUi = null;
-            // Intentionally NOT stopping/destroying this._bgm on shutdown,
-            // so the next scene can continue the same track if desired.
         });
-    }
 
-    togglePause() {
-        this._paused = !this._paused;
-        this._runtime?.setPaused?.(this._paused);
-
-        if (this._paused) {
-            this._pauseUi = systems.ui.pauseOverlay(this, {
-                onResume: () => this.togglePause(),
-                onHome: () => {
-                    // If returning home from pause, stop BGM
-                    this._runtime?.destroy?.();
-                    if (this._bgm) { this._bgm.stop(); /* destroy optional */ }
-                    const playerName = this.registry.get("playerName");
-                    this.scene.start("GameScene", { playerName });
-                }
-            });
-        } else {
-            this._pauseUi?.destroy?.();
-            this._pauseUi = null;
-        }
+        // EXAMPLE: wherever you previously did scene.start(...), call leaveTo(...)
+        // e.g.
+        // someButton.on("pointerup", () => this.leaveTo("SchoolBathroomScene"));
+        // handwashBtn.on("pointerup", () => this.leaveTo("HandwashAnimationScene", { skipIntro: true }));
+        // endBtn.on("pointerup", () => this.leaveTo("EndingScene"));
     }
 }

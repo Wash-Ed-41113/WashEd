@@ -1,176 +1,213 @@
-// db.js
-// Lightweight in-memory DB (resets every time the tab/app closes)
+// src/db.js
+// Lightweight in-memory DB with sessionStorage persistence (clears when tab closes)
 
 export const DB = (() => {
-    const STORAGE_KEY = "gameDatabase"; // name used to store data in sessionStorage
+    const STORAGE_KEY = "washed_game_db_v2";
 
-    // ----- in-memory database -----
     const state = {
         inited: false,
-        ids: { session: 0, round: 0, event: 0 },
+        ids: { session: 0, round: 0 },
         games: [
-            { game_id: 1, key: "SoapSplasher", title: "Soap Splasher" },
-            { game_id: 2, key: "GermScrubber", title: "Germ Scrubber" }
+            { game_id: 1, key: "SoapSplash", title: "Soap Splash" },
+            { game_id: 2, key: "CleanCatch", title: "Clean Catch" }
         ],
-        sessions: [],      // { session_id, started_at, player_name }
-        rounds: [],        // per-play summary rows
-        typing_events: []  // detailed events per round
+        sessions: [],  // { session_id, player_name, started_at, ended_at? }
+        rounds: []     // { round_id, session_id, game_key, started_at, ended_at, score, best_streak, breaches, base_score, bonus_score, reason }
+        // _telemetry: [] // optional; created on demand if you enable it in logTyping
     };
 
-    // ---- load / save / clear ----
-    function loadFromStorage() {
-        const saved = sessionStorage.getItem(STORAGE_KEY);
-        if (!saved) return;
+    // ---------- persistence ----------
+    function save() {
         try {
-            const parsed = JSON.parse(saved);
-            Object.assign(state, parsed);
-            console.log("Database loaded from sessionStorage");
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         } catch (e) {
-            console.error("Failed to load from storage:", e);
+            console.warn("[DB] save failed:", e);
         }
     }
-
-    function saveToStorage() {
+    function load() {
         try {
-            const json = JSON.stringify(state);
-            sessionStorage.setItem(STORAGE_KEY, json);
-            console.log("Database saved to sessionStorage");
+            const raw = sessionStorage.getItem(STORAGE_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            // basic shape guard
+            if (parsed && parsed.sessions && parsed.rounds) {
+                Object.assign(state, parsed);
+            }
         } catch (e) {
-            console.error("Failed to save to storage:", e);
+            console.warn("[DB] load failed:", e);
         }
     }
-
-    function clearStorage() {
-        sessionStorage.removeItem(STORAGE_KEY);
-        console.log("Storage cleared on tab close");
+    function clearAll() {
+        try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
     }
 
-    // ---- init (runs once per page lifetime) ----
+    // ---------- time/id helpers ----------
+    const now = () => new Date().toISOString();
+    const nextId = (k) => ++state.ids[k];
+
+    // ---------- lifecycle ----------
     function init() {
         if (state.inited) return;
+        load();
         state.inited = true;
-
-        // If you want persistence across reloads in the *same* tab without closing it,
-        // uncomment the next line. It has no effect if you close the tab, because we clear on beforeunload.
-        // loadFromStorage();
+        // soft migrate
+        state.ids.session = Number(state.ids.session) || 0;
+        state.ids.round   = Number(state.ids.round)   || 0;
+        save();
     }
 
-    // ---- helpers ----
-    const now = () => Date.now();
-    const nextId = k => (state.ids[k] += 1);
-    const gameId = key => state.games.find(g => g.key === key)?.game_id ?? null;
-
-    // ---- main API ----
-    function beginSession(playerName = "Player") {
-        init();
+    function beginSession(playerName) {
         const session_id = nextId("session");
-        state.sessions.push({ session_id, started_at: now(), player_name: playerName });
-        saveToStorage();
+        state.sessions.push({
+            session_id,
+            player_name: (playerName || "Player").trim() || "Player",
+            started_at: now(),
+        });
+        save();
         return session_id;
     }
 
-    function beginRound(sessionId, gameKey, difficulty = "normal") {
-        init();
-        const gid = gameId(gameKey);
-        if (!gid) throw new Error(`Unknown game key: ${gameKey}`);
+    function endSession(session_id) {
+        const s = state.sessions.find(s => s.session_id === session_id);
+        if (s && !s.ended_at) { s.ended_at = now(); save(); }
+    }
+
+    function beginRound(session_id, game_key) {
+        const s = state.sessions.find(s => s.session_id === session_id);
+        if (!s) throw new Error("beginRound: invalid session_id");
         const round_id = nextId("round");
         state.rounds.push({
-            round_id,
-            session_id: sessionId,
-            game_id: gid,
-            difficulty: String(difficulty),
+            round_id, session_id, game_key,
             started_at: now(),
             ended_at: null,
-            reason: null,
             score: 0,
             best_streak: 0,
             breaches: 0,
             base_score: 0,
-            multiplier: 0
+            bonus_score: 0,
+            reason: null
         });
-        saveToStorage();
+        save();
         return round_id;
     }
 
-    function logTyping(roundId, kind, payload = {}) {
-        init();
-        const event_id = nextId("event");
-        state.typing_events.push({
-            event_id, round_id: roundId, ts: now(), kind,
-            clean:        payload.clean ?? null,
-            streak:       payload.streak ?? null,
-            base_score:   payload.base_score ?? null,
-            total_score:  payload.total_score ?? null,
-            word:         payload.word ?? null
-        });
-        saveToStorage();
-    }
-
-    function finalizeRound(roundId, summary = {}) {
-        const r = state.rounds.find(r => r.round_id === roundId);
+    function finalizeRound(round_id, summary = {}) {
+        const r = state.rounds.find(r => r.round_id === round_id);
         if (!r) return;
         r.ended_at    = now();
-        r.reason      = summary.reason      ?? r.reason;
-        r.score       = summary.score       ?? r.score;
-        r.best_streak = summary.bestStreak  ?? r.best_streak;
-        r.breaches    = summary.breaches    ?? r.breaches;
-        r.base_score  = summary.baseScore   ?? r.base_score;
-        r.multiplier  = summary.multiplier  ?? r.multiplier;
-        saveToStorage();
+        r.score       = Number(summary.score ?? r.score ?? 0);
+        r.best_streak = Number(summary.best_streak ?? summary.bestStreak ?? r.best_streak ?? 0);
+        r.breaches    = Number(summary.breaches ?? r.breaches ?? 0);
+        r.base_score  = Number(summary.base_score ?? summary.baseScore ?? r.base_score ?? 0);
+        r.bonus_score = Number(summary.bonus_score ?? summary.bonusScore ?? r.bonus_score ?? 0);
+        r.reason      = summary.reason ?? r.reason ?? null;
+        save();
     }
 
-    // ---- queries (rounds) ----
-    function topRounds({ gameKey = null, limit = 10 } = {}) {
-        const gid = gameKey ? gameId(gameKey) : null;
+    // ---------- telemetry (safe no-op by default) ----------
+    /**
+     * Logs typing-related events from systems.js (mistake/complete/keypress/etc).
+     * This is intentionally a no-op to avoid any gameplay side-effects.
+     * To persist telemetry, uncomment the lines below.
+     */
+    function logTyping(event, payload = {}) {
+        try {
+            // // OPTIONAL: enable if you want to persist telemetry
+            // state._telemetry = state._telemetry || [];
+            // state._telemetry.push({ event, ...payload, at: now() });
+            // save();
+        } catch (_) {
+            // never throw from telemetry
+        }
+    }
+
+    // ---------- queries ----------
+    function players() {
+        // unique player list with counts
+        const map = new Map();
+        for (const s of state.sessions) {
+            const name = s.player_name || "Player";
+            const v = map.get(name) || { name, sessions: 0, last_seen: "" };
+            v.sessions += 1;
+            v.last_seen = s.started_at > v.last_seen ? s.started_at : v.last_seen;
+            map.set(name, v);
+        }
+        return Array.from(map.values())
+            .sort((a, b) => b.sessions - a.sessions || (b.last_seen || "").localeCompare(a.last_seen || ""));
+    }
+
+    function roundsBySession(session_id) {
         return state.rounds
-            .filter(r => r.ended_at && (!gid || r.game_id === gid))
-            .sort((a, b) => b.score - a.score)
-            .slice(0, limit)
-            .map(r => ({
-                round_id: r.round_id,
-                score: r.score,
-                best_streak: r.best_streak,
-                player_name: state.sessions.find(s => s.session_id === r.session_id)?.player_name ?? "Player",
-                game: state.games.find(g => g.game_id === r.game_id)?.title ?? "Game",
-                ended_at: r.ended_at,
-                difficulty: r.difficulty
-            }));
+            .filter(r => r.session_id === session_id && typeof r.score === "number")
+            .sort((a, b) => b.score - a.score || (b.ended_at || "").localeCompare(a.ended_at || ""));
     }
 
-    const roundsBySession = sid => state.rounds.filter(r => r.session_id === sid);
-    const eventsByRound   = rid => state.typing_events.filter(e => e.round_id === rid);
+    function topRoundsBySession(session_id, n = 3) {
+        return roundsBySession(session_id).slice(0, n);
+    }
 
-    // ---- NEW: totals & leaderboard across sessions ----
-    function sessionTotal(sessionId) {
+    function sessionTotal(session_id) {
         return state.rounds
-            .filter(r => r.session_id === sessionId && r.ended_at)
-            .reduce((sum, r) => sum + (r.score || 0), 0);
+            .filter(r => r.session_id === session_id)
+            .reduce((acc, r) => acc + (r.score || 0), 0);
     }
 
-    function topTotals({ limit = 10 } = {}) {
+    function topTotals(n = 10) {
+        // Top sessions by total score
+        const totals = new Map(); // session_id -> total
+        for (const r of state.rounds) {
+            totals.set(r.session_id, (totals.get(r.session_id) || 0) + (r.score || 0));
+        }
         const rows = state.sessions.map(s => ({
             session_id: s.session_id,
-            player_name: s.player_name || "Player",
-            total: sessionTotal(s.session_id),
+            player_name: s.player_name,
+            total: totals.get(s.session_id) || 0,
+            started_at: s.started_at
+        }));
+        return rows.sort((a, b) => b.total - a.total || (b.started_at || "").localeCompare(a.started_at || "")).slice(0, n);
+    }
+
+    // NEW: total for a specific game within a session
+    function sessionGameTotal(session_id, game_key) {
+        if (!session_id || !game_key) return 0;
+        return state.rounds
+            .filter(r => r.session_id === session_id && r.game_key === game_key)
+            .reduce((acc, r) => acc + (r.score || 0), 0);
+    }
+
+    // NEW: best overall session totals (top N sessions)
+    function bestSessionTotals(n = 1) {
+        const totals = new Map(); // session_id -> total
+        for (const r of state.rounds) {
+            totals.set(r.session_id, (totals.get(r.session_id) || 0) + (r.score || 0));
+        }
+        const rows = state.sessions.map(s => ({
+            session_id: s.session_id,
+            player_name: s.player_name,
+            total: totals.get(s.session_id) || 0,
             started_at: s.started_at
         }));
         return rows
-            .sort((a, b) => (b.total - a.total) || (a.started_at - b.started_at))
-            .slice(0, limit);
+            .sort((a, b) => b.total - a.total || (b.started_at || "").localeCompare(a.started_at || ""))
+            .slice(0, n);
     }
 
-    const dump = () => JSON.parse(JSON.stringify(state));
+    function dump() { return JSON.parse(JSON.stringify(state)); }
 
-    // wipe everything when the tab/window closes
-    window.addEventListener("beforeunload", clearStorage);
+    // clear DB when tab/window closes (keeps memory for this tab life)
+    window.addEventListener("beforeunload", clearAll);
 
     return {
-        init, beginSession, beginRound, logTyping, finalizeRound,
+        // lifecycle
+        init, beginSession, endSession, beginRound, finalizeRound,
+        // queries
         query: {
-            topRounds, roundsBySession, eventsByRound,
-            sessionTotal, topTotals
+            players, roundsBySession, topRoundsBySession, sessionTotal, topTotals,
+            sessionGameTotal, bestSessionTotals
         },
-        dump,
-        saveToStorage, loadFromStorage, clearStorage
+        // telemetry
+        logTyping,
+        // debug
+        dump
     };
 })();

@@ -3,6 +3,9 @@
 const BG_KEY = "washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png";
 const BG_PATH = "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png";
 
+import systems from "../systems.js";
+import { AudioManager } from "../systems.js";
+
 const TAP_KEY = "washed_day_UI_LEVEL_01_scene_02_bathroom__Tap.png";
 const TAP_PATH = "assets/images/UI/washed_day_UI_LEVEL_01_scene_02_bathroom__Tap.png";
 
@@ -57,6 +60,61 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             fn();
         };
 
+        systems.ui.placeLogo(this);
+
+        // ─────────────────────────────────────────────────────────────
+        // AUDIO: Hub (bathroom) re-entry should bring back the menu BGM.
+        // - Stop/clear any minigame track (game group / window.__MINI_BGM__)
+        // - Prefer resuming the exact MenuScene instance (window.__GLOBAL_BGM__ or sound key "kikos_day")
+        // - If none exists, safely add+play it without double-starting
+        // ─────────────────────────────────────────────────────────────
+        try {
+            // Stop any minigame group audio first
+            AudioManager.stopGroup?.("game");
+
+            // If you kept a direct Phaser Sound handle for the minigame, stop it as well
+            const mini = (typeof window !== "undefined") ? window.__MINI_BGM__ : null;
+            if (mini?.isPlaying) {
+                try { mini.stop(); } catch (_) {}
+            }
+        } catch (_) {}
+
+        try {
+            // Make sure the audio context is alive
+            this.sound.context?.resume?.();
+
+            // Prefer the exact instance started by MenuScene
+            let globalBgm = (typeof window !== "undefined") ? window.__GLOBAL_BGM__ : null;
+
+            // If not cached, try to find by key ("kikos_day" from MenuScene)
+            if (!globalBgm) globalBgm = this.sound.get("kikos_day");
+
+            if (globalBgm) {
+                // If it's a Phaser Sound instance, resume or (if somehow stopped) play
+                if (globalBgm.isPaused) {
+                    try { globalBgm.resume(); } catch (_) {}
+                } else if (!globalBgm.isPlaying) {
+                    try { globalBgm.play({ loop: true, volume: 0.6 }); } catch (_) {}
+                }
+
+                if (typeof window !== "undefined") window.__GLOBAL_BGM__ = globalBgm;
+            } else {
+                // Fallback: if there's no instance at all, create one now.
+                // First try raw Phaser (keeps things simple/consistent with MenuScene style).
+                let s = this.sound.get("kikos_day");
+                if (!s) s = this.sound.add("kikos_day", { loop: true, volume: 0.6 });
+                if (!s.isPlaying) s.play();
+                if (typeof window !== "undefined") window.__GLOBAL_BGM__ = s;
+
+                // As an alternative (if your project strictly uses AudioManager groups), you could:
+                // AudioManager.play(this, "kikos_day", { group: "global", volume: 0.6, loop: true });
+            }
+
+            // Unpause the global group if your AudioManager tracks pause state there
+            AudioManager.resumeGroup?.("global");
+        } catch (e) {
+            console.warn("[SchoolBathroomScene] Failed to resume menu BGM:", e);
+        }
 
         // Background
         const bg = this.add.image(width / 2, height / 2, BG_KEY).setOrigin(0.5, 0.5);
@@ -92,6 +150,20 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             .setInteractive({ useHandCursor: true });
         fitH(soapBottle, pos.soapBottle.h);
 
+        // (Removed previous AudioManager.play(..., "global_bg")) — we only want the menu track back.
+
+        try {
+            this.scene.stop("CleanCatchScene");
+            this.scene.stop("CleanCatchExplain");
+            this.scene.stop("SoapSplashScene");
+            this.scene.stop("SoapSplashExplain");
+        } catch {}
+
+        try {
+            AudioManager.stopGroup?.("game");
+            AudioManager.resumeGroup?.("global");
+        } catch {}
+
         // Hover pulse
         const makeHover = (img, factor = 1.06, dur = 120) => {
             const baseX = img.scaleX;
@@ -126,9 +198,11 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
         // --------- Hints: glow guidance ----------
         if (!this._step1Done) {
-            this._enableStep1Hints(tap); // blue glow on tap
+            // white glow on tap + both soaps (less obvious)
+            this._enableStep1Hints(tap, soapBar, soapBottle);
         } else {
-            this._enableStep2Hints(soapBar, soapBottle); // green glow on soaps
+            // white glow on soaps in step 2
+            this._enableStep2Hints(soapBar, soapBottle);
         }
 
         // Click routing (blocked until dialog closes)
@@ -160,7 +234,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         const handleSoapClick = onlyIfNoDialog(() => {
             if (!this._step1Done) {
                 // Wrong step — keep hint on tap
-                this._enableStep1Hints(tap);
+                this._enableStep1Hints(tap, soapBar, soapBottle);
                 this._showSmallDialog("Oops, that’s not the first step.\nLet's try again!\n\nRemember: we always start at the beginning.\nYou can do it!");
                 return;
             }
@@ -171,7 +245,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
                 () => {
                     // turning off hints is optional here; next scene is starting anyway
                     this._clearHints();
-                    this._fadeTo("SoapSplash");
+                    this._fadeTo("SoapSplash"); // keep fade logic; actual start happens on fadeout
                 }
             );
         });
@@ -184,11 +258,36 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             // cleanup hints when leaving
             this._clearHints();
             if (this.nextSceneKey) {
-                this.scene.start(this.nextSceneKey);
+                if (this.nextSceneKey === "SoapSplash") {
+                    // Start SoapSplash with explicit difficulty and belt-and-braces stop
+                    this.startSoapSplash();
+                } else {
+                    this.scene.start(this.nextSceneKey);
+                }
             } else {
                 this.cameras.main.fadeIn(300, 0, 0, 0); // safety
             }
         });
+
+        if (CONFIG.isDevMode) {
+            // 1/2/3 = set difficulty level
+            const setLvl = (n) => this.registry.set("difficulty", n);
+            this.input.keyboard.on("keydown-ONE",   () => setLvl(1));
+            this.input.keyboard.on("keydown-TWO",   () => setLvl(2));
+            this.input.keyboard.on("keydown-THREE", () => setLvl(3));
+
+            // S = jump straight to SoapSplash (bypass Clean Catcher)
+            this.input.keyboard.on("keydown-S", () => {
+                this._clearHints?.();
+                this.startSoapSplash();
+            });
+
+            // L = open leaderboard screen directly (bypass minis)
+            this.input.keyboard.on("keydown-L", () => {
+                this._clearHints?.();
+                this.scene.start("EndingScene");
+            });
+        }
 
         if (!skipIntro) {
             this._showEntryDialog();
@@ -197,6 +296,13 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         // Also clean up hints on shutdown
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this._clearHints());
         this.events.once(Phaser.Scenes.Events.DESTROY, () => this._clearHints());
+    }
+
+    // NEW: start SoapSplash cleanly with explicit difficulty and belt-and-braces stop
+    startSoapSplash() {
+        const difficulty = this.registry.get("difficulty") ?? 1;
+        this.scene.stop("SoapSplash"); // ensure no lingering instance
+        this.scene.start("SoapSplash", { difficulty, fromHub: true });
     }
 
     _fadeTo(sceneKey) {
@@ -413,16 +519,17 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         this._hints = { tap: null, soapBar: null, soapBottle: null };
     }
 
-    _enableStep1Hints(tapImg) {
+    _enableStep1Hints(tapImg, soapBarImg, soapBottleImg) {
         this._clearHints();
-        this._hints.tap = this._makeGlow(tapImg, { color: 0xffffff, alpha: 0.35, scale: 1, pulseMs: 1600 });
-
+        // white glow on all three so the first step isn't obvious
+        this._hints.tap        = this._makeGlow(tapImg,        { color: 0xffffff, alpha: 0.35, scale: 1, pulseMs: 1600 });
+        this._hints.soapBar    = this._makeGlow(soapBarImg,    { color: 0xffffff, alpha: 0.35, scale: 1, pulseMs: 1600 });
+        this._hints.soapBottle = this._makeGlow(soapBottleImg, { color: 0xffffff, alpha: 0.35, scale: 1, pulseMs: 1600 });
     }
 
     _enableStep2Hints(soapBarImg, soapBottleImg) {
         this._clearHints();
         this._hints.soapBar    = this._makeGlow(soapBarImg,    { color: 0xffffff, alpha: 0.35, scale: 1 });
         this._hints.soapBottle = this._makeGlow(soapBottleImg, { color: 0xffffff, alpha: 0.35, scale: 1 });
-
     }
 }

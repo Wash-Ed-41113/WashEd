@@ -2,10 +2,176 @@
 // scenes import this module as systems to access these features
 // everything below is inline documented so you can read top to bottom and understand the flow
 import { DB } from "./db.js";
+// === AudioManager ============================================================
+// Groups:
+//  - "global": your story bg (Bathroom → Handwash → Ending)
+//  - "game": per-mini-game music (CleanCatch / SoapSplash)
+// Behavior:
+//  - When any "game" track starts, we PAUSE the "global" group (with fade).
+//  - When the game scene shuts down, we RESUME the "global" group (with fade).
+export const AudioManager = (() => {
+    const SCENE_OWNERS = new Map(); // scene => Set(Phaser.Sound.BaseSound)
+    const GROUPS = new Map();       // group => Set(sound)
+    const CURRENT = new Map();      // key => sound
+
+    const FADE_MS = 400;
+
+    function _ensureSets(scene, group) {
+        if (!SCENE_OWNERS.has(scene)) SCENE_OWNERS.set(scene, new Set());
+        if (group && !GROUPS.has(group)) GROUPS.set(group, new Set());
+    }
+
+    function _fadeTo(sound, vol, ms = FADE_MS, onComplete) {
+        if (!sound || !sound.scene?.tweens) return onComplete?.();
+        try {
+            sound.scene.tweens.add({
+                targets: sound,
+                volume: vol,
+                duration: ms,
+                onComplete
+            });
+        } catch { onComplete?.(); }
+    }
+
+    function _addToGroup(sound, group) {
+        if (!group) return;
+        const set = GROUPS.get(group);
+        if (set) set.add(sound);
+        sound._amGroup = group;
+    }
+
+    function _remove(sound) {
+        try {
+            const g = sound._amGroup;
+            if (g && GROUPS.has(g)) GROUPS.get(g).delete(sound);
+            CURRENT.forEach((s, k) => { if (s === sound) CURRENT.delete(k); });
+            sound.destroy();
+        } catch {}
+    }
+
+    function _trackScene(scene, sound) {
+        SCENE_OWNERS.get(scene)?.add(sound);
+        // Auto-clean on SHUTDOWN
+        scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            stop(scene); // stop everything this scene owns
+            // If this was a game scene ending, resume the global bg
+            resumeGroup("global");
+        });
+    }
+
+    function play(scene, key, opts = {}) {
+        const { loop = true, volume = 1, group = "global", fadeIn = FADE_MS } = opts;
+        if (!scene?.sound || !scene.cache.audio.exists(key)) {
+            console.warn("[AudioManager] missing key:", key);
+            return null;
+        }
+        _ensureSets(scene, group);
+
+        // If same key already playing, just ensure it’s in the right state
+        let snd = CURRENT.get(key);
+        if (!snd || !snd.isPlaying) {
+            snd = scene.sound.add(key, { loop, volume: 0 });
+            CURRENT.set(key, snd);
+            _addToGroup(snd, group);
+            _trackScene(scene, snd);
+            snd.play();
+            _fadeTo(snd, volume, fadeIn);
+        } else {
+            // bring volume up if it’s mid-paused/faded
+            _fadeTo(snd, volume, fadeIn);
+        }
+
+        // If a game track began, duck/pause global
+        if (group === "game") pauseGroup("global");
+
+        return snd;
+    }
+
+    function stop(scene) {
+        const set = SCENE_OWNERS.get(scene);
+        if (!set) return;
+        for (const snd of Array.from(set)) {
+            try {
+                _fadeTo(snd, 0, FADE_MS, () => _remove(snd));
+            } catch { _remove(snd); }
+            set.delete(snd);
+        }
+    }
+
+    function pauseGroup(group, fadeMs = FADE_MS) {
+        const set = GROUPS.get(group); if (!set) return;
+        for (const s of set) {
+            if (!s || !s.isPlaying) continue;
+            _fadeTo(s, 0, fadeMs, () => { try { s.pause(); } catch {} });
+        }
+    }
+
+    function stopGroup(group, fadeMs = 150) {
+        const set = GROUPS.get(group); if (!set) return;
+        for (const s of Array.from(set)) {
+            try { _fadeTo(s, 0, fadeMs, () => _remove(s)); }
+            catch { _remove(s); }
+        }
+    }
+
+    function hardReset() {
+        // Brutal safety: stop EVERYTHING we’re tracking
+        for (const [group] of GROUPS) stopGroup(group, 0);
+        GROUPS.clear();
+        CURRENT.clear();
+        SCENE_OWNERS.clear();
+    }
+
+    return { play, stop, pauseGroup, resumeGroup, stopGroup, hardReset };
+
+
+    function resumeGroup(group, fadeMs = FADE_MS, toVol = 1) {
+        const set = GROUPS.get(group); if (!set) return;
+        for (const s of set) {
+            if (!s) continue;
+            try {
+                if (s.isPaused) {
+                    s.resume(); s.setVolume(0);
+                    _fadeTo(s, toVol, fadeMs);
+                } else if (s.isPlaying) {
+                    _fadeTo(s, toVol, fadeMs);
+                }
+            } catch {}
+        }
+    }
+
+    return { play, stop, pauseGroup, resumeGroup, stopGroup, hardReset };
+})();
+
+
 
 // short names for config sections used throughout
 const SS = CONFIG.soapSplash;   // soap splash game config values
 const CC = CONFIG.cleanCatch;   // clean catch game config values
+
+
+const safeDB = {
+    // accepts ("event", payload) OR (roundId, "event", payload)
+    logTyping: (...args) => {
+        try {
+            let event, payload;
+            if (args.length === 3 && typeof args[1] === "string") {
+                event = args[1];
+                payload = args[2];
+            } else if (args.length >= 2 && typeof args[0] === "string") {
+                event = args[0];
+                payload = args[1];
+            } else {
+                return; // unknown shape; ignore
+            }
+            // forward to DB in the canonical shape your db.js implements
+            DB?.logTyping?.(event, payload);
+        } catch (_) {
+            // never let telemetry break gameplay
+        }
+    }
+};
+
 
 // -----------------------------
 // helpers
@@ -65,28 +231,36 @@ const helpers = {
         return `${two(mm)}:${two(ss)}`;
     },
     // show a simple floating "+N" streak popup
-    streakPopup(scene, value, x, y) {
-        const t = scene.add.text(x, y, `+${value}`, {
-            fontFamily: SS.fontFamily,
-            fontSize: "22px",
-            color: "#ffffff",
-            fontStyle: "bold",
-            backgroundColor: "#2aa84a",
-            padding: { left: 10, right: 10, top: 6, bottom: 6 },
-            align: "center"
-        }).setOrigin(0.5).setDepth(200);
+    // show a clean "+N" streak popup (Chewy, light purple, no bg/outline)
+    streakPopup(scene, _ignored, x, y) {
+        const s = scene.streakSys?.streak ?? 0;
+        if (s < 1) return;
 
-        t.setScale(0.9);
+        const t = scene.add.text(x, y, `+${s}`, {
+            fontFamily: (CONFIG.soapSplash?.fontFamily || "Chewy, Arial, sans-serif"),
+            fontSize: "36px",
+            fontStyle: "bold",
+            color: "#BD66C9",           // Germ Scrubber pink-purple
+            align: "center",
+            padding: { left: 8, right: 8, top: 4, bottom: 4 },
+        })
+            .setOrigin(0.5)
+            .setDepth(200)
+            .setShadow(0, 2, "#BD66C955", 6); // subtle soft purple shadow
+
         scene.tweens.add({
             targets: t,
-            y: y - 35,
+            y: y - 40,
             alpha: { from: 1, to: 0 },
-            scale: { from: 0.95, to: 1.07 },
-            duration: 750,
+            scale: { from: 1.0, to: 1.08 },
+            duration: 800,
             ease: "Cubic.Out",
             onComplete: () => t.destroy()
         });
     },
+
+
+
 
 
 };
@@ -94,7 +268,7 @@ const helpers = {
 const telemetry = {
     onWordComplete(scene, g, clean) {
         if (!scene.roundId) return;
-        DB.logTyping(scene.roundId, "word_complete", {
+        safeDB.logTyping(scene.roundId, "word_complete", {
             clean: clean ? 1 : 0,
             streak: scene.streakSys?.streak ?? 0,
             base_score: scene.streakSys?.baseScore ?? 0,
@@ -104,7 +278,7 @@ const telemetry = {
     },
     onMistake(scene) {
         if (!scene.roundId) return;
-        DB.logTyping(scene.roundId, "mistake", {
+        safeDB.logTyping(scene.roundId, "mistake", {
             streak: scene.streakSys?.streak ?? 0,
             base_score: scene.streakSys?.baseScore ?? 0,
             total_score: scene.streakSys?.totalScore ?? 0
@@ -112,11 +286,54 @@ const telemetry = {
     }
 };
 
+
 // -----------------------------
 // ui
 // immediate mode ui helpers built on phaser primitives
 // -----------------------------
 const ui = {
+
+    // bottom-right sticky logo (fixed to screen, auto-resizes, easy cleanup)
+    placeLogo(scene, opts = {}) {
+        const key     = opts.key ?? "app_logo";
+        const margin  = opts.margin ?? 16;
+        const maxW    = opts.maxWidth ?? 220;  // cap visual width so it stays tidy
+        const depth   = opts.depth ?? 199;     // under topbar (which is ~200), above bg
+        const alpha   = opts.alpha ?? 0.95;
+
+        if (!scene.textures.exists(key)) return null;
+
+        const { width, height } = scene.scale;
+
+        // create
+        const img = scene.add.image(width - margin, height - margin, key)
+            .setOrigin(1, 1)
+            .setDepth(depth)
+            .setScrollFactor(0)
+            .setAlpha(alpha);
+
+        // scale to maxW while keeping aspect
+        const src = scene.textures.get(key).getSourceImage();
+        const scale = Math.min(1, maxW / (src?.width || maxW));
+        img.setScale(scale);
+
+        // keep in the corner on resize
+        const onResize = (gameSize) => {
+            img.setPosition(gameSize.width - margin, gameSize.height - margin);
+        };
+        scene.scale.on(Phaser.Scale.Events.RESIZE, onResize);
+
+        // clean up on shutdown
+        scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            scene.scale.off(Phaser.Scale.Events.RESIZE, onResize);
+            img.destroy();
+        });
+
+        return img; // (optional) if you want to keep a reference
+    },
+
+
+
     // draw a rectangle button with a text label and a click handler
     button(scene, x, y, label, onClick) {
         const B = CONFIG.ui.button;
@@ -227,29 +444,99 @@ const ui = {
         };
     },
 
-    // top bar with optional home pause settings icons anchored to top right
-    topbar(scene, { onHome, onPause, onSettings } = {}) {
-        const T = CONFIG.ui.topbar;
+    // top bar with optional home, pause, and settings icons anchored to top-right
+// now also includes a styled Mute/Unmute toggle (dark rectangle) below icons
+    topbar(scene, { onHome, onPause, onSettings, showMute = false } = {}) {
+        // scale icons relative to current screen size
+        const scaleFactor = Math.max(0.5, Math.min(1, scene.scale.width / 1920));
+        const T = {
+            iconSize: 140 * scaleFactor,
+            gap: 40 * scaleFactor,
+            top: 140 * scaleFactor,
+        };
+        T.padding = 24 * scaleFactor; // define padding used below
+
+        const B = CONFIG.ui.button || { width: 520, height: 64 }; // fallback
+
         let x = scene.scale.width - T.padding;
         const y = T.padding + T.iconSize / 2;
 
-        const make = (key, cb) => {
+        // helper to spawn each icon safely
+        const makeIcon = (key, cb) => {
+            if (!scene.textures.exists(key) || !cb) return null; // avoid missing sprite
             x -= T.iconSize / 2;
-            const img = scene.add.image(x, y, key).setOrigin(0.5)
+            const img = scene.add.image(x, y, key)
+                .setOrigin(0.5)
                 .setDisplaySize(T.iconSize, T.iconSize)
+                .setScale(1)
                 .setDepth(200)
                 .setScrollFactor(0)
                 .setInteractive({ useHandCursor: true });
-            if (cb) img.on("pointerup", cb);
+
+            // lock scale; just click
+            img.on("pointerup", cb);
             x -= T.iconSize + T.gap;
             return img;
         };
 
-        const home = make("ui_home", onHome || null);
-        const pause = make("ui_pause", onPause || null);
-        const settings = make("ui_settings", onSettings || null);
-        return { home, pause, settings };
+        // build optional icons
+        const home = makeIcon("ui_home", onHome || null);
+        const pause = makeIcon("ui_pause", onPause || null);
+        const settings = makeIcon("ui_settings", onSettings || null);
+
+        // create Mute/Unmute dark rectangle toggle
+        let muteRect = null, muteTxt = null;
+        if (showMute) {
+            const W = B.width, H = B.height;
+            const bx = scene.scale.width - (W / 2 + T.padding);
+            const by = y + T.iconSize / 2 + 12 + H / 2; // just below icons
+
+            const fillIdle  = 0x142038;
+            const fillHover = 0x1d2b52;
+
+            muteRect = scene.add.rectangle(bx, by, W, H, fillIdle, 1)
+                .setOrigin(0.5)
+                .setStrokeStyle(2, 0xffffff)
+                .setDepth(200)
+                .setScrollFactor(0)
+                .setInteractive({ useHandCursor: true });
+
+            muteTxt = scene.add.text(bx, by, (scene.sound?.mute ? "Unmute" : "Mute"), {
+                fontFamily: CONFIG.ui.fontFamily,
+                fontSize: "26px",
+                color: "#ffffff",
+                align: "center",
+                fixedWidth: W
+            })
+                .setOrigin(0.5)
+                .setDepth(201)
+                .setScrollFactor(0);
+
+            const toggleMute = () => {
+                if (!scene.sound) return;
+                scene.sound.mute = !scene.sound.mute;
+                scene.registry.set("mute", !!scene.sound.mute);
+                muteTxt.setText(scene.sound.mute ? "Unmute" : "Mute");
+            };
+
+            muteRect
+                .on("pointerover", () => muteRect.setFillStyle(fillHover))
+                .on("pointerout",  () => muteRect.setFillStyle(fillIdle))
+                .on("pointerup",   toggleMute);
+            muteTxt.on("pointerup", toggleMute);
+        }
+
+        const destroy = () => {
+            home?.destroy();
+            pause?.destroy();
+            settings?.destroy();
+            muteRect?.destroy();
+            muteTxt?.destroy();
+        };
+
+        return { home, pause, settings, destroy };
     },
+
 
     // pause overlay with menu, resume, audio toggle, and live stats
     pauseOverlay(scene, { onResume, onHome } = {}) {
@@ -257,7 +544,7 @@ const ui = {
         const P = CONFIG.ui.pauseOverlay;
 
         const overlay = scene.add.rectangle(0, 0, width, height, P.bgColor, P.bgAlpha)
-            .setOrigin(0, 0).setDepth(999);
+            .setOrigin(0, 0).setDepth(999).setInteractive(); // blocks clicks behind
 
         const panelW = 780, panelH = 420;
         const panel = scene.add.rectangle(width / 2, height / 2, panelW, panelH, P.panelColor, 1)
@@ -265,86 +552,112 @@ const ui = {
 
         // Title
         const title = scene.add.text(width / 2, height / 2 - 150, "Paused", {
-            fontFamily: CONFIG.ui.fontFamily,
-            fontSize: `${P.titleSize}px`,
-            color: "#ffffff"
+            fontFamily: CONFIG.ui.fontFamily, fontSize: `${P.titleSize}px`, color: "#ffffff"
         }).setOrigin(0.5).setDepth(1001);
 
-        // Live stats: score + streak (reads from streakSys if present)
-        const base  = scene.streakSys?.baseScore ?? 0;
-        const mult  = scene.streakSys?.multiplier?.() ?? 0;
-        const total = scene.streakSys?.totalScore ?? scene.typing?.score ?? 0;
-        const s     = scene.streakSys?.streak ?? scene.typing?.streak ?? 0;
-        const best  = scene.streakSys?.bestStreak ?? scene.typing?.bestStreak ?? 0;
+        // Close button (top-right of panel)
+        const close = scene.add.image(panel.x + panelW/2 - 26, panel.y - panelH/2 + 26, "ui_close")
+            .setOrigin(0.5).setDepth(1002).setDisplaySize(36,36)
+            .setInteractive({ useHandCursor: true });
 
-        const stats = scene.add.text(width / 2, height / 2 - 70,
-            `Score: ${total}  (base ${base} × x${mult.toFixed(1)})\n` +
+        close.on("pointerup", () => {
+            // CLOSE is the only way to unpause now
+            destroyAll();
+            scene._paused = false;
+            scene._pauseUi = null;
+            // re-enable your game loop, timers etc if you pause them elsewhere
+        });
+
+        // Live stats (engine is the single source of truth)
+        const base  = scene.streakSys?.baseScore ?? 0;
+        const mult  = scene.streakSys?.multiplier?.() ?? 1.0; // correct fallback
+        const total = scene.streakSys?.totalScore ?? 0;
+        const s     = scene.streakSys?.streak ?? 0;
+        const best  = scene.streakSys?.bestStreak ?? 0;
+
+        const stats = scene.add.text(
+            width / 2, height / 2 - 70,
+            `Score: ${total}  (base ${base} × ${mult.toFixed(1)})\n` + // remove “x” duplication
             `Streak: ${s}   Best: ${best}`,
             { fontFamily: CONFIG.ui.fontFamily, fontSize: "24px", color: "#ffffff", align: "center" }
         ).setOrigin(0.5).setDepth(1001);
 
-        // Buttons (reuse your ui.button helper)
-        const y0 = height / 2 + 10;
+        // Keep a “Main Menu” button if you like
         const mkBtn = (label, y, cb) => {
             const { btn, txt } = ui.button(scene, width / 2, y, label, cb);
             btn.setDepth(1001); txt.setDepth(1001);
             return { btn, txt };
         };
+        const y0 = height / 2 + 40;
+        const homeBtn = mkBtn("Play Again", y0, () => onHome?.());
 
-        const resumeBtn = mkBtn("Resume", y0, () => onResume?.());
-        const homeBtn   = mkBtn("Main Menu", y0 + 90, () => onHome?.());
-
-        // Mute/Unmute toggle
-        const isMuted = !!scene.sound?.mute;
-        let audioLabel = scene.add.text(width / 2, y0 + 155, isMuted ? "Unmute" : "Mute", {
-            fontFamily: CONFIG.ui.fontFamily, fontSize: "22px", color: "#ffffff",
-            backgroundColor: "#2d344f", padding: { left: 14, right: 14, top: 8, bottom: 8 }
-        }).setOrigin(0.5).setDepth(1001).setInteractive({ useHandCursor: true });
-
-        const toggleAudio = () => {
-            if (scene.sound) {
-                scene.sound.mute = !scene.sound.mute;
-                // persist mute across scenes
-                scene.registry.set("mute", scene.sound.mute);
-                audioLabel.setText(scene.sound.mute ? "Unmute" : "Mute");
+        function destroyAll() {
+            try {
+                console.log("[pauseOverlay@systems] destroyAll()");
+                overlay?.destroy(); panel?.destroy(); title?.destroy(); stats?.destroy();
+                homeBtn?.btn?.destroy(); homeBtn?.txt?.destroy();
+                close?.destroy();
+            } catch (e) {
+                console.warn("[pauseOverlay@systems] destroy error", e);
+            } finally {
+                scene._pauseUi = null;
+                scene._paused = false;
+                // hard unpause guarantees
+                scene.time.timeScale   = 1;
+                scene.tweens.timeScale = 1;
+                scene.physics?.world && (scene.physics.world.isPaused = false);
+                scene.sound?.resumeAll?.();
+                scene.input?.keyboard && (scene.input.keyboard.enabled = true);
             }
-        };
+        }
 
-        audioLabel.on("pointerup", toggleAudio);
-
-        return {
-            destroy() {
-                overlay.destroy(); panel.destroy(); title.destroy(); stats.destroy();
-                resumeBtn.btn.destroy(); resumeBtn.txt.destroy();
-                homeBtn.btn.destroy(); homeBtn.txt.destroy();
-                audioLabel.destroy();
-            }
-        };
+        return { destroy: destroyAll };
     },
 
+
     togglePause() {
-        // flip paused state
+        // if already paused, unpause and clean up
         if (this._paused) {
             this._paused = false;
-
-            // unpause SoapSplash timers/motion if you gate them elsewhere
-            this._pauseUi?.destroy();
+            if (this._pauseUi?.destroy) this._pauseUi.destroy();
             this._pauseUi = null;
-        } else {
-            this._paused = true;
 
-            // build the rich pause overlay from systems.js
-            this._pauseUi = systems.ui.pauseOverlay(this, {
-                onResume: () => this.togglePause(),
-                onHome: () => {
-                    // wrap up the round politely, then bounce to your hub/menu scene
-                    this.finalizeRound?.("Paused → Main Menu");
-                    const playerName = this.registry.get("playerName");
-                    this.scene.start("GameScene", { playerName });
-                }
-            });
+            this.time.timeScale   = 1;
+            this.tweens.timeScale = 1;
+            this.physics?.world && (this.physics.world.isPaused = false);
+            this.sound?.resumeAll?.();
+            this.input?.keyboard && (this.input.keyboard.enabled = true);
+            return;
         }
+
+        // otherwise, pause and build overlay
+        this._paused = true;
+        this.time.timeScale   = 0;
+        this.tweens.timeScale = 0;
+        if (this.physics?.world) this.physics.world.isPaused = true;
+        this.sound?.pauseAll?.();
+        this.input?.keyboard && (this.input.keyboard.enabled = false);
+
+        this._pauseUi = systems.ui.pauseOverlay(this, {
+            onResume: () => {
+                // close overlay when resume is clicked
+                if (this._pauseUi?.destroy) this._pauseUi.destroy();
+                this._paused = false;
+                this.time.timeScale   = 1;
+                this.tweens.timeScale = 1;
+                this.physics?.world && (this.physics.world.isPaused = false);
+                this.sound?.resumeAll?.();
+                this.input?.keyboard && (this.input.keyboard.enabled = true);
+            },
+            onHome: () => {
+                // home or play again → unpause then switch scene
+                if (this._pauseUi?.destroy) this._pauseUi.destroy();
+                this._paused = false;
+                this.scene.start("PlaygroundScene");
+            }
+        });
     }
+
 
 
 };
@@ -394,10 +707,12 @@ const streakScore = (() => {
                 this._recompute();
             },
 
-            multiplier() { return this.streak * 0.5; },
+            // Multiplier now has a base 1.0 so the first clean word scores visibly.
+            // 1st clean: 1.0x, 2nd: 1.5x, 3rd: 2.0x, etc.
+            multiplier() { return 1 + this.streak * 0.5; },
 
             _recompute() {
-                // spec: total = (streak * 0.5) * baseScore
+                // total = baseScore * multiplier
                 this.totalScore = Math.floor(this.baseScore * this.multiplier());
             }
         };
@@ -471,26 +786,57 @@ const soapsplash = (() => {
 
     // remove germ and all its visual parts by array index
     function removeGermByIndex(scene, i) {
-        const g = scene.germs[i]; if (!g) return;
+        const g = scene.germs[i];
+        if (!g) { scene.germs.splice(i, 1); return; }
 
-        if (g.curBox) { scene.tweens.killTweensOf(g.curBox); g.curBox.destroy(); g.curBox = null; }
-        if (g._add)   { scene.tweens.killTweensOf(g._add);   g._add.destroy();   g._add  = null; }
-        if (g._glow && g.sprite?.postFX?.remove) { g.sprite.postFX.remove(g._glow); g._glow = null; }
-        if (g._hitCircle) { g._hitCircle.destroy(); g._hitCircle = null; }
-
-        g.sprite.destroy();
-        g.labelTyped.destroy();
-        g.labelRemain.destroy();
-        scene.germs.splice(i, 1);
+        try {
+            if (g._caretPulse) { g._caretPulse.remove(); g._caretPulse = null; }
+            if (g.curBox)      { scene.tweens.killTweensOf(g.curBox); g.curBox.destroy(); g.curBox = null; }
+            if (g._add)        { scene.tweens.killTweensOf(g._add);   g._add.destroy();   g._add  = null; }
+            if (g._glow && g.sprite?.postFX?.remove) { g.sprite.postFX.remove(g._glow); g._glow = null; }
+            if (g._hitCircle)  { g._hitCircle.destroy(); g._hitCircle = null; }
+            g.labelTyped?.destroy?.();
+            g.labelRemain?.destroy?.();
+            g.sprite?.destroy?.();
+        } catch (e) {
+            console.warn("[SoapSplash] removeGermByIndex cleanup error", e);
+        } finally {
+            scene.germs.splice(i, 1);
+        }
     }
 
-    // pick a word for a new germ
-    // pick a word for a new germ (uses scene's sequential bag if available)
+
+    // pick a word for a new germ (strict-aware, but with fallback)
     function pickWord(scene) {
+        // primary: scene-provided strict supplier
         const fn = CONFIG?.soapSplash?.nextWordFn;
-        if (typeof fn === "function") return fn();                  // ← sequential, no repeats until cycle
-        return Phaser.Utils.Array.GetRandom(CONFIG.soapSplash.words || []); // ← legacy fallback
+        let w = (typeof fn === "function") ? fn() : null;
+
+        // fallback A: what's currently in SS.words (the list your scene set)
+        if (!w || typeof w !== "string" || !w.length) {
+            const list = SS.words || [];
+            if (Array.isArray(list) && list.length) {
+                w = list[Math.floor(Math.random() * list.length)];
+            }
+        }
+
+        // fallback B: helpers list (in case SS.words is not an array)
+        if (!w || typeof w !== "string" || !w.length) {
+            const list = helpers.words.soapSplashWords();
+            if (Array.isArray(list) && list.length) {
+                w = list[Math.floor(Math.random() * list.length)];
+            }
+        }
+
+        // fallback C: tiny safe default
+        if (!w || typeof w !== "string" || !w.length) {
+            w = "wash";
+        }
+
+        return w;
     }
+
+
 
 
     // ---------------- spawn ----------------
@@ -503,31 +849,57 @@ const soapsplash = (() => {
             if (scene.germs.length >= cap) return;
 
             const triesMax = SS.maxSpawnAttempts ?? 24;
-            const sep = SS.minSpawnSeparationPx ?? 0;
-            const minSink = SS.minSinkDistancePx ?? 0;
+            const sep      = SS.minSpawnSeparationPx ?? 0;
+            const minSink  = SS.minSinkDistancePx ?? 0;
 
-            // estimate hit radius of a new germ from texture size and sprite scale so spacing feels right
-            const tex = scene.textures.get("Germ");
-            const texW = tex?.getSourceImage()?.width || 64;
+            // ---- Ensure we have sane geometry even if useSpawner wasn't initialized ----
+            // If rOuter is 0, build a default corner-band around the top-right corner.
+            let rInner = scene.rInner, rOuter = scene.rOuter;
+            let aMin   = scene.angleMinDeg, aMax = scene.angleMaxDeg;
+
+            if (!rOuter || rOuter <= 0) {
+                const W = SS.width, H = SS.height;
+                // default: top-right corner wedge pointing toward sink
+                const corner = { x: W, y: 0 };
+                const dx = scene.sinkPosition.x - corner.x;
+                const dy = scene.sinkPosition.y - corner.y;
+                const centerDeg = Phaser.Math.RadToDeg(Math.atan2(Math.abs(dy), Math.abs(dx))); // ~ angle in 0..90
+
+                const margin = SS.cornerMargin ?? 40;
+                const band   = SS.cornerBandWidth ?? 180;
+                const cornerDist = Math.hypot(dx, dy);
+
+                rOuter = Math.max(60, cornerDist - margin);
+                rInner = Math.max(10, rOuter - band);
+
+                const spread = SS.angleSpreadDeg ?? 18;
+                aMin = Math.max(0, centerDeg - spread);
+                aMax = Math.min(90, centerDeg + spread);
+                if (aMin > aMax) { const t = aMin; aMin = aMax; aMax = t; }
+            }
+
+            // ---- Estimate new germ hit radius for spacing ----
+            const tex   = scene.textures.get("Germ");
+            const texW  = tex?.getSourceImage()?.width || 64;
             const scaledW = (SS.germSpriteSize ?? 1) * texW;
-            const newR = SS.germHitRadiusPx ?? Math.round(scaledW * (SS.germHitRadiusFromSprite ?? 0.35));
+            const newR  = SS.germHitRadiusPx ?? Math.round(scaledW * (SS.germHitRadiusFromSprite ?? 0.35));
 
+            // ---- Find a valid spawn point ----
             let tries = triesMax;
-            let pos = null;
+            let pos   = null;
 
             while (tries-- > 0) {
-                // sample position in ring sector
-                const theta = helpers.sampleAngle(scene.angleMinDeg, scene.angleMaxDeg);
-                const r = helpers.sampleRadius(scene.rInner, scene.rOuter);
-                const p = helpers.polarToWorld(scene.sinkPosition, r, theta);
+                const theta = helpers.sampleAngle(aMin, aMax);
+                const r     = helpers.sampleRadius(rInner, rOuter);
+                const p     = helpers.polarToWorld(scene.sinkPosition, r, theta);
 
-                // enforce minimum distance from sink
+                // minimum distance from sink
                 if (minSink > 0) {
                     const ds = Phaser.Math.Distance.Between(p.x, p.y, scene.sinkPosition.x, scene.sinkPosition.y);
                     if (ds < (minSink + newR)) continue;
                 }
 
-                // enforce separation from existing germs
+                // separation from existing germs
                 if (sep > 0 && scene.germs.length) {
                     let ok = true;
                     for (let i = 0; i < scene.germs.length; i++) {
@@ -541,17 +913,30 @@ const soapsplash = (() => {
                 pos = p; break;
             }
 
-            if (!pos) return;
-            const word = pickWord(scene);
+            if (!pos) {
+                // last-chance: drop one somewhere near the top-right quadrant
+                pos = { x: SS.width * 0.82, y: SS.height * 0.18 };
+            }
+
+            // ---- Word selection (robust) ----
+            const word = pickWord(scene); // now guaranteed non-empty string
+
             addGerm(scene, pos, word);
 
             // ensure there is an active target
             if (!scene.typing?.activeId) typing.pickNearest(scene);
         },
+
     };
 
     // ---------------- movement ----------------
     const movement = {
+        removeGermById(scene, id) {
+            if (id == null) return;
+            const i = scene.germs.findIndex(g => g?.id === id);
+            if (i >= 0) removeGermByIndex(scene, i);
+        },
+
         // move germs toward sink with small wobble and update their labels and effects
         moveGerms(scene, delta) {
             const base = SS.germBaseSpeed ?? 110;
@@ -627,7 +1012,11 @@ const soapsplash = (() => {
 
                     if (scene.streakSys) {
                         // Deduct from BASE so total recomputes with the (streak * 0.5) multiplier
-                        scene.streakSys.addBase(-penalty);
+                        // Flat penalty in TOTAL points (not scaled by multiplier)
+                        const P = SS.breachPenalty ?? 100;
+                        const m = scene.streakSys?.multiplier?.() ?? 1;
+                        scene.streakSys.addBase(-(P / Math.max(1, m)));
+
 
                         // Sync legacy fields used by overlay & any other UI
                         scene.typing.score = scene.streakSys.totalScore;
@@ -663,12 +1052,19 @@ const soapsplash = (() => {
             );
         },
         // update remaining time label every frame from start time
-            updateHUD(scene, now) {
-                if (scene.gameStartAt == null) return;
-                if (!scene.timerHud) return;        // ← add this guard
+        // update remaining time label every frame from start time
+        updateHUD(scene, now) {
+            if (!scene?.gameStartAt) return;
+            const hud = scene?.timerHud;
+            if (!hud || !hud.active || !hud.scene?.sys?.isActive()) return;
+            try {
                 const remaining = Math.max(0, (SS.gameDurationMin * 60 * 1000) - (now - scene.gameStartAt));
-                scene.timerHud.setText(`Time: ${helpers.mmss(remaining)}`);
-            },
+                hud.setText(`Time: ${helpers.mmss(remaining)}`);
+            } catch (_) {
+                // ignore one-frame teardown races
+            }
+        },
+
 
         endGame(scene, reason = SS.reason || "Game over") {
             if (scene.gameOver) return;
@@ -678,8 +1074,9 @@ const soapsplash = (() => {
             for (let i = scene.germs.length - 1; i >= 0; i--) { removeGermByIndex(scene, i); }
 
             // Finalize timer + score
-            const score = scene.streakSys?.totalScore ?? scene.typing?.score ?? 0;
-            const bestStreak = scene.streakSys?.bestStreak ?? scene.typing?.bestStreak ?? 0;
+            const score = scene.streakSys ? scene.streakSys.totalScore : 0;
+            const bestStreak = scene.streakSys ? scene.streakSys.bestStreak : 0;
+
             scene.timerHud?.setText("Time: 00:00");
             scene.endEvent?.remove(false);
 
@@ -811,6 +1208,10 @@ const soapsplash = (() => {
             });
 
             const goBack = () => {
+                try {
+                    AudioManager.stopGroup?.("game");
+                    AudioManager.resumeGroup?.("global");
+                } catch {}
                 dialogRoot.destroy(true);
                 scene.scene.start("HandwashAnimationScene", { skipIntro: true });
             };
@@ -820,45 +1221,31 @@ const soapsplash = (() => {
 
     };
 
-    function showStreakPopup(scene, value, x, y) {
-        const msg = `+${value}`;
-        const t = scene.add.text(x, y, msg, {
-            fontFamily: SS.fontFamily,
-            fontSize: "22px",
-            color: "#ffffff",
-            fontStyle: "bold",
-            backgroundColor: "#2aa84a",
-            padding: { left: 10, right: 10, top: 6, bottom: 6 },
-            align: "center"
-        }).setOrigin(0.5).setDepth(200);
 
-        // small scale pop + float up + fade
-        t.setScale(0.8);
-        scene.tweens.add({
-            targets: t,
-            y: y - 35,
-            alpha: { from: 1, to: 0 },
-            scale: { from: 0.95, to: 1.05 },
-            duration: 750,
-            ease: "Cubic.Out",
-            onComplete: () => t.destroy()
-        });
-    }
 
-    // ---------------- typing ----------------
     const typing = {
         // initialize typing state create measurement helper and keyboard handler
         init(scene) {
             scene.typing = {
                 activeId: null, keystrokes: 0, mistakes: 0, startedAt: null, locked: false,
-                // score shown on the “summary” must still live here for compatibility
-                score: 0, streak: 0, bestStreak: 0, wordClean: true, wordsCompleted: 0,
-                streakPops: 0, // include here on first (and only) assignment
+                // legacy mirrors kept for back-compat (UI must NOT read these)
+                score: 0, streak: 0, bestStreak: 0,
+                wordClean: true, wordsCompleted: 0,
+                streakPops: 0,
             };
 
             // attach reusable streak/score engine
+            // Spec note (matches code): totalScore = baseScore * (1 + 0.5 * streak)
             scene.streakSys = streakScore.create();
 
+            // --- one place to mirror legacy fields (write-through only) ---
+            scene.typing.syncLegacy = () => {
+                const s = scene.streakSys;
+                if (!s) return;
+                scene.typing.score      = s.totalScore;
+                scene.typing.streak     = s.streak;
+                scene.typing.bestStreak = s.bestStreak; // s.bestStreak already tracks the max
+            };
 
             // hidden text for measuring caret etc (unchanged)
             scene.typing._measure = scene.add.text(-9999, -9999, "", {
@@ -877,8 +1264,6 @@ const soapsplash = (() => {
 
             scene.input.keyboard.on("keydown", (e) => typing.onKey(e, scene));
         },
-
-
 
         // clear highlights and caret for all germs
         deactivateAll(scene) {
@@ -906,7 +1291,10 @@ const soapsplash = (() => {
             g.active = true;
             g.sprite.clearTint();
 
-            // soft outer glow using postfx if available and pulsing over time
+            // start each NEW word as “clean”
+            scene.typing.wordClean = true;
+
+            // soft outer glow…
             if (F.useGlow && g.sprite?.postFX?.addGlow) {
                 const baseOuter = (F.glowOuter ?? 6);
                 g._glow = g.sprite.postFX.addGlow(
@@ -927,7 +1315,7 @@ const soapsplash = (() => {
                 }
             }
 
-            // additive duplicate sprite for a bright focus aura
+            // additive duplicate sprite…
             if (F.additiveSprite !== false) {
                 const baseAlpha = F.addAlpha ?? 0.18;
                 const addScale  = F.addScale ?? 1.10;
@@ -951,18 +1339,16 @@ const soapsplash = (() => {
                 });
             }
 
-            // show caret underline with a slow pulse
+            // show caret underline…
             if (g.curBox) {
                 g.curBox.setVisible(true);
                 scene.tweens.add({ targets: g.curBox, alpha: 0.05, duration: 500, yoyo: true, repeat: -1 });
             }
 
-            // mark as active and lay out labels and caret
             scene.typing.activeId = g.id;
             typing.renderTarget(g, scene);
         },
 
-        // choose a random target or the nearest to the sink depending on strategy
         pickRandom(scene) {
             if (!scene.germs.length) { scene.typing.activeId = null; return; }
             const idx = Math.floor(Math.random() * scene.germs.length);
@@ -970,11 +1356,7 @@ const soapsplash = (() => {
         },
         pickNearest(scene) {
             if (!scene.germs.length) { scene.typing.activeId = null; return; }
-            // either: no on-screen filter
-            const cand = scene.germs; // was: filter by helpers.isOnScreen(...)
-            // or: keep the filter but with a generous margin
-            // const cand = scene.germs.filter(g => helpers.isOnScreen(scene, g.sprite.x, g.sprite.y, 64));
-
+            const cand = scene.germs;
             if (!cand.length) { scene.typing.activeId = null; return; }
             const hit = scene.getSinkHitPoint();
             let best = null, bestDist = Infinity;
@@ -997,6 +1379,15 @@ const soapsplash = (() => {
             g.labelTyped.setText(typedStr);
             g.labelRemain.setText(remainStr);
 
+            // hide caret once fully typed
+            if (g.typedIdx >= theWord.length) {
+                if (g.curBox) {
+                    if (g._caretPulse) { g._caretPulse.remove(); g._caretPulse = null; }
+                    g.curBox.setVisible(false);
+                }
+                return;
+            }
+
             const typedW  = g.labelTyped.displayWidth;
             const remainW = g.labelRemain.displayWidth;
             const totalW  = typedW + remainW;
@@ -1008,10 +1399,9 @@ const soapsplash = (() => {
             const isActive = !!(sc?.typing?.activeId === g.id && g.active);
             if (!g.curBox) return;
 
-            const sizeNum = (typeof SS.labelTextSize === "string")
-                ? parseInt(SS.labelTextSize, 10) : (SS.labelTextSize || 30);
+            const sizeNum = (typeof SS.labelTextSize === "string") ? parseInt(SS.labelTextSize, 10) : (SS.labelTextSize || 30);
             const nextCh  = g.word[g.typedIdx] || " ";
-            const cw = (sc?.typing?.measureChar) ? sc.typing.measureChar(nextCh) : 0.6 * sizeNum;
+            const cw      = (sc?.typing?.measureChar) ? sc.typing.measureChar(nextCh) : 0.6 * sizeNum;
             const underlineY = baseY + sizeNum + 2;
 
             if (!isActive) {
@@ -1043,10 +1433,9 @@ const soapsplash = (() => {
             if (scene.gameOver || scene._paused) return;
             if (!scene.typing.startedAt) scene.typing.startedAt = scene.time.now;
 
-            // if no target yet, pick one
             if (!scene.typing.activeId) typing.pickNearest(scene);
 
-            // self-heal stale/removed target (e.g., it breached or was cleared)
+            // self-heal stale/removed target
             let g = scene.germs.find(x => x.id === scene.typing.activeId);
             if (!g) {
                 scene.typing.activeId = null;
@@ -1057,7 +1446,7 @@ const soapsplash = (() => {
 
             const key = e.key;
 
-            // handle backspace
+            // handle backspace (no engine change)
             if (key === "Backspace") {
                 if (g.typedIdx > 0) g.typedIdx--;
                 typing.renderTarget(g, scene);
@@ -1069,7 +1458,7 @@ const soapsplash = (() => {
             // ignore non-printable
             if (key.length !== 1) return;
 
-            // prevent accidental browser focus/scroll on printable keys
+            // prevent accidental browser actions
             e.preventDefault();
 
             scene.typing.keystrokes++;
@@ -1078,91 +1467,137 @@ const soapsplash = (() => {
             if (!expected) return;
 
             if (ch.toLowerCase() === expected.toLowerCase()) {
-                g.typedIdx++;
+                // clamp so we never overshoot
+                g.typedIdx = Math.min(g.typedIdx + 1, g.word.length);
+
                 // reset error tint once user gets back on track
                 const C = CONFIG.soapSplash.colors || {};
                 g.labelRemain.setColor(C.remain ?? "#000000");
                 g.labelTyped.setColor(C.typed ?? "#000000");
 
                 typing.renderTarget(g, scene);
-                if (g.typedIdx >= g.word.length) typing.onWordComplete(scene, g);
+
+                // if complete, score immediately
+                if (g.typedIdx >= g.word.length) {
+                    const perWord   = (CONFIG.soapSplash?.pointsPerWord ?? 10);
+                    const perLetter = (CONFIG.soapSplash?.pointsPerLetter ?? 1);
+                    const addBase   = perWord + perLetter * (g.word?.length || 0);
+
+                    if (scene.streakSys) {
+                        scene.streakSys.addBase(addBase);
+                        scene.streakSys.onWord(!!scene.typing.wordClean);
+                        scene.typing.syncLegacy?.();
+                    }
+
+                    // small “+N” popup
+                    try { systems.helpers.streakPopup?.(scene, addBase, g.sprite.x, g.sprite.y - 28); } catch {}
+
+                    // telemetry (generic; keep soapsplash.* if you actually implement it)
+                    try { systems.telemetry?.onWordComplete?.(scene, g, !!scene.typing.wordClean); } catch {}
+
+
+                    // remove the germ
+                    if (systems?.soapsplash?.movement?.removeGermById && g?.id != null) {
+                        systems.soapsplash.movement.removeGermById(scene, g.id);
+                    } else if (systems?.soapsplash?.movement?.removeGermByIndex) {
+                        const i = scene.germs.indexOf(g);
+                        if (i >= 0) systems.soapsplash.movement.removeGermByIndex(scene, i);
+                    } else {
+                        try { g.labelTyped?.destroy(); g.labelRemain?.destroy(); g.sprite?.destroy(); } catch {}
+                        const i2 = scene.germs.indexOf(g);
+                        if (i2 >= 0) scene.germs.splice(i2, 1);
+                    }
+
+                    // next target starts clean
+                    scene.typing.activeId = null;
+                    scene.typing.wordClean = true;
+
+                    // pick a new target if any remain
+                    if (scene.germs.length) typing.pickNearest(scene);
+
+                    typing.updateHud(scene);
+                    return;
+                }
             } else {
+                // wrong character
                 g.errors++;
                 scene.typing.mistakes++;
-                scene.typing.wordClean = false;
-                scene.streakSys.onMistake();
-                telemetry.onMistake(scene);
+                scene.typing.wordClean = false; // this word is no longer “clean”
 
                 const C = CONFIG.soapSplash.colors || {};
-                g.labelRemain.setColor(C.errorRemain ?? "#ff4d4d");
+                g.labelRemain.setColor(C.errorRemain ?? C.error ?? "#bb2222");
                 g.labelTyped.setColor(C.errorTyped ?? g.labelTyped.style.color);
 
-                scene.tweens.add({
-                    targets: g.labelRemain,
-                    x: g.labelRemain.x + 4,
-                    duration: 40,
-                    yoyo: true,
-                    repeat: 2
-                });
+                // shake feedback
+                scene.tweens.add({ targets: g.labelRemain, x: g.labelRemain.x + 4, duration: 40, yoyo: true, repeat: 2 });
+
+                // Streak policy (intended): Any keystroke error instantly resets streak.
+                if (scene.streakSys) {
+                    scene.streakSys.onMistake();
+                    scene.typing.syncLegacy?.();
+                }
+
+                typing.renderTarget(g, scene);
             }
 
             typing.updateHud(scene);
         },
 
-        // when a word is completed remove germ update score and streak and retarget
+        // NOTE: legacy convenience for callers that auto-finish a word
         onWordComplete(scene, g) {
-            // 1) cache anything you need from g BEFORE removal
-            const px = g.sprite?.x ?? (SS.width / 2);
-            const py = (g.sprite?.y ?? (SS.height / 2)) - 10;
+            try {
+                const perWord   = (CONFIG.soapSplash?.pointsPerWord ?? 10);
+                const perLetter = (CONFIG.soapSplash?.pointsPerLetter ?? 1);
+                const addBase   = perWord + perLetter * (g?.word?.length || 0);
 
-            // 2) scoring & telemetry (no UI mutation on g here)
-            const oldStreak = scene.streakSys?.streak ?? 0;
-            scene.typing.wordsCompleted++;
+                scene.streakSys?.addBase?.(addBase);
+                scene.streakSys?.onWord?.(!!scene.typing.wordClean);
+                scene.typing.syncLegacy?.();
 
-            const clean = !!scene.typing.wordClean;
-            scene.streakSys.addBase(100);        // award base points
-            scene.streakSys.onWord(clean);       // apply streak rule
+                try { systems?.helpers?.streakPopup?.(scene, addBase, g?.sprite?.x ?? 0, (g?.sprite?.y ?? 0) - 28); } catch {}
+                try { systems?.telemetry?.onWordComplete?.(scene, g, !!scene.typing.wordClean); } catch {}
 
-            // keep legacy fields in sync
-            scene.typing.streak = scene.streakSys.streak;
-            scene.typing.bestStreak = Math.max(scene.typing.bestStreak, scene.streakSys.bestStreak);
-            scene.typing.score = scene.streakSys.totalScore;
 
-            // telemetry
-            telemetry.onWordComplete(scene, g, clean);
-
-            // streak popup (uses cached px/py)
-            if (scene.typing.streak > oldStreak && scene.typing.streak >= 1) {
-                helpers.streakPopup(scene, scene.typing.streak, px, py);
-                scene.typing.streakPops += 1;
+                if (systems?.soapsplash?.movement?.removeGermById && g?.id != null) {
+                    systems.soapsplash.movement.removeGermById(scene, g.id);
+                } else {
+                    const idx = scene.germs.indexOf(g);
+                    if (idx >= 0 && systems?.soapsplash?.movement?.removeGermByIndex) {
+                        systems.soapsplash.movement.removeGermByIndex(scene, idx);
+                    } else {
+                        try { g.labelTyped?.destroy(); g.labelRemain?.destroy(); g.sprite?.destroy(); } catch {}
+                        const i2 = scene.germs.indexOf(g);
+                        if (i2 >= 0) scene.germs.splice(i2, 1);
+                    }
+                }
+            } finally {
+                scene.typing.wordClean = true;
+                try { systems?.soapsplash?.typing?.updateHud?.(scene); } catch {}
+                if (scene.germs.length) {
+                    systems?.soapsplash?.typing?.pickNearest?.(scene);
+                } else {
+                    scene.typing.activeId = null;
+                }
             }
-
-            // reset cleanliness for the NEXT word
-            scene.typing.wordClean = true;
-
-            // 3) NOW remove the germ visuals and clear target
-            const idx = scene.germs.indexOf(g);
-            if (idx >= 0) removeGermByIndex(scene, idx);
-            scene.typing.activeId = null;
-
-            // 4) refresh HUD and auto-select next target
-            typing.updateHud(scene);
-            typing.pickNearest(scene);
         },
 
         // refresh the score and streak hud text
         updateHud(scene) {
-            const base = scene.streakSys?.baseScore ?? 0;
-            const mult = scene.streakSys?.multiplier?.() ?? 0;
+            // UI must read from streakSys only (no legacy fallbacks)
+            const base  = scene.streakSys?.baseScore ?? 0;
+            const mult  = scene.streakSys?.multiplier?.() ?? 1.0; // fallback fixed
             const total = scene.streakSys?.totalScore ?? 0;
-            const s = scene.streakSys?.streak ?? 0;
+            const s     = scene.streakSys?.streak ?? 0;
 
+            // Show a single multiply symbol (no “× x” duplication)
             scene.typeHud?.setText(
-                `Score: ${total}  (base ${base} × x${mult.toFixed(1)})   Streak: ${s}`
+                `Score: ${total}  (base ${base} × ${mult.toFixed(1)})   Streak: ${s}`
             );
         },
-
     };
+
+
+
 
     // expose all namespaces to scenes through systems so they can call systems.soapsplash.whatever
     return { spawn, movement, rules, timer, typing };
@@ -1185,10 +1620,6 @@ const cleancatcher = {
         kikoSad.src = CONFIG.assets.kiko?.sad || "assets/images/Kiko/WashEd_kiko_sprite_sad.png";
 
         ctx.imageSmoothingEnabled = true;
-
-        // set canvas resolution to the game size so drawing is crisp
-        canvas.width = CC.width;
-        canvas.height = CC.height;
 
         // images and word lists
         const A = CONFIG.assets.cleanCatch || {};
@@ -1318,7 +1749,7 @@ const cleancatcher = {
 
         // when the player image finishes loading recompute size and keep player inside bounds
         playerImg.onload = () => {
-            pSize = sizeFrom(playerImg, P, 300);
+            pSize = sizeFrom(playerImg, P, 450);
             const baseline = canvas.height - (P.bottom ?? 30);
             player.width = pSize.w;
             player.height = pSize.h;
@@ -1488,12 +1919,16 @@ const cleancatcher = {
 
                 ctx.save();
                 ctx.globalAlpha = alpha;
+                // scale around the toast's anchor (x, y) instead of the top-left (0,0)
+                ctx.translate(x, y);
                 ctx.scale(bounce, bounce);
+                ctx.translate(-x, -y);
 
                 // Kiko sprite — ~0.23 scale equivalent (~250–280 px tall)>
                 const img = t.mood === "sad" ? kikoSad : kikoCheer;
                 if (img && img.complete && img.naturalWidth > 0) {
-                    const baseH = 280;                       // target visual height
+                    const baseH = Math.min(280, Math.round(canvas.height * 0.28)); // responsive, capped
+                    // target visual height
                     const aspect = img.naturalWidth / img.naturalHeight;
                     const baseW = baseH * aspect;
                     ctx.drawImage(img, x - baseW, y - baseH + 30, baseW, baseH);

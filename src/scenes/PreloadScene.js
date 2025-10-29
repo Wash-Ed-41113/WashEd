@@ -1,6 +1,7 @@
 // this file defines the preload scene
 // its job is to load all global assets before the game starts
-// after loading it immediately switches to the menu scene
+// after loading it waits for CONFIG.wordsReady then switches to the menu scene
+import systems from "../systems.js";
 
 export default class PreloadScene extends Phaser.Scene {
     // constructor registers this scene with key PreloadScene
@@ -13,6 +14,15 @@ export default class PreloadScene extends Phaser.Scene {
         const BG = CONFIG.assets.backgrounds;
         const UI = CONFIG.assets.ui;
 
+        // PreloadScene.js → preload()
+        this.load.audio("global_bg",        "assets/sounds/kikos_day.mp3");   // overall bg
+        this.load.audio("clean_catch_music","assets/sounds/cleanCatcher.mp3");     // game
+        this.load.audio("soap_splash_music","assets/sounds/germ-scrubber.mp3");   // game
+
+
+        // preload the global logo
+        this.load.image("app_logo", CONFIG.assets.logo);
+
         // load background image for the front page
         this.load.image("frontpage_background", BG.frontpage);
         // load base kiko sprite
@@ -22,6 +32,8 @@ export default class PreloadScene extends Phaser.Scene {
         this.load.image("ui_pause", UI.pauseBut);
         this.load.image("ui_settings", UI.settingsBut);
         this.load.image("ui_home", UI.homeBut);
+        this.load.image("ui_close", UI.closeBut);
+
         // conditionally load start button if path is defined
         if (UI.startBut)    this.load.image("ui_start", UI.startBut);
         // conditionally load dialog panel if path is defined
@@ -30,28 +42,33 @@ export default class PreloadScene extends Phaser.Scene {
         // optionally load kiko cheer pose if available
         if (KI.cheer) this.load.image("kiko_cheer", KI.cheer);
 
-        // additionally load in json as single source of truth for litrature.
-        this.load.json("WordBank", "WordBank.json");
-
+        // IMPORTANT: do NOT load or parse WordBank.json here anymore.
+        // Single source of truth is in main.js (loadWordBankOnce).
     }
 
     create() {
-        const wordsData = this.cache.json.get("WordBank") || {};
-        const all = Array.isArray(wordsData.WordBank) ? wordsData.WordBank : [];
-        CONFIG.words = all;
+        // place logo (keeps your existing visual)
+        systems.ui.placeLogo(this);
 
+        // wait until main.js marks words as ready, then continue flow
+        const goNext = () => this.scene.start("MenuScene");
 
-        const good = all.filter(w => w.type === "Good").map(w => w.word);
-        const bad  = all.filter(w => w.type === "Bad").map(w => w.word);
+        // If words are already ready, go immediately
+        if (window.CONFIG?.wordsReady) {
+            goNext();
+            return;
+        }
 
-        CONFIG.soapSplash.words = good;
-        CONFIG.cleanCatch.words = { good, bad };
-
-        this.scene.start("MenuScene");
+        // Otherwise, poll briefly until ready
+        this._wordsWaitEvt = this.time.addEvent({
+            delay: 50,
+            loop: true,
+            callback: () => {
+                if (window.CONFIG?.wordsReady) {
+                    this._wordsWaitEvt?.remove(false);
+                    goNext();
+                }
+            }
+        });
     }
-
-
-
-
-
 }

@@ -8,6 +8,9 @@ window.CONFIG = {
     width: 1920,
     height: 1080,
 
+
+    isLeaderboardsSwas: false,
+
     // ui related defaults for fonts buttons topbar and pause overlayy
     ui: {
         fontFamily: "Montserrat",        // default font for text
@@ -47,8 +50,11 @@ window.CONFIG = {
         },
     },
 
+    isDevMode: true,
+
     // file paths for all images used in the game
     assets: {
+        logo : "assets/images/washed_day_UI-Logo__WashEd.png",
         kiko: {
             base: "assets/images/Kiko/WashEd_kiko_sprite_base.png",
             cheer: "assets/images/Kiko/WashEd_kiko_sprite_thumbs-up.png",
@@ -67,6 +73,7 @@ window.CONFIG = {
             startBut: "assets/images/UI/washed_kikos-day_UI-Button_Main_START.png",
             dialogPanel: "assets/images/UI/washed_kikos-day_UI-dialogue-box-v1.png",
             next: "assets/images/UI/washed_kikos-day_UI-Button_ARROW_Right.png",
+            closeBut: "assets/images/UI/washed_kikos-day_UI-Button_EXIT.png"
         },
         soapSplash: {
             sink: "assets/images/soap/sink.png", // sink sprite
@@ -82,6 +89,8 @@ window.CONFIG = {
             ],
             backgroundVid: "assets/images/SopaSplash/hands_alpha.webm",
             backgroundAud: "assets/sounds/germ_scrubber.mp3",
+            correctAud: "assets/sounds/typed-correctly-Germ-Scrubber.mp3",
+            incorrectAud: "assets/sounds/Typed-incorrectly-Germ-scrubber.mp3",
 
         },
         cleanCatch: {

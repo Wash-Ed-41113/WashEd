@@ -1,69 +1,172 @@
 // src/scenes/MenuScene.js
 /* global Phaser, CONFIG */
 
-// Use the same target fractions for both dialogs
-
+import systems from "../systems.js";
 import { DB } from "../db.js";
+import { AudioManager } from "../systems.js";
 
-
-const DLG = { W_FRAC: 0.80, H_FRAC: 0.60 }; // 80% of viewport width, 60% of height
-const UI_FONT_FALLBACK = "Montserrat, Arial, sans-serif";
-
+const DLG = { W_FRAC: 0.80, H_FRAC: 0.60 }; // dialog occupies 80% width, 60% height
 const getUIFont = () => CONFIG.ui?.fontFamily || "Montserrat";
 
 export default class MenuScene extends Phaser.Scene {
     constructor() {
         super("MenuScene");
-        this.video= null;
+        this.video = null;
         this.fallback = null;
 
         this.startButton = null;
         this.startShadow = null;
         this.startLabel = null;
 
-        this._leaving = false; // avoid double transition
+        // inside constructor()
+        this._leaving = false;      // avoid double transition
+        this._audioEnsured = false; // guard for one-time audio unlock (DOM-first)
+        this._gateArmed = false;    // NEW: gesture gate armed?
+        this._uiBlocker = null;     // NEW: transparent blocker while gating
+
+
+        this._leaving = false;     // avoid double transition
+        this._audioEnsured = false; // guard for one-time audio unlock (DOM-first)
     }
 
     preload() {
-        // backup background (if video is not loaded)
-        const BG =
-            (typeof CONFIG !== "undefined" &&
-                CONFIG.assets &&
-                CONFIG.assets.backgrounds) ||
-            {};
-        this.load.image(
-            "frontpage_background",
-            BG.frontpage || "assets/images/backgrounds/frontpage.png"
-        );
+        // Fallback background if video fails
+        const BG = (typeof CONFIG !== "undefined" && CONFIG.assets && CONFIG.assets.backgrounds) || {};
+        this.load.image("frontpage_background", BG.frontpage || "assets/images/backgrounds/frontpage.png");
 
-        // background video
+        // Background video (muted)
         this.load.video(
             "menu_bg_video",
             "assets/videos/washed_kikos-day_LEVEL_01_scene_01_action_01_launcher.mp4",
+            "loadeddata",
+            false,
             true // noAudio
         );
 
-        // pop up + X button + kiko + continue arrow
-        this.load.image("dialog_skin","assets/images/UI/washed_kikos-day_UI-dialogue-box-v1.png");
-        this.load.image("ui_exit","assets/images/UI/washed_kikos-day_UI-Button_EXIT.png");
-        this.load.image("kiko_dialog","assets/images/Kiko/WashEd_kiko_sprite_base.png");
-        this.load.image("ui_continue","assets/images/UI/washed_kikos-day_UI-Button_ARROW_Right.png");
+        // UI textures
+        this.load.image("dialog_skin", "assets/images/UI/washed_kikos-day_UI-dialogue-box-v1.png");
+        this.load.image("ui_exit", "assets/images/UI/washed_kikos-day_UI-Button_EXIT.png");
+        this.load.image("kiko_dialog", "assets/images/Kiko/WashEd_kiko_sprite_base.png");
+        this.load.image("ui_continue", "assets/images/UI/washed_kikos-day_UI-Button_ARROW_Right.png");
 
-        // BGM
-        this.load.audio("bgm_kiko", "assets/sounds/kikos_day.mp3");
+        // Shared BGM key used across scenes
+        this.load.audio("kikos_day", "assets/sounds/kikos_day.mp3");
     }
 
-    create() {
+    create(data) {
+        // Coming from EndingScene "New Player" path — reset session only
+        if (data?.resetSession) {
+            window.__SESSION_ID__ = null;
+        }
+
+        // Ensure minigame scenes are not lingering
+        try {
+            this.scene.stop("CleanCatchScene");
+            this.scene.stop("CleanCatchExplain");
+            this.scene.stop("SoapSplashScene");
+            this.scene.stop("SoapSplashExplain");
+        } catch {}
+
+        // ─────────────────────────────────────────────
+// AUDIO: gesture-gated start (idempotent, safe)
+// ─────────────────────────────────────────────
+        try {
+            const KEY = "kikos_day";
+            const VOL = 0.6;
+
+            const playNow = () => {
+                try { AudioManager.stopGroup?.("game"); } catch {}
+                try { AudioManager.resumeGroup?.("global"); } catch {}
+
+                let s = this.sound.get(KEY);
+                if (!(s?.isPlaying)) {
+                    s = s || this.sound.add(KEY, { loop: true, volume: VOL });
+                    s.play();
+                }
+
+                if (typeof window !== "undefined") {
+                    window.__GLOBAL_BGM__ = s;
+                    s.once?.("destroy", () => {
+                        if (window.__GLOBAL_BGM__ === s) window.__GLOBAL_BGM__ = null;
+                    });
+                }
+            };
+
+            // prevent double-arming across re-entries
+            if (!this._gateArmed) {
+                this._gateArmed = true;
+
+                // keep a reference for safe teardown
+                this._uiBlocker = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0)
+                    .setOrigin(0, 0)
+                    .setScrollFactor(0)
+                    .setDepth(9999)
+                    .setInteractive({ useHandCursor: true });
+
+                const safeKillGate = () => {
+                    const g = this._uiBlocker;
+                    this._uiBlocker = null;
+                    if (g && g.scene) {
+                        // removeInteractive() avoids touching scene.sys
+                        try { g.removeInteractive?.(); } catch {}
+                        try { g.destroy?.(); } catch {}
+                    }
+                };
+
+                const onFirstGesture = () => {
+                    // Only run once (protect against multiple sources)
+                    if (!this._gateArmed) return;
+                    this._gateArmed = false;
+
+                    try { if (this.sound.locked) this.sound.unlock(); } catch {}
+                    try { this.sound.context?.resume?.(); } catch {}
+
+                    playNow();
+                    // gate may already be gone if Start emitted first — guard it
+                    safeKillGate();
+                };
+
+                // Use pointer *up* so the gate doesn't eat Start’s click
+                this._uiBlocker.once("pointerup", onFirstGesture);
+                this.input.keyboard?.once("keydown", onFirstGesture);
+
+                // DOM/other paths can emit this:
+                this.events.once("menu:startPressed", onFirstGesture);
+
+                // If already unlocked, kick on next tick
+                if (!this.sound.locked) this.time.delayedCall(0, onFirstGesture);
+            }
+
+            this.sound.pauseOnBlur = false;
+            this.sound.mute = this.registry.get("mute") === true;
+        } catch (e) {
+            console.warn("[MenuScene] audio bootstrap error:", e);
+        }
+
+
+        // Also ensure DOM-only interactions emit the start signal at least once
+        this.ensureAudioStartOnce();
+
+        // ─────────────────────────────────────────────
+        // Visual setup
+        // ─────────────────────────────────────────────
+        systems.ui.placeLogo(this);
+
         const { width, height } = this.scale;
 
-        // backup background
+        this._leaving = false;
+        this.input.enabled = true;
+        this.tweens.killAll();
+        this.cameras.main.resetFX();
+
+        // Fallback background
         this.fallback = this.add
             .image(0, 0, "frontpage_background")
             .setOrigin(0, 0)
             .setDisplaySize(width, height)
             .setDepth(-3);
 
-        // video background
+        // Video background
         this.video = this.add
             .video(width / 2, height / 2, "menu_bg_video")
             .setOrigin(0.5)
@@ -82,65 +185,64 @@ export default class MenuScene extends Phaser.Scene {
             let dw, dh;
             if (vr > sr) { dh = H; dw = H * vr; }
             else { dw = W; dh = W / vr; }
-
             this.video.setSize(dw, dh).setPosition(W / 2, H / 2);
             this.fallback.setDisplaySize(W, H).setPosition(0, 0);
         };
         this.video.on("loadeddata", resizeVideo);
         resizeVideo();
 
-        // ► Start BGM immediately (and persist across scenes until a minigame stops it)
-        this.sound.pauseOnBlur = false;
-        this.sound.mute = this.registry.get("mute") === true;
-
-        const startBgm = () => {
-            let bgm = this.sound.get("bgm_kiko");
-            if (!bgm) {
-                bgm = this.sound.add("bgm_kiko", { loop: true, volume: 0.45 });
-            }
-            if (!bgm.isPlaying) bgm.play();
-        };
-        if (this.sound.locked) {
-            this.sound.once(Phaser.Sound.Events.UNLOCKED, startBgm);
-            this.input.once("pointerdown", startBgm);
-        } else {
-            startBgm();
-        }
-
-        // START → ask name → ask difficulty → go Playground
+        // ─────────────────────────────────────────────
+        // Start flow (Start → Name → Difficulty → Playground)
+        // ─────────────────────────────────────────────
         const startFlow = () => {
             const cachedName = this.registry.get("playerName");
-            const cachedDiff = this.registry.get("difficulty");
 
-            const goPlay = (playerName, difficulty) => {
-                this.goToPlaygroundSmooth(playerName, difficulty, 600);
-            };
+            const proceedAfterName = (rawName) => {
+                const name = (rawName || "").trim() || "Player";
+                this.registry.set("playerName", name);
 
-            const afterName = (playerName) => {
-                this.registry.set("playerName", playerName);
-                const diff = this.registry.get("difficulty");
-                if (diff) return goPlay(playerName, diff);
-                this.openDifficultyDialog((difficulty) => {
-                    this.registry.set("difficulty", difficulty);
-                    goPlay(playerName, difficulty);
+                // Open difficulty dialog; when chosen, ensure session and go
+                this.openDifficultyDialog((lvl) => {
+                    window.__SESSION_ID__ = window.__SESSION_ID__ ?? DB.beginSession(name);
+                    this.registry.set("difficulty", lvl);
+                    this.goToPlaygroundSmooth(name, lvl, 600);
                 });
             };
 
-            if (!cachedName) {
-                this.openNameDialog(afterName);
-            } else if (!cachedDiff) {
-                this.openDifficultyDialog((difficulty) => {
-                    this.registry.set("difficulty", difficulty);
-                    goPlay(cachedName, difficulty);
-                });
-            } else {
-                goPlay(cachedName, cachedDiff);
-            }
+            if (!cachedName) this.openNameDialog(proceedAfterName);
+            else proceedAfterName(cachedName);
         };
 
-        // START button
-        this.createStartButton(startFlow);
+        // Optional quick-restart
+        this._quickRestart = !!data?.quickRestart;
+        this._qrName = data?.restartName || "Kiko";
+        this._qrReuseDifficulty = (data?.reuseDifficulty !== false);
 
+        const onStartPressed = () => {
+            // Ensure BGM start even if the interaction happened on DOM
+            this.events.emit("menu:startPressed");
+
+            if (this._quickRestart) {
+                const currentName = this.registry.get("playerName") ?? this._qrName;
+                const difficulty = 1;
+
+                if (!this.registry.get("playerName")) this.registry.set("playerName", currentName);
+                if (!this.registry.get("difficulty")) this.registry.set("difficulty", difficulty);
+
+                if (typeof this.goToPlaygroundSmooth === "function") {
+                    this.goToPlaygroundSmooth(currentName, difficulty, 400);
+                } else {
+                    this.scene.start("PlaygroundScene", { playerName: currentName, difficulty });
+                }
+                return;
+            }
+            startFlow();
+        };
+
+        // Wire START button
+        this.createStartButton(onStartPressed);
+
+        // Responsive layout
         this.scale.on("resize", () => {
             resizeVideo();
             this.layoutUI();
@@ -151,12 +253,21 @@ export default class MenuScene extends Phaser.Scene {
 
     // Smoothly leave this scene (fade-out) then start PlaygroundScene
     goToPlaygroundSmooth(playerName, difficulty, dur = 600) {
+
+        // kill any leftover blocker safely
+        if (this._uiBlocker) {
+            try { this._uiBlocker.removeInteractive?.(); this._uiBlocker.destroy?.(); } catch {}
+            this._uiBlocker = null;
+        }
+        this._gateArmed = false;
+
+
         if (this._leaving) return;
         this._leaving = true;
 
-        this.input.enabled = false;      // debounce clicks while fading
-        this.tweens.killAll();           // stop UI tweens for snappy fade
-        this.video?.stop();              // optional: stop video during transition
+        this.input.enabled = false;
+        this.tweens.killAll();
+        this.video?.stop(); // stop video only (do NOT touch BGM)
 
         this.cameras.main.once("camerafadeoutcomplete", () => {
             this.scene.start("PlaygroundScene", { playerName, difficulty });
@@ -165,48 +276,43 @@ export default class MenuScene extends Phaser.Scene {
     }
 
     // ─────────────────────────────────────────────
-    // name input popup
+    // Name input popup
     // ─────────────────────────────────────────────
     openNameDialog(onOk) {
         const { width, height } = this.scale;
-
-        // container
         const dialogRoot = this.add.container(0, 0).setDepth(20);
 
-        // dim overlay
+        // Dim overlay
         const overlay = this.add
             .rectangle(0, 0, width, height, 0x000000, 0.35)
             .setOrigin(0, 0)
             .setInteractive();
         dialogRoot.add(overlay);
 
-        // skin layout and (UNIFIED) scale
+        // Panel scale
         const skinImg = this.textures.get("dialog_skin").getSourceImage();
         const s = Math.min(
-            (width  * DLG.W_FRAC) / skinImg.width,
+            (width * DLG.W_FRAC) / skinImg.width,
             (height * DLG.H_FRAC) / skinImg.height
         );
 
-        const panel = this.add
-            .image(width / 2, height / 2, "dialog_skin")
-            .setScale(s);
+        const panel = this.add.image(width / 2, height / 2, "dialog_skin").setScale(s);
         dialogRoot.add(panel);
 
         const panelW = skinImg.width * s;
         const panelH = skinImg.height * s;
 
-        // inner layout (same math for both dialogs)
-        const innerPad  = Math.round(60 * s);
+        const innerPad = Math.round(60 * s);
         const innerLeft = panel.x - panelW / 2 + innerPad;
         const innerRight = panel.x + panelW / 2 - innerPad;
         const innerW = innerRight - innerLeft;
 
-        const gutter   = Math.round(28 * s);
+        const gutter = Math.round(28 * s);
         const leftColW = Math.round(innerW * 0.3);
-        const rightX   = innerLeft + leftColW + gutter;
-        const rightW   = innerW - leftColW - gutter;
+        const rightX = innerLeft + leftColW + gutter;
+        const rightW = innerW - leftColW - gutter;
 
-        // kiko (left side)
+        // Kiko art (left column)
         if (this.textures.exists("kiko_dialog")) {
             const kd = this.add
                 .image(innerLeft + leftColW / 2, panel.y + panelH * 0.35, "kiko_dialog")
@@ -216,10 +322,9 @@ export default class MenuScene extends Phaser.Scene {
             dialogRoot.add(kd);
         }
 
-        // title
-
         const uiFont = getUIFont();
 
+        // Title
         const title = this.add
             .text(rightX, panel.y - panelH * 0.12, "Hey, I’m Kiko. What’s your name?", {
                 fontFamily: uiFont,
@@ -227,24 +332,19 @@ export default class MenuScene extends Phaser.Scene {
             })
             .setOrigin(0, 0.5);
         title.setFontSize(Math.max(40, Math.round(40 * s)));
-        // title.setFontStyle("bold");
         title.setWordWrapWidth(rightW, true);
         dialogRoot.add(title);
 
-        // DOM form (we only use the input; the DOM button will be hidden)
+        // DOM form (input + hidden button)
         const html = `
-      <div id="wrap" style="font-family:${uiFont}">
-        <input id="nameInput" type="text" placeholder="Type your name..." style="font-family:${uiFont}" />
-        <button id="okBtn">Continue</button>
-      </div>
-    `;
-        const form = this.add
-            .dom(rightX + 110, panel.y + panelH * 0.02)
-            .createFromHTML(html)
-            .setOrigin(0.5);
+          <div id="wrap" style="font-family:${uiFont}">
+            <input id="nameInput" type="text" placeholder="Type your name..." style="font-family:${uiFont}" />
+            <button id="okBtn">Continue</button>
+          </div>
+        `;
+        const form = this.add.dom(rightX + 110, panel.y + panelH * 0.02).createFromHTML(html).setOrigin(0.5);
         dialogRoot.add(form);
 
-        // styling
         const wrap = form.getChildByID("wrap");
         const input = form.getChildByID("nameInput");
         const ok = form.getChildByID("okBtn");
@@ -265,10 +365,9 @@ export default class MenuScene extends Phaser.Scene {
         input.style.borderRadius = `${Math.round(10 * s)}px`;
         input.style.outline = "none";
 
-        // hide DOM button
-        ok.style.display = "none";
+        ok.style.display = "none"; // we use the arrow image as the submit
 
-        // Phaser image button (green arrow)
+        // Continue arrow button
         const btnSize = Math.round(170 * s);
         const continueBtn = this.add
             .image(panel.x, panel.y + panelH * 0.27, "ui_continue")
@@ -277,7 +376,6 @@ export default class MenuScene extends Phaser.Scene {
             .setInteractive({ useHandCursor: true });
         dialogRoot.add(continueBtn);
 
-        // Hover / out
         const base = { s: continueBtn.scale, y: continueBtn.y };
         continueBtn.on("pointerover", () => {
             this.tweens.add({ targets: continueBtn, scale: base.s * 1.06, y: base.y - 3, duration: 120, ease: "Sine.easeOut" });
@@ -286,7 +384,6 @@ export default class MenuScene extends Phaser.Scene {
             this.tweens.add({ targets: continueBtn, scale: base.s, y: base.y, duration: 120, ease: "Sine.easeOut" });
         });
 
-        // submit / key handler
         const submit = () => {
             const value = (input.value || "").trim();
             if (value) {
@@ -306,7 +403,6 @@ export default class MenuScene extends Phaser.Scene {
         };
         const onKey = (e) => { if (e.key === "Enter") submit(); };
 
-        // click image button to submit
         continueBtn.on("pointerdown", () => {
             this.tweens.add({
                 targets: continueBtn,
@@ -318,10 +414,9 @@ export default class MenuScene extends Phaser.Scene {
             });
         });
 
-        // (keep DOM listeners for keyboard)
         form.node.addEventListener("keydown", onKey);
 
-        // close(X)
+        // Close (X) button
         const closeBtn = this.add
             .image(
                 panel.x + panelW / 2 - Math.round(46 * s),
@@ -335,57 +430,49 @@ export default class MenuScene extends Phaser.Scene {
 
         const baseScale = 0.12;
         closeBtn.on("pointerover", () => {
-            this.tweens.add({
-                targets: closeBtn,
-                scale: baseScale * 1.15,
-                duration: 120,
-                ease: "Sine.easeOut",
-            });
+            this.tweens.add({ targets: closeBtn, scale: baseScale * 1.15, duration: 120, ease: "Sine.easeOut" });
         });
         closeBtn.on("pointerout", () => {
-            this.tweens.add({
-                targets: closeBtn,
-                scale: baseScale,
-                duration: 120,
-                ease: "Sine.easeOut",
-            });
+            this.tweens.add({ targets: closeBtn, scale: baseScale, duration: 120, ease: "Sine.easeOut" });
         });
 
         const destroyDialog = () => {
             form.node.removeEventListener?.("keydown", onKey);
             this.tweens.killTweensOf(closeBtn);
             this.tweens.killTweensOf(form);
-            this.tweens.killTweensOf(continueBtn); // ensure cleanup
+            this.tweens.killTweensOf(continueBtn);
             dialogRoot.destroy(true);
             this.events.off("shutdown", destroyDialog);
         };
 
         closeBtn.on("pointerdown", destroyDialog);
         this.events.once("shutdown", destroyDialog);
+
+        // Ensure audio unlock also fires when user interacts only with DOM
+        this.ensureAudioStartOnce();
     }
 
     // ─────────────────────────────────────────────
-    // difficulty select popup (Easy / Normal / Hard)
+    // Difficulty select popup (Easy / Normal / Hard)
     // ─────────────────────────────────────────────
     openDifficultyDialog(onPick) {
         const { width, height } = this.scale;
 
-        // container
         const dialogRoot = this.add.container(0, 0).setDepth(20);
 
-        // overlay
         const overlay = this.add
             .rectangle(0, 0, width, height, 0x000000, 0.35)
             .setOrigin(0, 0)
             .setInteractive();
         dialogRoot.add(overlay);
 
-        // skin + (UNIFIED) scale
         const skinImg = this.textures.get("dialog_skin").getSourceImage();
         const s = Math.min(
-            (width  * DLG.W_FRAC) / skinImg.width,
+            (width * DLG.W_FRAC) / skinImg.width,
             (height * DLG.H_FRAC) / skinImg.height
         );
+
+        const lvlMap = { easy: 1, normal: 2, hard: 3 };
 
         const panel = this.add.image(width / 2, height / 2, "dialog_skin").setScale(s);
         dialogRoot.add(panel);
@@ -393,29 +480,23 @@ export default class MenuScene extends Phaser.Scene {
         const panelW = skinImg.width * s;
         const panelH = skinImg.height * s;
 
-        // inner layout (same math as name dialog)
         const innerPad = Math.round(60 * s);
-        const left  = panel.x - panelW / 2 + innerPad;
+        const left = panel.x - panelW / 2 + innerPad;
         const right = panel.x + panelW / 2 - innerPad;
         const innerW = right - left;
 
         const uiFont = getUIFont();
 
-        // title (centered)
         const title = this.add
-            .text(
-                panel.x,
-                panel.y - panelH * 0.18,
-                "Choose difficulty",
-                { fontFamily: uiFont, color: "#000000", align: "center" }
-            )
+            .text(panel.x, panel.y - panelH * 0.18, "Choose difficulty", {
+                fontFamily: uiFont, color: "#000000", align: "center"
+            })
             .setOrigin(0.5, 0.5);
         title.setFontSize(Math.max(42, Math.round(42 * s)));
         title.setFontStyle("bold");
         title.setWordWrapWidth(innerW, true);
         dialogRoot.add(title);
 
-        // three buttons row
         const rowY = panel.y + Math.round(panelH * 0.02);
         const btnW = Math.min(width * 0.22, 360);
         const btnH = Math.min(height * 0.12, 120);
@@ -426,15 +507,15 @@ export default class MenuScene extends Phaser.Scene {
             const g = this.add.graphics();
             g.fillStyle(fill, 1);
             g.fillRoundedRect(0, 0, btnW, btnH, radius);
-            g.lineStyle(Math.max(3, Math.round(3*s)), 0x073b4c, 0.35);
+            g.lineStyle(Math.max(3, Math.round(3 * s)), 0x073b4c, 0.35);
             g.strokeRoundedRect(0, 0, btnW, btnH, radius);
             g.generateTexture(key, btnW, btnH);
             g.destroy();
         };
 
-        if (!this.textures.exists("btn_diff_easy"))  makeBtnTex("btn_diff_easy",  0xB9FBC0);
-        if (!this.textures.exists("btn_diff_norm"))  makeBtnTex("btn_diff_norm",  0xBEE1FF);
-        if (!this.textures.exists("btn_diff_hard"))  makeBtnTex("btn_diff_hard",  0xFFD6A5);
+        if (!this.textures.exists("btn_diff_easy")) makeBtnTex("btn_diff_easy", 0xB9FBC0);
+        if (!this.textures.exists("btn_diff_norm")) makeBtnTex("btn_diff_norm", 0xBEE1FF);
+        if (!this.textures.exists("btn_diff_hard")) makeBtnTex("btn_diff_hard", 0xFFD6A5);
 
         const cx = panel.x;
         const x1 = cx - btnW - gap;
@@ -442,27 +523,21 @@ export default class MenuScene extends Phaser.Scene {
         const x3 = cx + btnW + gap;
 
         const buttons = [
-            { key: "btn_diff_easy",  label: "Easy",   value: "easy" },
-            { key: "btn_diff_norm",  label: "Normal", value: "normal" },
-            { key: "btn_diff_hard",  label: "Hard",   value: "hard" },
+            { key: "btn_diff_easy", label: "Easy", value: "easy" },
+            { key: "btn_diff_norm", label: "Normal", value: "normal" },
+            { key: "btn_diff_hard", label: "Hard", value: "hard" },
         ];
         const bx = [x1, x2, x3];
-
         const phaserBtns = [];
 
         buttons.forEach((b, i) => {
-            const img = this.add.image(bx[i], rowY, b.key)
-                .setOrigin(0.5)
-                .setInteractive({ useHandCursor: true });
+            const img = this.add.image(bx[i], rowY, b.key).setOrigin(0.5).setInteractive({ useHandCursor: true });
             img.setDepth(1);
-            const lab = this.add.text(bx[i], rowY, b.label, {
-                fontFamily: uiFont, color: "#073B4C",
-            }).setOrigin(0.5, 0.55);
+            const lab = this.add.text(bx[i], rowY, b.label, { fontFamily: uiFont, color: "#073B4C" }).setOrigin(0.5, 0.55);
             lab.setFontSize(Math.round(btnH * 0.35));
             lab.setDepth(2);
 
-            // hover
-            const base = { s: 1, y: img.y, ly: lab.y };
+            const base = { y: img.y, ly: lab.y };
             img.on("pointerover", () => {
                 this.tweens.add({ targets: img, scale: 1.04, y: base.y - 4, duration: 120, ease: "Sine.easeOut" });
                 this.tweens.add({ targets: lab, scale: 1.04, y: base.ly - 4, duration: 120, ease: "Sine.easeOut" });
@@ -480,8 +555,11 @@ export default class MenuScene extends Phaser.Scene {
                     yoyo: true,
                     ease: "Quad.easeOut",
                     onComplete: () => {
+                        const raw = b.value ?? "normal";
+                        const lvl = lvlMap[String(raw).toLowerCase()] ?? 2;
+                        this.registry.set("difficulty", lvl);
                         destroyDialog();
-                        onPick?.(b.value); // startFlow -> goToPlaygroundSmooth
+                        onPick?.(lvl);
                     },
                 });
             });
@@ -491,7 +569,7 @@ export default class MenuScene extends Phaser.Scene {
             dialogRoot.add(lab);
         });
 
-        // close(X)
+        // Close (X)
         const closeBtn = this.add
             .image(
                 panel.x + panelW / 2 - Math.round(46 * s),
@@ -521,14 +599,12 @@ export default class MenuScene extends Phaser.Scene {
     }
 
     // =======================
-    // START button
+    // START button (image or generated)
     // =======================
     createStartButton(onStart) {
         const { width, height } = this.scale;
-        const bx =
-            (typeof CONFIG !== "undefined" && CONFIG.menu?.buttonsX?.start) ?? 0.72;
-        const by =
-            (typeof CONFIG !== "undefined" && CONFIG.menu?.buttonsY?.start) ?? 0.7;
+        const bx = (typeof CONFIG !== "undefined" && CONFIG.menu?.buttonsX?.start) ?? 0.72;
+        const by = (typeof CONFIG !== "undefined" && CONFIG.menu?.buttonsY?.start) ?? 0.7;
         const BTN_X = width * bx;
         const BTN_Y = height * by;
 
@@ -556,36 +632,12 @@ export default class MenuScene extends Phaser.Scene {
 
             const base = { s, y: img.y, sy: shadow.y };
             img.on("pointerover", () => {
-                this.tweens.add({
-                    targets: img,
-                    scale: base.s * 1.05,
-                    y: base.y - 4,
-                    duration: 120,
-                    ease: "Sine.easeOut",
-                });
-                this.tweens.add({
-                    targets: shadow,
-                    scale: base.s * 1.05,
-                    y: base.sy - 4,
-                    duration: 120,
-                    ease: "Sine.easeOut",
-                });
+                this.tweens.add({ targets: img, scale: base.s * 1.05, y: base.y - 4, duration: 120, ease: "Sine.easeOut" });
+                this.tweens.add({ targets: shadow, scale: base.s * 1.05, y: base.sy - 4, duration: 120, ease: "Sine.easeOut" });
             });
             img.on("pointerout", () => {
-                this.tweens.add({
-                    targets: img,
-                    scale: base.s,
-                    y: base.y,
-                    duration: 120,
-                    ease: "Sine.easeOut",
-                });
-                this.tweens.add({
-                    targets: shadow,
-                    scale: base.s,
-                    y: base.sy,
-                    duration: 120,
-                    ease: "Sine.easeOut",
-                });
+                this.tweens.add({ targets: img, scale: base.s, y: base.y, duration: 120, ease: "Sine.easeOut" });
+                this.tweens.add({ targets: shadow, scale: base.s, y: base.sy, duration: 120, ease: "Sine.easeOut" });
             });
             img.on("pointerdown", () => {
                 this.tweens.add({
@@ -602,7 +654,7 @@ export default class MenuScene extends Phaser.Scene {
             this.startShadow = shadow;
             this.startLabel = null;
         } else {
-            // instant button
+            // Generated button fallback
             const bw = Math.min(width * 0.5, 520);
             const bh = Math.min(height * 0.2, 140);
             const radius = Math.min(24, bh * 0.25);
@@ -629,11 +681,7 @@ export default class MenuScene extends Phaser.Scene {
                 .setTint(0x000000)
                 .setAlpha(0.25);
             const label = this.add
-                .text(BTN_X, BTN_Y, "START", {
-                    fontFamily: getUIFont(),
-                    color: "#ffffff",
-                    // fontStyle: "bold",
-                })
+                .text(BTN_X, BTN_Y, "START", { fontFamily: getUIFont(), color: "#ffffff" })
                 .setOrigin(0.5)
                 .setDepth(3);
             label.setFontSize(Math.round(bh * 0.42));
@@ -671,10 +719,8 @@ export default class MenuScene extends Phaser.Scene {
 
     layoutUI() {
         const { width, height } = this.scale;
-        const bx =
-            (typeof CONFIG !== "undefined" && CONFIG.menu?.buttonsX?.start) ?? 0.72;
-        const by =
-            (typeof CONFIG !== "undefined" && CONFIG.menu?.buttonsY?.start) ?? 0.7;
+        const bx = (typeof CONFIG !== "undefined" && CONFIG.menu?.buttonsX?.start) ?? 0.72;
+        const by = (typeof CONFIG !== "undefined" && CONFIG.menu?.buttonsY?.start) ?? 0.7;
         const BTN_X = width * bx;
         const BTN_Y = height * by;
 
@@ -701,5 +747,23 @@ export default class MenuScene extends Phaser.Scene {
         const sW = (width * 0.38) / nativeW;
         const sH = (height * 0.22) / nativeH;
         return Math.min(sW, sH);
+    }
+
+    // ─────────────────────────────────────────────
+    // One-time audio unlock that also works for DOM interactions
+    // ─────────────────────────────────────────────
+    ensureAudioStartOnce() {
+        if (this._audioEnsured) return;
+        this._audioEnsured = true;
+
+        const fire = () => {
+            try { if (this.sound.locked) this.sound.unlock(); } catch {}
+            // Route into the gesture gate (menu:startPressed handler)
+            this.events.emit("menu:startPressed");
+        };
+
+        window.addEventListener("mousedown", fire, { once: true, passive: true });
+        window.addEventListener("touchstart", fire, { once: true, passive: true });
+        document.addEventListener("keydown", fire, { once: true });
     }
 }
