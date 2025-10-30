@@ -90,7 +90,9 @@ export default class CleanCatchScene extends Phaser.Scene {
         canvas.height = height;
         root.node.appendChild(canvas);
 
-        const difficulty = this.registry.get("difficulty") || "easy";
+        const difficulty = data?.difficulty || this.registry.get("difficulty") || "easy";
+        this.registry.set("difficulty", difficulty);
+
 
         // Word suppliers (single source from CONFIG.cleanCatch)
         if (CONFIG?.cleanCatch?.resetDecks && CONFIG?.cleanCatch?.nextGood && CONFIG?.cleanCatch?.nextBad) {
