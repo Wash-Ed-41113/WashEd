@@ -221,7 +221,7 @@ export default class PlaygroundScene extends Phaser.Scene {
         // Speech bubble
         this.speech = new SpeechBubble(this, kiko, { maxWidth: 700, fontSize: 30, gap: -10 });
         const name = (this.registry.get("playerName") || "friend");
-        this.speech.say(`Hello, ${name}! My name is Kiko.\nLook! Let's make sandcastle!\nTap the sand!`);
+        this.speech.say(`Hello, ${name}! My name is Kiko.\nLook! Let's make a sandcastle!\nTap the sand!`);
 
         // Build handler
         const buildNext = () => {

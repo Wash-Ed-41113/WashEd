@@ -50,9 +50,9 @@ export default class CleanCatchScene extends Phaser.Scene {
         if (!this.cache.audio.exists("sfx_goodCatch"))
             this.load.audio("sfx_goodCatch", "assets/sounds/bubble pop Soap Splasher.wav");
         if (!this.cache.audio.exists("sfx_badCatch"))
-            this.load.audio("sfx_badCatch", "assets/sounds/germ touch Soap Splasher.mp3");
+            this.load.audio("sfx_badCatch", "assets/sounds/badPop.mp3");
         if (!this.cache.audio.exists("sfx_beep"))
-            this.load.audio("sfx_beep", "assets/sounds/timerSound.mp3");
+            this.load.audio("sfx_beep", "assets/sounds/timerSound.m4a");
     }
 
     create(data) {
@@ -90,7 +90,9 @@ export default class CleanCatchScene extends Phaser.Scene {
         canvas.height = height;
         root.node.appendChild(canvas);
 
-        const difficulty = this.registry.get("difficulty") || "easy";
+        const difficulty = data?.difficulty || this.registry.get("difficulty") || "easy";
+        this.registry.set("difficulty", difficulty);
+
 
         // Word suppliers (single source from CONFIG.cleanCatch)
         if (CONFIG?.cleanCatch?.resetDecks && CONFIG?.cleanCatch?.nextGood && CONFIG?.cleanCatch?.nextBad) {

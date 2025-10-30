@@ -1827,23 +1827,24 @@ const cleancatcher = {
         }
 
 
-        // draw all items with labels
+        // draw all items with labels, hard no img
         function drawItems() {
             for (const item of items) {
-                // Draw the assigned image for this item
-                let img;
-                if (item.type === "good") {
-                    // randomly pick water or soap for good items
-                    img = item.img || (Math.random() > 0.5 ? waterImg : soapImg);
-                } else {
-                    img = germImg;
-                }
-
+                // If not hard mode, draw the item image (water/soap/germ)
                 if (difficulty !== "hard") {
+                    let img;
+
+                    if (item.type === "good") {
+                        // randomly pick between water or soap
+                        img = item.img || (Math.random() > 0.5 ? waterImg : soapImg);
+                    } else {
+                        img = germImg;
+                    }
+
                     if (img && img.complete && img.naturalWidth) {
                         ctx.drawImage(img, item.x, item.y, item.width, item.height);
                     } else {
-                        // fallback shapes
+                        // fallback shape if image missing
                         if (item.type === "good") {
                             ctx.fillStyle = "aqua";
                             ctx.beginPath();
@@ -1867,13 +1868,16 @@ const cleancatcher = {
                     }
                 }
 
-                // Draw word below the image (or centered if hard)
+                // Draw the label (text)
                 ctx.fillStyle = "black";
                 ctx.font = "50px Chewy";
                 ctx.textAlign = "center";
+
                 if (difficulty === "hard") {
+                    // Only text centered — no images
                     ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height / 2 + 8);
                 } else {
+                    // Text below the image
                     ctx.fillText(item.word, item.x + item.width / 2, item.y + item.height + 24);
                 }
             }
@@ -1940,13 +1944,14 @@ const cleancatcher = {
                 ctx.lineWidth = 6;
                 ctx.strokeStyle = "#000000";
                 ctx.fillStyle = "#ffffff";
-                ctx.shadowColor = "#00000099";
+                ctx.shadowColor = "#00000000";
                 ctx.shadowBlur = 8;
                 ctx.strokeText(t.text, x - 80, y + 15);
                 ctx.fillText(t.text, x - 80, y + 15);
 
                 ctx.restore();
             }
+
 
 
 
@@ -2240,27 +2245,37 @@ const cleancatcher = {
 
             rafId = requestAnimationFrame(frame);
         }
-        // start all periodic loops animation item spawning movement and timer countdown
+
+        // start all periodic loops: animation, item spawning, and timer countdown
         function startLoops() {
+            // ensure no duplicate loops running
             if (rafId) cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(frame);
 
+            // start continuous player movement (≈60fps)
             if (!moveInterval) moveInterval = setInterval(movePlayer, 16);
+
+            // spawn new items periodically based on difficulty
             if (!spawnInterval) spawnInterval = setInterval(spawnItem, spawnRate);
+
+            // countdown timer logic
             if (!timerInterval) timerInterval = setInterval(() => {
                 if (!paused && !gameOver) {
                     timeLeft--;
 
-                    // Play beep in last 5 seconds
-                    if (timeLeft <= 5 && timeLeft > 0 && timerBeepSound) {
+                    // ✅ Play the 5-second warning sound once
+                    if (timeLeft === 5 && timerBeepSound) {
                         timerBeepSound.play();
                     }
 
-                    if (timeLeft <= 0) gameOver = true;
+                    // stop the game when time is up
+                    if (timeLeft <= 0) {
+                        gameOver = true;
+                    }
                 }
             }, 1000);
-
         }
+
 
         // stop every loop and clear ids
         function stopLoops() {
