@@ -2240,27 +2240,37 @@ const cleancatcher = {
 
             rafId = requestAnimationFrame(frame);
         }
-        // start all periodic loops animation item spawning movement and timer countdown
+
+        // start all periodic loops: animation, item spawning, and timer countdown
         function startLoops() {
+            // ensure no duplicate loops running
             if (rafId) cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(frame);
 
+            // start continuous player movement (≈60fps)
             if (!moveInterval) moveInterval = setInterval(movePlayer, 16);
+
+            // spawn new items periodically based on difficulty
             if (!spawnInterval) spawnInterval = setInterval(spawnItem, spawnRate);
+
+            // countdown timer logic
             if (!timerInterval) timerInterval = setInterval(() => {
                 if (!paused && !gameOver) {
                     timeLeft--;
 
-                    // Play beep in last 5 seconds
-                    if (timeLeft <= 5 && timeLeft > 0 && timerBeepSound) {
+                    // ✅ Play the 5-second warning sound once
+                    if (timeLeft === 5 && timerBeepSound) {
                         timerBeepSound.play();
                     }
 
-                    if (timeLeft <= 0) gameOver = true;
+                    // stop the game when time is up
+                    if (timeLeft <= 0) {
+                        gameOver = true;
+                    }
                 }
             }, 1000);
-
         }
+
 
         // stop every loop and clear ids
         function stopLoops() {
