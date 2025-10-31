@@ -34,7 +34,7 @@ export default class CleanCatchExplain extends Phaser.Scene {
         const username   = this.registry.get("playerName") || "friend";
         const difficulty = data?.difficulty || this.registry.get("difficulty") || "easy";
 
-        systems.ui.placeLogo(this);
+        // logo code - systems.ui.placeLogo(this);
 
         // --- pause any global bgm ---
         try {
