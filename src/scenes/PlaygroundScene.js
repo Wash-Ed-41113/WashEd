@@ -36,8 +36,8 @@ const CASTLE_FRAMES = [
     { key: "sandcastle04", path: "assets/images/sandground/sandcastle04.png" },
 ];
 
-const CASTLE_SIZE = 0.6;
-const DOOR_X_FRAC = 0.65;
+const CASTLE_SIZE   = 0.6;
+const DOOR_X_FRAC   = 0.65;
 const DOOR_Y_OFFSET = 0;
 
 /** ----------------------------------------------------------------------------
@@ -58,7 +58,7 @@ class SpeechBubble extends Phaser.GameObjects.Container {
 
         this.label = scene.add.text(0, 0, "", {
             fontFamily: (window.CONFIG?.ui?.fontFamily),
-            fontSize: (34),
+            fontSize: 34,
             color: "#073B4C",
             wordWrap: { width: this.maxWidth - this.padding * 2 },
             align: "left",
@@ -67,14 +67,24 @@ class SpeechBubble extends Phaser.GameObjects.Container {
         this.add([this.bg, this.label]);
         this.setDepth(LAYERS.UI).setAlpha(1);
 
-        // Position once
+        // Position once (use WORLD coordinates if anchor is a child of a container)
         if (Number.isFinite(opts.x) && Number.isFinite(opts.y)) {
             this.setPosition(opts.x, opts.y);
         } else if (anchor) {
+            // Get anchor world position (works for both sprites and container children)
+            let worldX = anchor.x, worldY = anchor.y;
+            if (typeof anchor.getWorldTransformMatrix === "function") {
+                const m = anchor.getWorldTransformMatrix();
+                worldX = m.tx; // world translation X
+                worldY = m.ty; // world translation Y (feet because origin is 0.5,1)
+            }
+
+            // Compute bubble position above the head using displayHeight
             const anchorH = (anchor.displayHeight ?? anchor.height ?? 0) || 200;
-            const headTop = anchor.y - anchorH; // origin (0.5, 1) ⇒ y is feet
+            const headTop = worldY - anchorH; // origin (0.5,1) ⇒ anchor.y is feet
             const bubbleHalfH = (this.bg.height * (this.bg.scaleY || this.bg.scaleX)) / 2;
-            this.setPosition(anchor.x, headTop - this.gap - bubbleHalfH);
+
+            this.setPosition(worldX, headTop - this.gap - bubbleHalfH);
         } else {
             this.setPosition(scene.scale.width * 0.5, scene.scale.height * 0.25);
         }
@@ -88,7 +98,8 @@ class SpeechBubble extends Phaser.GameObjects.Container {
         let i = 0;
         this.label.setText("");
         this._typeEvt = this.scene.time.addEvent({
-            delay: 20, loop: true,
+            delay: 20, // typewriter speed (ms per char)
+            loop: true,
             callback: () => {
                 this.label.setText(chars.slice(0, ++i).join(""));
                 if (i >= chars.length) this._typeEvt.remove(false);
@@ -108,6 +119,9 @@ class SpeechBubble extends Phaser.GameObjects.Container {
     }
 }
 
+
+
+
 export default class PlaygroundScene extends Phaser.Scene {
     constructor() {
         super("PlaygroundScene");
@@ -116,6 +130,11 @@ export default class PlaygroundScene extends Phaser.Scene {
         this.sandArea = null;
         this.speech = null;
         this.canTap = true;
+        this._dlgTimers = []; // queued dialogue timers
+
+        // Kiko references
+        this._kiko = null;     // sprite
+        this._kikoRig = null;  // container that moves/scales
     }
 
     preload() {
@@ -167,7 +186,6 @@ export default class PlaygroundScene extends Phaser.Scene {
         // If audio context got suspended (tab switch), just resume the context.
         try { this.sound.context?.resume?.(); } catch {}
 
-        // ✅ 절대 play()로 다시 시작하지 않음!
         if (bgm) {
             if (bgm.isPaused) {
                 try { bgm.resume(); } catch {}
@@ -194,32 +212,31 @@ export default class PlaygroundScene extends Phaser.Scene {
         const castleX = centerX - 220;
         const castleY = centerY;
 
-        // Kiko (right)
-        let kiko;
+        // --- Kiko: sprite + rig container to avoid y tween conflicts -----------
         if (this.textures.exists(KIKO_BASE_KEY)) {
-            kiko = this.add.image(centerX + 220, centerY, KIKO_BASE_KEY)
+            this._kiko = this.add.image(0, 0, KIKO_BASE_KEY)
                 .setDisplaySize(600, 600)
-                .setOrigin(0.5, 1)
-                .setDepth(LAYERS.KIKO);
+                .setOrigin(0.5, 1);
         } else {
-            const g = this.add.graphics({ x: centerX + 220, y: centerY });
+            const g = this.add.graphics({ x: 0, y: 0 });
             g.fillStyle(0x2a4cff, 1).fillCircle(0, 0, 60);
-            g.setDepth(LAYERS.KIKO);
-            kiko = g;
+            this._kiko = g;
         }
+        // rig holds the sprite and is the only thing that moves/scales
+        this._kikoRig = this.add.container(centerX + 220, centerY, [this._kiko]).setDepth(LAYERS.KIKO);
 
-        // Idle bounce
+        // Idle bounce on the child only
         this.tweens.add({
-            targets: kiko,
-            y: kiko.y - 10,
+            targets: this._kiko,
+            y: -10,                // bob 10px above its local baseline (0)
             duration: 1500,
             yoyo: true,
             repeat: -1,
             ease: "Sine.easeInOut",
         });
 
-        // Speech bubble
-        this.speech = new SpeechBubble(this, kiko, { maxWidth: 700, fontSize: 30, gap: -10 });
+        // Speech bubble anchored to the Kiko sprite (not the rig)
+        this.speech = new SpeechBubble(this, this._kiko, { maxWidth: 700, fontSize: 30, gap: -10 });
         const name = (this.registry.get("playerName") || "friend");
         this.speech.say(`Hello, ${name}! My name is Kiko.\nLook! Let's make a sandcastle!\nTap the sand!`);
 
@@ -247,9 +264,33 @@ export default class PlaygroundScene extends Phaser.Scene {
                 this.speech.say(`Again!`);
             } else if (this._castleStage === 2) {
                 this.speech.say(`Last one!`);
-            } else if (this._castleStage === 3) {
-                this.speech.say(`Oh no... my hands have gotten dirty.`);
-                this.time.delayedCall(900, () => this._enterDoor(kiko));
+            }
+
+            // Stage 3: queued lines with fixed 2s gaps, then start walking
+            if (this._castleStage === 3) {
+                // no more tapping while dialog/transition is in progress
+                this.canTap = false;
+
+                // queue helper: estimate typewriter time + 2s gap
+                const typeMsPerChar = 20;  // keep in sync with SpeechBubble.say()
+                const padMs        = 2000; // 2s gap between lines
+                let t = 0;
+
+                const queueLine = (text) => {
+                    const ms = Math.max(800, text.length * typeMsPerChar + padMs);
+                    const h = this.time.delayedCall(t, () => this.speech.say(text, 0 /* keep visible */));
+                    this._dlgTimers.push(h);
+                    t += ms;
+                };
+
+                // lines
+                queueLine(`Oh no... my hands have gotten dirty.`);
+                queueLine(`Hmm, what should we do? \nOf course — it's hand washing time!`);
+                queueLine(`Washing our hands keeps us clean and healthy.`);
+                queueLine(`Come with me! \nWill you help me wash my hands?`);
+
+                // begin walking after the final line
+                this.time.delayedCall(t, () => this._enterDoor());
             }
         };
 
@@ -261,12 +302,13 @@ export default class PlaygroundScene extends Phaser.Scene {
 
             this.canTap = false;
 
+            // temporary cheer swap on tap
             if (this._castleStage < CASTLE_FRAMES.length - 1 &&
-                this.textures.exists(KIKO_CHEER_KEY) && kiko.setTexture) {
-                kiko.setTexture(KIKO_CHEER_KEY).setDisplaySize(600, 600);
+                this.textures.exists(KIKO_CHEER_KEY) && this._kiko.setTexture) {
+                this._kiko.setTexture(KIKO_CHEER_KEY).setDisplaySize(600, 600);
                 this.time.delayedCall(220, () =>
-                    (this.textures.exists(KIKO_BASE_KEY) && kiko.setTexture)
-                        ? kiko.setTexture(KIKO_BASE_KEY).setDisplaySize(600, 600)
+                    (this.textures.exists(KIKO_BASE_KEY) && this._kiko.setTexture)
+                        ? this._kiko.setTexture(KIKO_BASE_KEY).setDisplaySize(600, 600)
                         : null
                 );
             }
@@ -286,7 +328,7 @@ export default class PlaygroundScene extends Phaser.Scene {
             const cx = this.sandArea.centerX;
             const cy = this.sandArea.bottom - 10;
 
-            if (kiko?.setPosition) kiko.setPosition(cx + 220, cy);
+            if (this._kikoRig) this._kikoRig.setPosition(cx + 220, cy);
             if (this._castleImage) this._castleImage.setPosition(cx - 220, cy);
         };
         const onResize = ({ width: w, height: h }) => reflow(w, h);
@@ -306,22 +348,41 @@ export default class PlaygroundScene extends Phaser.Scene {
             this._castleImage = null;
             this.canTap = true;
             this._castleStage = -1;
+            // optional: clear any delayed calls owned by this scene
+            // this.time.removeAllEvents();
         });
     }
 
     /** Move toward the door, then go to bathroom scene. */
-    _enterDoor(kiko) {
+    _enterDoor() {
         this.canTap = false;
 
-        if (kiko.setTexture && this.textures.exists(KIKO_ENTER_KEY)) {
-            kiko.setTexture(KIKO_ENTER_KEY).setDisplaySize(600, 600);
-            kiko.setFlipX(true);
-            kiko.setAngle(8);
+        // one-shot guard
+        if (this._leaving) return;
+        this._leaving = true;
+
+        // stop any queued dialogue before moving
+        if (this._dlgTimers) {
+            for (const h of this._dlgTimers) { try { h.remove(false); } catch {} }
+            this._dlgTimers.length = 0;
         }
 
+        // hide & destroy speech bubble
+        if (this.speech) {
+            try { this.speech.hide(); } catch {}
+            this.time.delayedCall(220, () => { try { this.speech.destroy(); } catch {} this.speech = null; });
+        }
+
+        // switch to side-jump pose
+        if (this._kiko.setTexture && this.textures.exists(KIKO_ENTER_KEY)) {
+            this._kiko.setTexture(KIKO_ENTER_KEY).setDisplaySize(600, 600);
+            this._kiko.setFlipX(true).setAngle(8).setOrigin(0.5, 1);
+        }
+
+        // bobbing on the child sprite only (no y conflict with rig)
         const walkBob = this.tweens.add({
-            targets: kiko,
-            y: "+=10",
+            targets: this._kiko,
+            y: -10,
             yoyo: true,
             duration: 180,
             repeat: -1,
@@ -331,18 +392,22 @@ export default class PlaygroundScene extends Phaser.Scene {
         const doorX = this.scale.width * DOOR_X_FRAC;
         const doorY = this.sandArea.bottom - 150 + DOOR_Y_OFFSET;
 
-        const startScale = kiko.scale;
-        const endScale = startScale * 0.55;
+        const startScale = this._kikoRig.scale || 1;
+        const endScale   = startScale * 0.55;
 
+        // move/scale the rig container only
         this.tweens.add({
-            targets: kiko,
+            targets: this._kikoRig,
             x: doorX,
             y: doorY,
             scale: endScale,
             duration: 2800,
             ease: "Sine.easeInOut",
             onComplete: () => {
-                walkBob.stop();
+                // stop bobbing and snap child y to baseline to avoid “drop”
+                try { walkBob.stop(); } catch {}
+                if (this._kiko) this._kiko.y = 0;
+
                 this.input.enabled = false;
                 this.cameras.main.once("camerafadeoutcomplete", () => {
                     this.scene.start("SchoolBathroomScene");
