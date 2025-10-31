@@ -450,7 +450,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         });
     }
 
-    // ---------------- Glow helpers & hint control ----------------
+// ---------------- Glow helpers & hint control ----------------
 
     /** Create a subtle pulsing glow around an image.
      *  Prefers postFX glow; falls back to an additive aura.

@@ -2233,7 +2233,7 @@ const cleancatcher = {
 // click → back to bathroom scene
                     const goBack = () => {
                         dialogRoot.destroy(true);
-                        scene.scene.start("SchoolBathroomScene", { skipIntro: true }); // <-- pass flag
+                        scene.scene.start("SchoolBathroomScene", { skipIntro: true, showScrubDialog: true}); // <-- pass flag
                     };
                     btn.on("pointerup", goBack);
                     btnLabel.setInteractive({ useHandCursor: true }).on("pointerup", goBack);
