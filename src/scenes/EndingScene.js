@@ -87,9 +87,6 @@ export default class EndingScene extends Phaser.Scene {
         this.load.image("homeResetButton", "assets/images/UI/washed_kikos-day_UI-Button_HOME.png");
         this.load.image("classroom_bg", "assets/images/background/Classroom.png");
 
-        if (!this.cache.audio.exists("endingMusic")) {
-            this.load.audio("endingMusic", "assets/sounds/kikos day.mp3");
-        }
     }
 
     // ===== Helpers =====
