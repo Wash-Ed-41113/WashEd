@@ -35,6 +35,10 @@ export default class SoapSplashScene extends Phaser.Scene {
         this._spawnArmed = false; this._idleWatchStart = 0; this._debugTick = 0;
         this._nextWord = null;
         this._bgmArmed = false;
+
+        // --- NEW: scoreboard sync heartbeat (registry/localStorage fallback) ---
+        this._lastSyncedScore = -1;
+        this._scoreSyncAt = 0; // next millis to sync (throttle)
     }
 
     // --- one-shots for correct / incorrect typing (direct Phaser playback) ---
@@ -83,6 +87,9 @@ export default class SoapSplashScene extends Phaser.Scene {
 
     // ---- helper: ALWAYS use this to leave SoapSplash ----
     leaveTo(targetKey, data) {
+        // NEW: finalize round before leaving so EndingScene can sum it
+        this.finalizeRound("scene-change");
+
         try { AudioManager.stop(this); AudioManager.stopGroup("game"); AudioManager.resumeGroup("global"); } catch {}
         this.scene.stop(this.scene.key);
         if (targetKey) this.scene.start(targetKey, data);
@@ -106,6 +113,10 @@ export default class SoapSplashScene extends Phaser.Scene {
         // reset SFX trackers
         this._lastStreakVal = 0;
         this._sfxCooldownUntil = 0;
+
+        // NEW: reset scoreboard sync
+        this._lastSyncedScore = -1;
+        this._scoreSyncAt = 0;
     }
 
     preload() {
@@ -282,8 +293,6 @@ export default class SoapSplashScene extends Phaser.Scene {
         return this._makeToast({ mood: "sad", text: msg, ttl: 1850 });
     }
 
-    // togglePause() { ... }  // (intentionally disabled UI button; ESC handler kept)
-
     create() {
         const SS = CONFIG.soapSplash;
 
@@ -418,8 +427,18 @@ export default class SoapSplashScene extends Phaser.Scene {
         this._waveActive = false; this._pendingSpawns = 0; this._nextSpawnAt = 0;
         this._lastSadAtBreaches = 0; this._lastEncouragementAt = 0;
 
-        const diff = this.registry.get("difficulty");
-        this.roundId = DB.beginRound(window.__SESSION_ID__, "SoapSplash", String(diff));
+        // --- NEW: ensure a session id exists, then begin the round -------------
+        try {
+            const sid =
+                window.__SESSION_ID__ ||
+                DB?.getSessionId?.() ||
+                this.registry.get("sessionId") ||
+                DB.beginSession?.(this.registry.get("playerName") || "Player");
+            if (sid && !window.__SESSION_ID__) window.__SESSION_ID__ = sid;
+            this.roundId = DB.beginRound(sid, "SoapSplash", String(this.registry.get("difficulty") ?? levelNum));
+        } catch (e) {
+            console.warn("[SoapSplash] beginRound failed (non-fatal):", e);
+        }
 
         // PAUSE BUTTON DISABLED (per request)
         const T = CONFIG.ui.topbar;
@@ -468,7 +487,25 @@ export default class SoapSplashScene extends Phaser.Scene {
             if (k && this.bgSprite.setTexture) this.bgSprite.setTexture(k);
         };
 
+        // --- SAFETY: ensure finalize if scene shuts down without gameOver -----
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { if (!this.gameOver) this.finalizeRound("Scene shutdown"); });
+        this.events.once(Phaser.Scenes.Events.DESTROY,  () => { if (!this.gameOver) this.finalizeRound("Scene destroy"); });
+    }
+
+    // --- NEW: keep a robust mirror of score for EndingScene fallbacks ----------
+    _syncScoreForScoreboard(nowMs) {
+        // throttle: at most once every 300 ms
+        if (nowMs < (this._scoreSyncAt || 0)) return;
+        this._scoreSyncAt = nowMs + 300;
+
+        const cur = Number(this.streakSys?.totalScore ?? 0);
+        if (!Number.isFinite(cur)) return;
+        if (cur === this._lastSyncedScore) return;
+        this._lastSyncedScore = cur;
+
+        // registry key used by EndingScene fallback
+        this.registry.set("splash_score", cur);
+        try { localStorage.setItem("splash_score", String(cur)); } catch {}
     }
 
     _commitFinalScore(reason = "finalize") {
@@ -488,17 +525,33 @@ export default class SoapSplashScene extends Phaser.Scene {
     }
 
     finalizeRound(reason = "Time up", overrides = {}) {
-        if (this.gameOver) return; this.gameOver = true;
-        this.streakSys?._recompute?.(); this._commitFinalScore(reason);
+        if (this.gameOver) return; // idempotent guard
+        this.gameOver = true;
+
+        // recompute & save convenience mirrors
+        this.streakSys?._recompute?.();
+        this._commitFinalScore(reason);
+
+        // also mirror to registry/localStorage so EndingScene has fallback
+        const finalScore = Number(overrides.score ?? (this.streakSys?.totalScore ?? 0)) || 0;
+        this.registry.set("splash_score", finalScore);
+        try { localStorage.setItem("splash_score", String(finalScore)); } catch {}
+
         if (this.roundId) {
-            DB.finalizeRound(this.roundId, {
-                score:        overrides.score        ?? (this.streakSys?.totalScore ?? 0),
-                bestStreak:   overrides.bestStreak   ?? (this.streakSys?.bestStreak ?? 0),
-                breaches:     overrides.breaches     ?? (this.breaches ?? 0),
-                baseScore:    overrides.baseScore    ?? (this.streakSys?.baseScore ?? 0),
-                multiplier:   overrides.multiplier   ?? (this.streakSys?.multiplier?.() ?? 1.0),
-                reason
-            });
+            try {
+                DB.finalizeRound(this.roundId, {
+                    score:        finalScore,
+                    bestStreak:   overrides.bestStreak   ?? (this.streakSys?.bestStreak ?? 0),
+                    breaches:     overrides.breaches     ?? (this.breaches ?? 0),
+                    baseScore:    overrides.baseScore    ?? (this.streakSys?.baseScore ?? 0),
+                    multiplier:   overrides.multiplier   ?? (this.streakSys?.multiplier?.() ?? 1.0),
+                    reason
+                });
+            } catch (e) {
+                console.warn("[SoapSplash] finalizeRound DB error:", e);
+            } finally {
+                this.roundId = null; // prevent double finalize
+            }
         }
     }
 
@@ -529,12 +582,17 @@ export default class SoapSplashScene extends Phaser.Scene {
                 this.countdownText?.setColor("#fff")?.setStroke("#000", 8)?.setShadow(0, 4, "#00000099", 8, true, true);
             }
         }
+        // when time hits 0 → auto finalize (safety)
+        if (this._countdownMsLeft <= 0 && !this.gameOver) this.finalizeRound("Time up");
     }
 
     update(time, delta) {
         const active = this.sys?.isActive?.() ?? true;
         if (this._tearingDown || this._paused || !active) return;
         if (this.gameOver) return;
+
+        // keep scoreboard mirrors fresh
+        this._syncScoreForScoreboard(time);
 
         if (!this._spawnArmed) { this._spawnArmed = true; this._waveActive = false; this._pendingSpawns = 0; this._nextSpawnAt = time + (this._betweenWaveDelayMs ?? 700); this._idleWatchStart = time; }
 
@@ -570,29 +628,26 @@ export default class SoapSplashScene extends Phaser.Scene {
         systems.soapsplash.timer.updateHUD(this, time);
 
         // ── Kiko reactions + SFX binding to gameplay signals ──
-        // Breach -> SAD toast + incorrect SFX
         if (this.breaches > (this._lastSadAtBreaches ?? -1)) {
             this._lastSadAtBreaches = this.breaches;
             this.showKikoSad?.();
             if (time >= (this._sfxCooldownUntil || 0)) {
                 this._playIncorrectSfx();
-                this._sfxCooldownUntil = time + 40; // relaxed to 40ms
+                this._sfxCooldownUntil = time + 40;
             }
         }
 
-        // Streak increase -> encouragement toast
         const curStreak = this.streakSys?.streak ?? 0;
         if (curStreak > (this._lastEncouragementAt ?? 0) && curStreak >= 1) {
             this._lastEncouragementAt = curStreak;
             this.showKikoEncouragement?.();
         }
 
-        // SFX on streak change (increase: correct; drop: incorrect)
         if (curStreak !== this._lastStreakVal) {
             if (time >= (this._sfxCooldownUntil || 0)) {
                 if (curStreak > this._lastStreakVal) this._playCorrectSfx();
                 else this._playIncorrectSfx();
-                this._sfxCooldownUntil = time + 40; // relaxed to 40ms
+                this._sfxCooldownUntil = time + 40;
             }
             this._lastStreakVal = curStreak;
         }
@@ -602,7 +657,8 @@ export default class SoapSplashScene extends Phaser.Scene {
             console.log("[SS update]", {
                 paused: this._paused, tearing: this._tearingDown, active: this.sys?.isActive?.(),
                 waveActive: this._waveActive, pending: this._pendingSpawns, germs: this.germs.length,
-                nextSpawnIn: Math.round((this._nextSpawnAt ?? time) - time)
+                nextSpawnIn: Math.round((this._nextSpawnAt ?? time) - time),
+                score: this.streakSys?.totalScore ?? 0
             });
         }
     }
