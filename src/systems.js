@@ -297,7 +297,7 @@ const ui = {
     placeLogo(scene, opts = {}) {
         const key     = opts.key ?? "app_logo";
         const margin  = opts.margin ?? 16;
-        const maxW    = opts.maxWidth ?? 220;  // cap visual width so it stays tidy
+        const maxW    = opts.maxWidth ?? 125;  // cap visual width so it stays tidy
         const depth   = opts.depth ?? 199;     // under topbar (which is ~200), above bg
         const alpha   = opts.alpha ?? 0.95;
 
@@ -1039,12 +1039,12 @@ const soapsplash = (() => {
     const timer = {
         // create hud and schedule round end
         init(scene) {
-            scene.gameOver = false;
-            scene.timerHud = scene.add.text(
-                SS.width - 140, 15,
-                "Time: " + SS.gameDurationTextHud,
-                { fontFamily: SS.fontFamily, fontSize: "16px", color: "#fff" }
-            ).setDepth(10);
+            // scene.gameOver = false;
+            // scene.timerHud = scene.add.text(
+            //     SS.width - 140, 15,
+            //     "Time: " + SS.gameDurationTextHud,
+            //     { fontFamily: SS.fontFamily, fontSize: "16px", color: "#fff" }
+            // ).setDepth(10);
 
             scene.endEvent = scene.time.delayedCall(
                 SS.gameDurationMin * 60 * 1000,
@@ -1077,7 +1077,7 @@ const soapsplash = (() => {
             const score = scene.streakSys ? scene.streakSys.totalScore : 0;
             const bestStreak = scene.streakSys ? scene.streakSys.bestStreak : 0;
 
-            scene.timerHud?.setText("Time: 00:00");
+            // scene.timerHud?.setText("Time: 00:00");
             scene.endEvent?.remove(false);
 
             if (typeof scene.finalizeRound === "function") {
@@ -1656,7 +1656,7 @@ const cleancatcher = {
         // Initialise Phaser sounds if available
         if (scene.sound) {
             catchGoodSound = scene.sound.add("sfx_goodCatch", { volume: 0.5 });
-            catchBadSound = scene.sound.add("sfx_badCatch", { volume: 0.8 });
+            catchBadSound = scene.sound.add("sfx_badCatch", { volume: 0.5 });
             timerBeepSound = scene.sound.add("sfx_beep", { volume: 0.7 });
         } else {
             console.warn("[CleanCatch] No Phaser sound system found — skipping sound effects.");
@@ -2267,6 +2267,11 @@ const cleancatcher = {
             if (!timerInterval) timerInterval = setInterval(() => {
                 if (!paused && !gameOver) {
                     timeLeft--;
+
+                    // ✅ Play the 5-second warning sound once
+                    if (timeLeft === 5 && timerBeepSound) {
+                        timerBeepSound.play();
+                    }
 
                     // stop the game when time is up
                     if (timeLeft <= 0) {

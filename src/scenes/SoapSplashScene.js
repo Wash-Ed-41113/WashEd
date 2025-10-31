@@ -15,12 +15,16 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.germs = []; this.lastSpawn = 0; this.germSeq = 0; this.breaches = 0; this.gameOver = false; this.gameStartAt = null;
         // ui / pause
         this._paused = false; this._pauseUi = null;
+        this._timeUpFired = false; // prevent double-handling at 00
+        this._leaving = false;     // used by endGameAndGoto one-shot guard
+
         // spawn geometry
         this.rOuter = 0; this.rInner = 0; this.angleMinDeg = 0; this.angleMaxDeg = 90;
         // visuals
         this.bgSprite = null; this._bgKeys = [];
         // db / round
         this.roundId = null;
+
         // spawner loop
         this._waveActive = false; this._pendingSpawns = 0; this._nextSpawnAt = 0; this._betweenWaveDelayMs = 900;
         // toast state (Kiko reactions)
@@ -29,16 +33,12 @@ export default class SoapSplashScene extends Phaser.Scene {
         // SFX trackers (new)
         this._lastStreakVal = 0;           // detect streak changes for SFX
         this._sfxCooldownUntil = 0;        // anti-spam guard (ms)
-        // timer HUD
+        // timer HUD (legacy small HUD; Chewy is authoritative now)
         this._countdownMsTotal = 100000; this._countdownMsLeft = 100000; this._lastShownSec = 101; this._urgentPulsing = false; this.countdownText = null;
         // misc runtime
         this._spawnArmed = false; this._idleWatchStart = 0; this._debugTick = 0;
         this._nextWord = null;
         this._bgmArmed = false;
-
-        // --- NEW: scoreboard sync heartbeat (registry/localStorage fallback) ---
-        this._lastSyncedScore = -1;
-        this._scoreSyncAt = 0; // next millis to sync (throttle)
     }
 
     // --- one-shots for correct / incorrect typing (direct Phaser playback) ---
@@ -85,11 +85,28 @@ export default class SoapSplashScene extends Phaser.Scene {
         };
     }
 
+    _onTimeUp() {
+        if (this._timeUpFired || this.gameOver) return;
+        this._timeUpFired = true;
+
+        // clamp legacy HUD if present
+        try { this._countdownMsLeft = 0; this.countdownText?.setText("0"); } catch {}
+
+        // optional reaction
+        try { this.showKikoSad?.("Time’s up!"); } catch {}
+
+        // EXACT SAME PATH as breach-limit end:
+        try {
+            systems.soapsplash.timer?.endGame?.(this, "Time's up");
+        } catch (e) {
+            console.warn("[SoapSplash] timer.endGame failed, falling back:", e);
+            this.finalizeRound("Time's up");
+            this.leaveTo("HandwashAnimationScene", { skipIntro: true });
+        }
+    }
+
     // ---- helper: ALWAYS use this to leave SoapSplash ----
     leaveTo(targetKey, data) {
-        // NEW: finalize round before leaving so EndingScene can sum it
-        this.finalizeRound("scene-change");
-
         try { AudioManager.stop(this); AudioManager.stopGroup("game"); AudioManager.resumeGroup("global"); } catch {}
         this.scene.stop(this.scene.key);
         if (targetKey) this.scene.start(targetKey, data);
@@ -110,13 +127,11 @@ export default class SoapSplashScene extends Phaser.Scene {
         this._lastSadAtBreaches = 0;
         this._lastEncouragementAt = 0;
 
+        this._timeUpFired = false;
+
         // reset SFX trackers
         this._lastStreakVal = 0;
         this._sfxCooldownUntil = 0;
-
-        // NEW: reset scoreboard sync
-        this._lastSyncedScore = -1;
-        this._scoreSyncAt = 0;
     }
 
     preload() {
@@ -162,45 +177,46 @@ export default class SoapSplashScene extends Phaser.Scene {
         if (badSrc && !this.cache.audio.exists("SS_SND_INCORRECT")) this.load.audio("SS_SND_INCORRECT", badSrc);
     }
 
-    _buildPauseOverlay() {
-        const { width: W, height: H } = this.scale;
-        const g = this.add.container(0, 0).setDepth(99999);
-        const overlay = this.add.rectangle(0, 0, W, H, 0xffffff, 0.45).setOrigin(0, 0).setInteractive(); g.add(overlay);
-
-        let panel;
-        if (this.textures.exists("DialogPanel")) {
-            panel = this.add.image(W / 2, H / 2, "DialogPanel").setOrigin(0.5);
-            const tw = Math.min(W * 0.8, 980); panel.setDisplaySize(tw, tw * 0.58);
-        } else {
-            const gfx = this.add.graphics();
-            const pw = Math.min(W * 0.8, 980), ph = Math.min(H * 0.6, 520), px = (W - pw) / 2, py = (H - ph) / 2;
-            gfx.fillStyle(0xffffff, 1).fillRoundedRect(px, py, pw, ph, 28).lineStyle(6, 0x222222, 0.18).strokeRoundedRect(px, py, pw, ph, 28);
-            panel = gfx;
-        }
-        g.add(panel);
-
-        const title = this.add.text(W / 2, H / 2 - 170, "Game Paused", { fontFamily: "Chewy", fontSize: "72px", color: "#000", align: "center" }).setOrigin(0.5); g.add(title);
-        const score = this.streakSys?.totalScore ?? 0, best = this.streakSys?.bestStreak ?? 0, breaches = this.breaches ?? 0;
-        const stats = this.add.text(W / 2, H / 2 - 10, `Score: ${score}\nBest Streak: ${best}\nBreaches: ${breaches}`, {
-            fontFamily: "Montserrat", fontSize: "40px", color: "#000", align: "center", lineSpacing: 12
-        }).setOrigin(0.5); g.add(stats);
-
-        g.destroy = () => {
-            try { panel?.destroy(); title?.destroy(); stats?.destroy(); } catch { }
-            finally {
-                this._pauseUi = null; this._paused = false;
-                this.time.timeScale = 1; this.tweens.timeScale = 1;
-                if (this.physics?.world) this.physics.world.isPaused = false;
-                this.sound?.resumeAll?.();
-                if (this._origSysPauseOverlay) { systems.ui.pauseOverlay = this._origSysPauseOverlay; this._origSysPauseOverlay = null; }
-            }
-        };
-        this._pauseUi = g; return g;
-    }
-
-    // ─────────────────────────────────────────────
-    // Toast builder (bottom-right, Chewy font)
-    // ─────────────────────────────────────────────
+    // _buildPauseOverlay() {
+    //     const { width: W, height: H } = this.scale;
+    //
+    //     const g = this.add.container(0, 0).setDepth(99999);
+    //     const overlay = this.add.rectangle(0, 0, W, H, 0xffffff, 0.45).setOrigin(0, 0).setInteractive(); g.add(overlay);
+    //
+    //     let panel;
+    //     if (this.textures.exists("DialogPanel")) {
+    //         panel = this.add.image(W / 2, H / 2, "DialogPanel").setOrigin(0.5);
+    //         const tw = Math.min(W * 0.8, 980); panel.setDisplaySize(tw, tw * 0.58);
+    //     } else {
+    //         const gfx = this.add.graphics();
+    //         const pw = Math.min(W * 0.8, 980), ph = Math.min(H * 0.6, 520), px = (W - pw) / 2, py = (H - ph) / 2;
+    //         gfx.fillStyle(0xffffff, 1).fillRoundedRect(px, py, pw, ph, 28).lineStyle(6, 0x222222, 0.18).strokeRoundedRect(px, py, pw, ph, 28);
+    //         panel = gfx;
+    //     }
+    //     g.add(panel);
+    //
+    //     const title = this.add.text(W / 2, H / 2 - 170, "Game Paused", { fontFamily: "Chewy", fontSize: "72px", color: "#000", align: "center" }).setOrigin(0.5); g.add(title);
+    //     const score = this.streakSys?.totalScore ?? 0, best = this.streakSys?.bestStreak ?? 0, breaches = this.breaches ?? 0;
+    //     const stats = this.add.text(W / 2, H / 2 - 10, `Score: ${score}\nBest Streak: ${best}\nBreaches: ${breaches}`, {
+    //         fontFamily: "Montserrat", fontSize: "40px", color: "#000", align: "center", lineSpacing: 12
+    //     }).setOrigin(0.5); g.add(stats);
+    //
+    //     g.destroy = () => {
+    //         try { panel?.destroy(); title?.destroy(); stats?.destroy(); } catch { }
+    //         finally {
+    //             this._pauseUi = null; this._paused = false;
+    //             this.time.timeScale = 1; this.tweens.timeScale = 1;
+    //             if (this.physics?.world) this.physics.world.isPaused = false;
+    //             this.sound?.resumeAll?.();
+    //             if (this._origSysPauseOverlay) { systems.ui.pauseOverlay = this._origSysPauseOverlay; this._origSysPauseOverlay = null; }
+    //         }
+    //     };
+    //     this._pauseUi = g; return g;
+    // }
+    //
+    // // ─────────────────────────────────────────────
+    // // Toast builder (bottom-right, Chewy font)
+    // // ─────────────────────────────────────────────
     _makeToast({ mood = "happy", text, ttl = 1800 }) {
         const { width: W, height: H } = this.scale;
         if (!this._toastStack) this._toastStack = [];
@@ -293,6 +309,8 @@ export default class SoapSplashScene extends Phaser.Scene {
         return this._makeToast({ mood: "sad", text: msg, ttl: 1850 });
     }
 
+    // togglePause() { ... }  // (intentionally disabled UI button; ESC handler kept)
+
     create() {
         const SS = CONFIG.soapSplash;
 
@@ -341,8 +359,17 @@ export default class SoapSplashScene extends Phaser.Scene {
             });
         }
 
-        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { AudioManager.stop(this); AudioManager.stopGroup("game"); AudioManager.resumeGroup("global"); });
-        this.events.once(Phaser.Scenes.Events.DESTROY,  () => { AudioManager.stop(this); AudioManager.stopGroup("game"); AudioManager.resumeGroup("global"); });
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            try { this._chewyTimerEvt?.remove?.(); } catch {}
+            try { this.chewyTimer?.destroy?.(); } catch {}
+            AudioManager.stop(this); AudioManager.stopGroup("game"); AudioManager.resumeGroup("global");
+        });
+
+        this.events.once(Phaser.Scenes.Events.DESTROY, () => {
+            try { this._chewyTimerEvt?.remove?.(); } catch {}
+            try { this.chewyTimer?.destroy?.(); } catch {}
+            AudioManager.stop(this); AudioManager.stopGroup("game"); AudioManager.resumeGroup("global");
+        });
 
         systems.ui.placeLogo(this);
         this.sound?.resumeAll?.();
@@ -369,14 +396,13 @@ export default class SoapSplashScene extends Phaser.Scene {
             okEvents.forEach (ev => this.events.on(ev,  () => this._playCorrectSfx()));
             badEvents.forEach(ev => this.events.on(ev, () => this._playIncorrectSfx()));
         }
-        if (!this.typeHud || !this.typeHud.scene) {
-            this.typeHud = this.add.text(16, 14, "Score: 0  (base 0 × 1.0)   Streak: 0", {
-                fontFamily: CONFIG.ui?.fontFamily || "Montserrat", fontSize: "20px", color: "#fff"
-            }).setDepth(200);
-        }
+        // if (!this.typeHud || !this.typeHud.scene) {
+        //     this.typeHud = this.add.text(16, 14, "Score: 0  (base 0 × 1.0)   Streak: 0", {
+        //         fontFamily: CONFIG.ui?.fontFamily || "Montserrat", fontSize: "20px", color: "#fff"
+        //     }).setDepth(200);
+        // }
 
         this.gameStartAt = this.time.now;
-        if (!this._timerInit) { systems.soapsplash.timer.init(this); this._timerInit = true; }
 
         const raw = this.registry.get("difficulty"); const map = { easy: 1, normal: 2, medium: 2, hard: 3 };
         const levelNum = (typeof raw === "number") ? Phaser.Math.Clamp(Math.round(raw), 1, 3) : (map[String(raw ?? "").toLowerCase()] ?? 2);
@@ -414,6 +440,74 @@ export default class SoapSplashScene extends Phaser.Scene {
             if (this.bgVideo.video?.readyState >= 2) setScale(); else { this.bgVideo.once("play", setScale); this.bgVideo.once("loadeddata", setScale); }
         }
 
+        // === CHEWY COUNTDOWN (center-top) — PERCENT: 100 → 00 ===
+        this._roundMs = 100000;                         // 100 seconds total
+        this._roundEndAt = this.time.now + this._roundMs;
+        this._lastTimerNow = this.time.now;             // for pause-freeze
+
+// Big Chewy timer at top-center (100 → 00)
+        const Wc = this.scale.width;
+        this.chewyTimer = this.add.text(Wc / 2, 16, "100", {
+            fontFamily: "Chewy",
+            fontSize: "48px",
+            color: "#ffffff",
+            stroke: "#000000",
+            strokeThickness: 4,
+            align: "center",
+        })
+            .setOrigin(0.5, 0)
+            .setDepth(1000);
+
+// helper to format: keep "100" at start, then "99".."00" with zero-pad to 2 digits
+        const _fmtChewy = (n) => (n === 100 ? "100" : String(Math.max(0, n)).padStart(2, "0"));
+
+// Drive the display and auto-end the round at 0 (identical path to breaches)
+        this._chewyTimerEvt = this.time.addEvent({
+            delay: 1000, // update every 1s for a clean 100→00 step
+            loop: true,
+            callback: () => {
+                if (this.gameOver) return;
+
+                // freeze countdown while paused
+                const now = this.time.now;
+                const dt = now - (this._lastTimerNow || now);
+                this._lastTimerNow = now;
+                if (this._paused) { this._roundEndAt += dt; return; }
+
+                const remainMs = Math.max(0, this._roundEndAt - now);
+                // clamp to 0..100 in whole seconds (ceil so display changes right at the tick)
+                let count = Math.ceil(remainMs / 1000);       // 100, 99, ..., 0
+                if (count < 0) count = 0;
+                if (count > 100) count = 100;
+
+                this.chewyTimer.setText(_fmtChewy(count));
+
+                // color cues (same feel as before)
+                if (count <= 10) this.chewyTimer.setColor("#ff6666");
+                else if (count <= 30) this.chewyTimer.setColor("#ffcc33");
+                else this.chewyTimer.setColor("#ffffff");
+
+                if (remainMs <= 0) {
+                    if (!this._timeUpFired) {
+                        this._timeUpFired = true;
+                        try { this._chewyTimerEvt?.remove?.(); } catch {}
+                        try { this.chewyTimer?.setText("00"); } catch {}
+                        try { this.showKikoSad?.("Time’s up!"); } catch {}
+
+                        // EXACT SAME PATH as breach-limit end:
+                        try {
+                            systems.soapsplash.timer?.endGame?.(this, "Time's up");
+                        } catch (e) {
+                            // safety fallback if helper missing
+                            this.finalizeRound("Time's up");
+                            this.leaveTo("HandwashAnimationScene", { skipIntro: true });
+                        }
+                    }
+                }
+            },
+        });
+
+
         if (SS.useSpawner) {
             const d = Math.hypot(SS.width - this.sinkPosition.x, 0 - this.sinkPosition.y);
             this.rOuter = Math.max(0, d - SS.cornerMargin); this.rInner = Math.max(0, this.rOuter - SS.cornerBandWidth);
@@ -427,26 +521,10 @@ export default class SoapSplashScene extends Phaser.Scene {
         this._waveActive = false; this._pendingSpawns = 0; this._nextSpawnAt = 0;
         this._lastSadAtBreaches = 0; this._lastEncouragementAt = 0;
 
-        // --- NEW: ensure a session id exists, then begin the round -------------
-        try {
-            const sid =
-                window.__SESSION_ID__ ||
-                DB?.getSessionId?.() ||
-                this.registry.get("sessionId") ||
-                DB.beginSession?.(this.registry.get("playerName") || "Player");
-            if (sid && !window.__SESSION_ID__) window.__SESSION_ID__ = sid;
-            this.roundId = DB.beginRound(sid, "SoapSplash", String(this.registry.get("difficulty") ?? levelNum));
-        } catch (e) {
-            console.warn("[SoapSplash] beginRound failed (non-fatal):", e);
-        }
+        const diff = this.registry.get("difficulty");
+        this.roundId = DB.beginRound(window.__SESSION_ID__, "SoapSplash", String(diff));
 
-        // PAUSE BUTTON DISABLED (per request)
-        const T = CONFIG.ui.topbar;
-        // const pause = this.add.image(this.scale.width - T.padding - T.iconSize/2, T.padding + T.iconSize/2, "ui_pause")
-        //   .setOrigin(0.5).setDisplaySize(T.iconSize, T.iconSize).setDepth(200).setScrollFactor(0).setInteractive({ useHandCursor: true });
-        // pause.on("pointerup", () => this.togglePause());
-
-        // keep only ESC to close our overlay if present
+        // ESC to close overlay if present
         this.input.keyboard?.on("keydown-ESC", () => { if (this._paused && this._pauseUi?.destroy) this._pauseUi.destroy(); });
         this.events.once("shutdown", () => { this._pauseUi?.destroy?.(); });
         this.events.once("destroy",  () => { this._pauseUi?.destroy?.(); });
@@ -456,14 +534,14 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.topbar?.setTimerVisible?.(false);
         try { this.topbar?.timerText?.destroy?.(); } catch (_) {}
 
-        this._buildCountdownHUD();
+        // LEGACY HUD disabled by default now (Chewy is authoritative)
+        // this._buildCountdownHUD();
 
-        systems.soapsplash.typing.updateHud(this);
+        // systems.soapsplash.typing.updateHud(this);
         if (!this.typing?.activeId && this.germs.length) systems.soapsplash.typing.pickNearest(this);
 
         this.events.once(Phaser.Scenes.Events.RESUME, () => {
             this.gameStartAt = this.time.now;
-            if (!this._timerInit) { systems.soapsplash.timer.init(this); this._timerInit = true; }
             if (this.germs.length && (!this.typing || !this.typing.activeId)) systems.soapsplash.typing.pickNearest(this);
             ensureBgm();
         });
@@ -487,25 +565,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             if (k && this.bgSprite.setTexture) this.bgSprite.setTexture(k);
         };
 
-        // --- SAFETY: ensure finalize if scene shuts down without gameOver -----
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { if (!this.gameOver) this.finalizeRound("Scene shutdown"); });
-        this.events.once(Phaser.Scenes.Events.DESTROY,  () => { if (!this.gameOver) this.finalizeRound("Scene destroy"); });
-    }
-
-    // --- NEW: keep a robust mirror of score for EndingScene fallbacks ----------
-    _syncScoreForScoreboard(nowMs) {
-        // throttle: at most once every 300 ms
-        if (nowMs < (this._scoreSyncAt || 0)) return;
-        this._scoreSyncAt = nowMs + 300;
-
-        const cur = Number(this.streakSys?.totalScore ?? 0);
-        if (!Number.isFinite(cur)) return;
-        if (cur === this._lastSyncedScore) return;
-        this._lastSyncedScore = cur;
-
-        // registry key used by EndingScene fallback
-        this.registry.set("splash_score", cur);
-        try { localStorage.setItem("splash_score", String(cur)); } catch {}
     }
 
     _commitFinalScore(reason = "finalize") {
@@ -518,81 +578,107 @@ export default class SoapSplashScene extends Phaser.Scene {
     }
 
     endGameAndGoto(next, data = {}, reason = "scene-change") {
-        if (this.gameOver) return;
-        this.finalizeRound(reason);
-        try { this.scene.stop("SoapSplash"); if (next) this.scene.start(next, data); }
-        catch (e) { console.warn("[SoapSplash] endGameAndGoto error:", e); }
-    }
+        if (this._leaving) return;
+        this._leaving = true;
 
-    finalizeRound(reason = "Time up", overrides = {}) {
-        if (this.gameOver) return; // idempotent guard
-        this.gameOver = true;
+        if (!this.gameOver) this.finalizeRound?.(reason);
 
-        // recompute & save convenience mirrors
-        this.streakSys?._recompute?.();
-        this._commitFinalScore(reason);
+        // stop overlays that might be on top
+        try { this.scene.stop("SoapSplashExplain"); } catch {}
 
-        // also mirror to registry/localStorage so EndingScene has fallback
-        const finalScore = Number(overrides.score ?? (this.streakSys?.totalScore ?? 0)) || 0;
-        this.registry.set("splash_score", finalScore);
-        try { localStorage.setItem("splash_score", String(finalScore)); } catch {}
-
-        if (this.roundId) {
-            try {
-                DB.finalizeRound(this.roundId, {
-                    score:        finalScore,
-                    bestStreak:   overrides.bestStreak   ?? (this.streakSys?.bestStreak ?? 0),
-                    breaches:     overrides.breaches     ?? (this.breaches ?? 0),
-                    baseScore:    overrides.baseScore    ?? (this.streakSys?.baseScore ?? 0),
-                    multiplier:   overrides.multiplier   ?? (this.streakSys?.multiplier?.() ?? 1.0),
-                    reason
-                });
-            } catch (e) {
-                console.warn("[SoapSplash] finalizeRound DB error:", e);
-            } finally {
-                this.roundId = null; // prevent double finalize
-            }
+        try {
+            this.scene.stop(this.scene.key);
+            if (next) this.scene.start(next, data);
+        } catch (e) {
+            console.warn("[SoapSplash] endGameAndGoto error:", e);
         }
     }
 
-    _buildCountdownHUD() {
-        const { width: W } = this.scale;
-        this._countdownMsTotal = 100000; this._countdownMsLeft = 100000; this._lastShownSec = 101; this._urgentPulsing = false;
-        this.countdownText = this.add.text(W / 2, 16, "100", {
-            fontFamily: "Chewy", fontSize: "64px", color: "#fff", align: "center"
-        }).setOrigin(0.5, 0).setStroke("#000", 8).setShadow(0, 4, "#00000099", 8, true, true).setDepth(1000);
+    finalizeRound(reason = "Time up", overrides = {}) {
+        if (this.gameOver) return; this.gameOver = true;
+        this.streakSys?._recompute?.(); this._commitFinalScore(reason);
+        if (this.roundId) {
+            DB.finalizeRound(this.roundId, {
+                score:        overrides.score        ?? (this.streakSys?.totalScore ?? 0),
+                bestStreak:   overrides.bestStreak   ?? (this.streakSys?.bestStreak ?? 0),
+                breaches:     overrides.breaches     ?? (this.breaches ?? 0),
+                baseScore:    overrides.baseScore    ?? (this.streakSys?.baseScore ?? 0),
+                multiplier:   overrides.multiplier   ?? (this.streakSys?.multiplier?.() ?? 1.0),
+                reason
+            });
+        }
     }
 
+    // Bridge/fallback: prefer timer.endGame path; keep for backward-compat
+    _handleTimeUpToGameOver() {
+        this._paused = true;
+        if (this.physics?.world) this.physics.world.isPaused = true;
+
+        try { this._chewyTimerEvt?.remove?.(); } catch {}
+        try { this.scene.stop("SoapSplashExplain"); } catch {}
+        try { AudioManager.fadeGroup?.("game", { to: 0, duration: 600 }); } catch {}
+
+        try { this.finalizeRound?.("Time up"); } catch (e) {
+            console.warn("[SoapSplash] finalizeRound on timeup failed:", e);
+        }
+
+        if (typeof this.gameOverScreen === "function") return this.gameOverScreen({ reason: "timeup" });
+        if (systems?.soapsplash?.ui?.showGameOver)       return systems.soapsplash.ui.showGameOver(this, { reason: "timeup" });
+        if (systems?.ui?.showGameOver)                    return systems.ui.showGameOver(this, { reason: "timeup" });
+
+        this.events.emit("soapsplash:gameover", { reason: "timeup" });
+
+        this.time.delayedCall(1200, () => {
+            const NEXT = (window.CONFIG?.flow?.afterSoapSplash) || "EndingScene";
+            try { this.endGameAndGoto?.(NEXT, { from: "SoapSplash", reason: "timeup" }, "Time up"); } catch {}
+        });
+    }
+
+    // Legacy mini HUD; Chewy is authoritative now
+    // _buildCountdownHUD() {
+    //     const { width: W } = this.scale;
+    //     this._countdownMsTotal = 100000; this._countdownMsLeft = 100000; this._lastShownSec = 101; this._urgentPulsing = false;
+    //     this.countdownText = this.add.text(W / 2, 16, "100", {
+    //         fontFamily: "Chewy", fontSize: "64px", color: "#fff", align: "center"
+    //     }).setOrigin(0.5, 0).setStroke("#000", 8).setShadow(0, 4, "#00000099", 8, true, true).setDepth(1000);
+    // }
+
     _updateCountdown(delta) {
+        // intentionally left available but UNUSED; Chewy timer now owns time-up
         if (this._paused || this.gameOver) return;
+
         this._countdownMsLeft = Math.max(0, this._countdownMsLeft - delta);
         let s = Math.ceil(this._countdownMsLeft / 1000); if (s < 0) s = 0;
+
+        if (s <= 0) { this._onTimeUp(); return; }
+
         if (s !== this._lastShownSec) {
-            this._lastShownSec = s; this.countdownText?.setText(String(s));
+            this._lastShownSec = s;
+            this.countdownText?.setText(String(s));
+
             if (s <= 10) {
                 this.countdownText?.setColor("#ff3b3b")?.setStroke("#7a0000", 10)?.setShadow(0, 6, "#ff3b3b", 14, true, true);
                 if (!this._urgentPulsing) {
                     this._urgentPulsing = true;
-                    this.tweens.add({ targets: this.countdownText, scaleX: 1.12, scaleY: 1.12, duration: 110, yoyo: true, ease: "Sine.inOut", onComplete: () => { this._urgentPulsing = false; } });
+                    this.tweens.add({
+                        targets: this.countdownText,
+                        scaleX: 1.12, scaleY: 1.12, duration: 110, yoyo: true, ease: "Sine.inOut",
+                        onComplete: () => { this._urgentPulsing = false; }
+                    });
                 }
             } else if (s <= 20) {
-                this.countdownText?.setColor("#ffd166")?.setStroke("#5c3b00", 9)?.setShadow(0, 5, "#000000aa", 10, true, true);
+                this.countdownText?.setColor("#ffd166")?.setStroke("#5c3b00", 9)?.setShadow("#000000aa");
                 this.tweens.add({ targets: this.countdownText, scaleX: 1.06, scaleY: 1.06, duration: 140, yoyo: true, ease: "Sine.inOut" });
             } else {
                 this.countdownText?.setColor("#fff")?.setStroke("#000", 8)?.setShadow(0, 4, "#00000099", 8, true, true);
             }
         }
-        // when time hits 0 → auto finalize (safety)
-        if (this._countdownMsLeft <= 0 && !this.gameOver) this.finalizeRound("Time up");
     }
 
     update(time, delta) {
         const active = this.sys?.isActive?.() ?? true;
         if (this._tearingDown || this._paused || !active) return;
         if (this.gameOver) return;
-
-        // keep scoreboard mirrors fresh
-        this._syncScoreForScoreboard(time);
 
         if (!this._spawnArmed) { this._spawnArmed = true; this._waveActive = false; this._pendingSpawns = 0; this._nextSpawnAt = time + (this._betweenWaveDelayMs ?? 700); this._idleWatchStart = time; }
 
@@ -613,7 +699,9 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         const SS = CONFIG.soapSplash || {};
         if (this.gameStartAt == null) this.gameStartAt = time;
-        this._updateCountdown?.(delta);
+
+        // IMPORTANT: legacy countdown disabled to avoid double-timer
+        // this._updateCountdown?.(delta);
 
         const base = SS.spawnIntervalMs ?? SS.spawnEveryMs ?? 1200, jitter = SS.spawnJitterMs ?? 140, cap = SS.waveCap ?? SS.maxGerms ?? 5;
         if (!this._waveActive && this.germs.length === 0) { this._waveActive = true; this._pendingSpawns = cap; this._nextSpawnAt = this._nextSpawnAt ?? (time + (this._betweenWaveDelayMs ?? 900)); }
@@ -625,9 +713,10 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         systems.soapsplash.movement.moveGerms(this, delta);
         systems.soapsplash.rules.checkBreaches(this);
-        systems.soapsplash.timer.updateHUD(this, time);
+        // systems.soapsplash.timer.updateHUD(this, time);
 
         // ── Kiko reactions + SFX binding to gameplay signals ──
+        // Breach -> SAD toast + incorrect SFX
         if (this.breaches > (this._lastSadAtBreaches ?? -1)) {
             this._lastSadAtBreaches = this.breaches;
             this.showKikoSad?.();
@@ -637,12 +726,14 @@ export default class SoapSplashScene extends Phaser.Scene {
             }
         }
 
+        // Streak increase -> encouragement toast
         const curStreak = this.streakSys?.streak ?? 0;
         if (curStreak > (this._lastEncouragementAt ?? 0) && curStreak >= 1) {
             this._lastEncouragementAt = curStreak;
             this.showKikoEncouragement?.();
         }
 
+        // SFX on streak change (increase: correct; drop: incorrect)
         if (curStreak !== this._lastStreakVal) {
             if (time >= (this._sfxCooldownUntil || 0)) {
                 if (curStreak > this._lastStreakVal) this._playCorrectSfx();
@@ -657,8 +748,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             console.log("[SS update]", {
                 paused: this._paused, tearing: this._tearingDown, active: this.sys?.isActive?.(),
                 waveActive: this._waveActive, pending: this._pendingSpawns, germs: this.germs.length,
-                nextSpawnIn: Math.round((this._nextSpawnAt ?? time) - time),
-                score: this.streakSys?.totalScore ?? 0
+                nextSpawnIn: Math.round((this._nextSpawnAt ?? time) - time)
             });
         }
     }

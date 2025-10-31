@@ -116,7 +116,7 @@ export default class EndingScene extends Phaser.Scene {
         this.load.image("kiko_cheer", "assets/images/WashEd_kiko_sprite/kiko_cheer.png");
         this.load.image("confetti", "assets/images/background/confetti.png");
         this.load.image("dialogPanel", CONFIG.assets.ui.dialogPanel);
-        this.load.image("homeResetButton", "assets/images/UI/washed_kikos-day_UI-Button_HOME.png");
+        // this.load.image("homeResetButton", "assets/images/UI/washed_kikos-day_UI-Button_HOME.png");
         this.load.image("classroom_bg", "assets/images/background/Classroom.png");
     }
 
@@ -141,8 +141,8 @@ export default class EndingScene extends Phaser.Scene {
     _addPlayAgainButton() {
         const { width, height } = this.scale;
         const texKey = this._ensureEasyBtnTexture(1);
-        const x = Math.round(width * 0.84);
-        const y = Math.round(height * 0.82);
+        const x = Math.round(width * 0.14);
+        const y = Math.round(height * 0.90);
 
         const img = this.add.image(x, y, texKey).setOrigin(0.5).setDepth(300).setInteractive({ useHandCursor: true });
         const label = this.add.text(x, y, "Play Again", {
@@ -230,6 +230,8 @@ export default class EndingScene extends Phaser.Scene {
             duration: 120, yoyo: true, repeat: -1, repeatDelay: jumpD - 120
         });
 
+        systems.ui.placeLogo(this);
+
         // Chalkboard scoreboard (names intentionally mapped to the correct game)
         //  - "Germ Scrubber"  == SoapSplash (typing)
         //  - "Soap Splasher"  == CleanCatch (catching)
@@ -239,8 +241,8 @@ export default class EndingScene extends Phaser.Scene {
             const clip = this.add.graphics().fillStyle(0x000000, 0).fillRect(board.x, board.y, board.w, board.h);
             const mask = clip.createGeometryMask();
 
-            const styleTitle = { fontFamily: "Chewy, Arial, sans-serif", fontSize: "48px", color: "#F3F0E6", align: "left", wordWrap: { width: board.w - 20 } };
-            const styleLine  = { fontFamily: "Chewy, Arial, sans-serif", fontSize: "34px", color: "#F3F0E6", align: "left", wordWrap: { width: board.w - 20 } };
+            const styleTitle = { fontFamily: "Chewy", fontSize: "48px", color: "#F3F0E6", align: "left", wordWrap: { width: board.w - 20 } };
+            const styleLine  = { fontFamily: "Chewy", fontSize: "34px", color: "#F3F0E6", align: "left", wordWrap: { width: board.w - 20 } };
 
             const playerName = this.registry.get("playerName") || "Player";
             const c  = this.add.container(board.x, board.y).setDepth(5).setMask(mask);
@@ -276,10 +278,10 @@ export default class EndingScene extends Phaser.Scene {
         const selected = lines[tier][Math.floor(Math.random() * lines[tier].length)];
 
         const dialogY = height * 0.97;
-        const dialog = this.add.image(width * 0.50, dialogY, "dialogPanel")
+        const dialog = this.add.image(width * 0.58, dialogY, "dialogPanel")
             .setOrigin(0.5, 1).setAlpha(0).setDepth(25).setScale(0.5);
         const panelCenterY = dialogY - (dialog.height * dialog.scaleY) / 2;
-        const msg = this.add.text(width * 0.50, panelCenterY, selected, {
+        const msg = this.add.text(width * 0.58, panelCenterY, selected, {
             fontFamily: "Montserrat", fontSize: "64px", color: "#000000", wordWrap: { width: 870 }, align: "center"
         }).setOrigin(0.5).setAlpha(0).setDepth(26);
 
@@ -335,26 +337,26 @@ export default class EndingScene extends Phaser.Scene {
             AudioManager.play(this, "global_bg", { group: "global", volume: 0.6 });
         } catch {}
 
-        // Home/reset icon (top-right) → full reset to ENTRY_SCENE
-        const home = this.add.image(width * 0.95, height * 0.1, "homeResetButton")
-            .setOrigin(0.5).setScale(0.1).setDepth(20).setInteractive({ useHandCursor: true });
-        home.on("pointerover", () => home.setScale(0.103));
-        home.on("pointerout",  () => home.setScale(0.1));
-        home.on("pointerdown", () => { home.disableInteractive(); this.cameras.main.fadeOut(500, 0, 0, 0); });
-        this.cameras.main.once("camerafadeoutcomplete", async () => {
-            this._confettiCancelled = true;
-            try {
-                if (this.music) {
-                    await new Promise((res) => {
-                        this.tweens.add({
-                            targets: this.music, volume: 0, duration: 600, ease: "Sine.easeOut",
-                            onComplete: () => { this.music?.stop(); res(); }
-                        });
-                    });
-                }
-            } catch {}
-            await fullResetAndGotoStart(this);
-        });
+        // // Home/reset icon (top-right) → full reset to ENTRY_SCENE
+        // const home = this.add.image(width * 0.95, height * 0.1, "homeResetButton")
+        //     .setOrigin(0.5).setScale(0.1).setDepth(20).setInteractive({ useHandCursor: true });
+        // home.on("pointerover", () => home.setScale(0.103));
+        // home.on("pointerout",  () => home.setScale(0.1));
+        // home.on("pointerdown", () => { home.disableInteractive(); this.cameras.main.fadeOut(500, 0, 0, 0); });
+        // this.cameras.main.once("camerafadeoutcomplete", async () => {
+        //     this._confettiCancelled = true;
+        //     try {
+        //         if (this.music) {
+        //             await new Promise((res) => {
+        //                 this.tweens.add({
+        //                     targets: this.music, volume: 0, duration: 600, ease: "Sine.easeOut",
+        //                     onComplete: () => { this.music?.stop(); res(); }
+        //                 });
+        //             });
+        //         }
+        //     } catch {}
+        //     await fullResetAndGotoStart(this);
+        // });
 
         // Fade-in + Play Again
         this.cameras.main.fadeIn(600, 0, 0, 0);
