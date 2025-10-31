@@ -1609,7 +1609,12 @@ const soapsplash = (() => {
 // -----------------------------
 const cleancatcher = {
     create(scene, canvas, difficulty = "easy") {
-        difficulty = String(difficulty).toLowerCase();
+        //difficulty levels
+        if (difficulty === 1) difficulty = "easy";
+        else if (difficulty === 2) difficulty = "normal";
+        else if (difficulty === 3) difficulty = "hard";
+        else difficulty = String(difficulty).toLowerCase();
+
         const CC = CONFIG.cleanCatch;
         const ctx = canvas.getContext("2d");
         //toast system for dialogue
