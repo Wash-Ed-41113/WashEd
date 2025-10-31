@@ -1656,7 +1656,7 @@ const cleancatcher = {
         // Initialise Phaser sounds if available
         if (scene.sound) {
             catchGoodSound = scene.sound.add("sfx_goodCatch", { volume: 0.5 });
-            catchBadSound = scene.sound.add("sfx_badCatch", { volume: 0.5 });
+            catchBadSound = scene.sound.add("sfx_badCatch", { volume: 0.8 });
             timerBeepSound = scene.sound.add("sfx_beep", { volume: 0.7 });
         } else {
             console.warn("[CleanCatch] No Phaser sound system found — skipping sound effects.");
@@ -2267,11 +2267,6 @@ const cleancatcher = {
             if (!timerInterval) timerInterval = setInterval(() => {
                 if (!paused && !gameOver) {
                     timeLeft--;
-
-                    // ✅ Play the 5-second warning sound once
-                    if (timeLeft === 5 && timerBeepSound) {
-                        timerBeepSound.play();
-                    }
 
                     // stop the game when time is up
                     if (timeLeft <= 0) {
