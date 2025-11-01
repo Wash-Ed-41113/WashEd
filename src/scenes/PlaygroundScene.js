@@ -287,7 +287,7 @@ export default class PlaygroundScene extends Phaser.Scene {
                 queueLine(`Oh no... my hands have gotten dirty.`);
                 queueLine(`Hmm, what should we do? \nOf course — it's hand washing time!`);
                 queueLine(`Washing our hands keeps us clean and healthy.`);
-                queueLine(`Come with me! \nWill you help me wash my hands?`);
+                queueLine(`Will you help me wash my hands? \nCome with me!`);
 
                 // begin walking after the final line
                 this.time.delayedCall(t, () => this._enterDoor());
