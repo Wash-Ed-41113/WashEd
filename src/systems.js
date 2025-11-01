@@ -1195,7 +1195,25 @@ const soapsplash = (() => {
                 repeat: -1
             });
 
+            // Save Soap Splash score for leaderboard
+            const finalScore = scene.streakSys ? scene.streakSys.totalScore : 0;
+            scene.registry.set("ss_score", finalScore);
+            window.__SS_LAST_SCORE__ = { total: finalScore };
+            localStorage.setItem("ss_score", finalScore);
+
+
             const goBack = () => {
+                // ✅ Persist Soap Splash score
+                try {
+                    const finalScore = scene.streakSys ? scene.streakSys.totalScore : 0;
+                    window.__SS_LAST_SCORE__ = { total: finalScore };
+                    localStorage.setItem("ss_score", finalScore);
+                    scene.game.registry.set("ss_score", finalScore);
+                    console.log("[SoapSplash] Saved score:", finalScore);
+                } catch (err) {
+                    console.warn("Failed to save Soap Splash score", err);
+                }
+
                 try {
                     AudioManager.stopGroup?.("game");
                     AudioManager.resumeGroup?.("global");
@@ -1203,6 +1221,7 @@ const soapsplash = (() => {
                 dialogRoot.destroy(true);
                 scene.scene.start("HandwashAnimationScene", { skipIntro: true });
             };
+
             btn.on("pointerup", goBack);
             btnLabel.setInteractive({ useHandCursor: true }).on("pointerup", goBack);
         },
@@ -2142,6 +2161,7 @@ const cleancatcher = {
                     const title = scene.add.text(panel.x, panel.y - panelH * 0.28, "GAME OVER!", {
                         fontFamily: uiFont,
                         color: "#000000",
+
                     }).setOrigin(0.5);
                     title.setFontSize(Math.max(45, Math.round(44 * s)));
                     // title.setFontStyle("bold");
@@ -2211,11 +2231,27 @@ const cleancatcher = {
                         repeat: -1
                     });
 
-// click → back to bathroom scene
+                    // Save Clean Catch score for leaderboard
+                    scene.registry.set("cc_score", score);
+                    window.__CLEAN_CATCH_SCORE__ = score;
+                    localStorage.setItem("cc_score", score);
+
+
                     const goBack = () => {
+                        // ✅ Persist Clean Catch score
+                        try {
+                            window.__CLEAN_CATCH_SCORE__ = score;
+                            localStorage.setItem("cc_score", score);
+                            scene.game.registry.set("cc_score", score);
+                            console.log("[CleanCatch] Saved score:", score);
+                        } catch (err) {
+                            console.warn("Failed to save Clean Catch score", err);
+                        }
+
                         dialogRoot.destroy(true);
-                        scene.scene.start("SchoolBathroomScene", { skipIntro: true, showScrubDialog: true}); // <-- pass flag
+                        scene.scene.start("SchoolBathroomScene", { skipIntro: true, showScrubDialog: true });
                     };
+
                     btn.on("pointerup", goBack);
                     btnLabel.setInteractive({ useHandCursor: true }).on("pointerup", goBack);
 
@@ -2248,11 +2284,6 @@ const cleancatcher = {
             if (!timerInterval) timerInterval = setInterval(() => {
                 if (!paused && !gameOver) {
                     timeLeft--;
-
-                    // ✅ Play the 5-second warning sound once
-                    if (timeLeft === 5 && timerBeepSound) {
-                        timerBeepSound.play();
-                    }
 
                     // stop the game when time is up
                     if (timeLeft <= 0) {
