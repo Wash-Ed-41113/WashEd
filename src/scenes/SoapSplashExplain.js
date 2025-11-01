@@ -85,22 +85,22 @@ export default class SoapSplashExplain extends Phaser.Scene {
         this.add.rectangle(W/2, H/2, W, H, 0x000000, 0.5);
         let kikoKey = "KikoBase";
         if (!this.textures.exists(kikoKey)) { const any = Object.keys(this.textures.list)[0]; if (any) kikoKey = any; }
-        this.kiko = this.add.sprite(W*0.09, H*0.7, kikoKey).setOrigin(0.5).setScale(0.35);
+        this.kiko = this.add.sprite(W*0.15, H*0.5, kikoKey).setOrigin(0.5).setScale(0.20);
 
         let panel;
-        if (this.textures.exists("DialogPanel")) panel = this.add.image(W/2, H*0.75, "DialogPanel").setOrigin(0.5).setScale(0.5);
+        if (this.textures.exists("DialogPanel")) panel = this.add.image(W/2, H*0.50, "DialogPanel").setOrigin(0.5).setScale(0.5);
         else panel = this.add.rectangle(W/2, H*0.75, Math.min(W*0.8, 960), 260, 0xffffff, 1).setStrokeStyle(4, 0x7ec8ff).setOrigin(0.5);
 
         const panelW = panel.displayWidth || panel.width || Math.min(W*0.8, 900);
         const style = { fontFamily: CONFIG.ui.fontFamily, fontSize: "64px", color: "#000", wordWrap: { width: Math.max(120, Math.floor(panelW*0.8)) }, align: "center" };
 
         const lines = [
-            `Okay, ${username}, it’s time for the Germ Scrubber showdown!`,
-            `The germs are coming and we need your help to stop them.`,
-            `You have 1 minute to type the clean words to make germs go away.`,
-            `Each clean word helps you scrub better with soap so the germs disappear!`,
-            `You have 3 lives. If you miss one, the germs reach the sink and you lose a life.`,
-            `Let’s fight the germs together!`,
+            `Okay, ${username}, it’s time for the Germ Scrubber Showdown!`,
+            `The GERMS are coming and we need your HELP to STOP them.`,
+            `You have 1 MINUTE to TYPE the clean WORDS to make GERMS go away.`,
+            `Each clean WORD helps you SCRUB better with SOAP so the GERMS disappear!`,
+            `You have 3 LIVES. If you miss one, the GERMS reach the sink and you LOSE a LIFE.`,
+            `Let’s fight the GERMS together!`,
         ];
         let i = 0;
         const text = this.add.text(panel.x, panel.y, lines[i], style).setOrigin(0.5).setDepth((panel.depth||0)+1);
@@ -119,7 +119,7 @@ export default class SoapSplashExplain extends Phaser.Scene {
         };
 
         let nextBtn, nextText = null;
-        const nx = W*0.74, ny = H*0.9;
+        const nx = W*0.85, ny = H*0.5;
         if (this.textures.exists("UI_Next")) {
             nextBtn = this.add.image(nx, ny, "UI_Next").setOrigin(0.5).setDepth((panel.depth||0)+2)
                 .setInteractive({ useHandCursor: true, pixelPerfect: true });
