@@ -34,7 +34,7 @@ export default class CleanCatchExplain extends Phaser.Scene {
         const username   = this.registry.get("playerName") || "friend";
         const difficulty = data?.difficulty || this.registry.get("difficulty") || "easy";
 
-        systems.ui.placeLogo(this);
+        // logo code - systems.ui.placeLogo(this);
 
         // --- pause any global bgm ---
         try {
@@ -107,10 +107,12 @@ export default class CleanCatchExplain extends Phaser.Scene {
 
         const lines = [
             `${username}! Are you ready for the Soap Splash game? Let’s play!`,
-            `Here’s how it works: Catch the clean water drops and soap bubbles — they’re good for us!`,
+            `Here’s how it works: `,
+            `Catch the clean water drops and soap bubbles, they’re good for us!`,
             `But be careful, you have 3 lives. Avoid the germs from spreading! Don’t let them touch your hands.`,
             `You have 30 seconds to catch as much clean water and soap as you can!
-            Use your mouse to move my hands — let’s see how many you can catch!`,
+            Use your mouse to move my hands`,
+            `let’s see how many you can catch!`,
             `When you’re ready, press PLAY!`,
         ];
 
