@@ -1895,7 +1895,7 @@ const cleancatcher = {
             }
         }
 
-        //better time display
+        //better time display - 5 seconds turns red
         function formatTime(seconds) {
             const m = Math.floor(seconds / 60).toString().padStart(2, "0");
             const s = (seconds % 60).toString().padStart(2, "0");
@@ -1910,12 +1910,20 @@ const cleancatcher = {
             const scoreText = score.toString().padStart(2, "0");
             ctx.fillText(scoreText, 85, 95);
 
-            // TIMERs//
+            // TIMER //
             const timerText = formatTime(timeLeft);
             ctx.font = "52px Chewy";
-            ctx.fillStyle = "white";
             ctx.textAlign = "center";
+
+            // Turn red when timer hits 5 or less
+            if (timeLeft <= 5) {
+                ctx.fillStyle = "#ff0000"; // bright red
+            } else {
+                ctx.fillStyle = "white";   // normal color
+            }
+
             ctx.fillText(timerText, canvas.width / 2, 105);
+
 
             //NEW kiko dialogue - change this for changing size
             for (let i = activeToasts.length - 1; i >= 0; i--) {
@@ -1982,12 +1990,12 @@ const cleancatcher = {
                         if (catchGoodSound) catchGoodSound.play();
 
                         if (goodCatchCount % 3 === 0) {
-                            makeToast("happy", helpers.words.pick(goodMessages)); // 👈 new toast
+                            makeToast("happy", helpers.words.pick(goodMessages)); //  new toast
                         }
                     } else {
                         lives -= 1;
                         if (catchBadSound) catchBadSound.play();
-                        makeToast("sad", helpers.words.pick(badMessages)); // 👈 new toast
+                        makeToast("sad", helpers.words.pick(badMessages)); // new toast
                         if (lives <= 0) gameOver = true;
                     }
 
@@ -2238,7 +2246,7 @@ const cleancatcher = {
 
 
                     const goBack = () => {
-                        // ✅ Persist Clean Catch score
+                        // Persist Clean Catch score
                         try {
                             window.__CLEAN_CATCH_SCORE__ = score;
                             localStorage.setItem("cc_score", score);
