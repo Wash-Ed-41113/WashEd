@@ -258,11 +258,6 @@ const helpers = {
             onComplete: () => t.destroy()
         });
     },
-
-
-
-
-
 };
 
 const telemetry = {
@@ -657,11 +652,7 @@ const ui = {
             }
         });
     }
-
-
-
 };
-
 
 // -----------------------------
 // streak / score engine
@@ -835,8 +826,6 @@ const soapsplash = (() => {
 
         return w;
     }
-
-
 
 
     // ---------------- spawn ----------------
@@ -1032,7 +1021,6 @@ const soapsplash = (() => {
             }
         }
     };
-
 
 
     // ---------------- timer ----------------
@@ -1956,13 +1944,7 @@ const cleancatcher = {
 
                 ctx.restore();
             }
-
-
-
-
         }
-
-
 
         // move items down, check collisions, update stats, remove offscreen
         function updateItems() {
@@ -2001,7 +1983,6 @@ const cleancatcher = {
                 if (item.y > canvas.height) items.splice(i, 1);
             }
         }
-
 
         // input events arrow keys and mouse move
         const onKeyDown = (e) => {

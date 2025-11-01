@@ -205,6 +205,16 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             this._enableStep2Hints(soapBar, soapBottle);
         }
 
+        // If returning from CleanCatch, show Let's Scrub dialog now
+        if (data.showScrubDialog) {
+            this._step1Done = true; // tap step already completed
+            this._clearHints();     // remove any misleading glows
+            this._showScrubDialog(() => {
+                this._enableStep2Hints(soapBar, soapBottle); // now glow soaps only
+            });
+        }
+
+
         // Click routing (blocked until dialog closes)
         // TAP is the FIRST correct step
         tap.on("pointerdown", onlyIfNoDialog(() => {
@@ -335,13 +345,13 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
         this._dialogRoot.add(
             this.add.text(panel.x, panel.y - panelH * 0.25, "Let's Wash!", {
-                fontFamily: CONFIG.ui.fontFamily, fontSize: "42px", color: "#000000"
+                fontFamily: "Chewy", fontSize: "42px", color: "#000000"
             }).setOrigin(0.5)
         );
 
         this._dialogRoot.add(
-            this.add.text(panel.x, panel.y, "We're here in the bathroom and it’s time to wash our hands!\n\nWhat should I do first? Can you help me choose?\n\nClick on the best choice!", {
-                fontFamily: CONFIG.ui.fontFamily, fontSize: "34px", color: "#2a4155", align: "center"
+            this.add.text(panel.x, panel.y - panelH * 0.005, "We're here in the bathroom and it’s time to wash our hands!\n\nWhat should I do first? Can you help me choose?\n\nClick on the best choice!", {
+                fontFamily: "Montserrat", fontSize: "34px", color: "#2a4155", align: "center"
             }).setOrigin(0.5)
         );
 
@@ -363,6 +373,78 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         arrow.on("pointerdown", () => {
             this._dialogRoot.destroy(true);
             this._dialogRoot = null;
+        });
+    }
+
+    _showScrubDialog(onClose) {
+        const { width, height } = this.scale;
+
+        this._dialogRoot = this.add.container(0, 0).setDepth(9999);
+
+        const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.5)
+            .setOrigin(0, 0)
+            .setInteractive();
+        this._dialogRoot.add(overlay);
+
+        const panel = this.add.image(width / 2, height / 2, "dialog_skin")
+            .setOrigin(0.5);
+        const s = Math.min((width * 0.8) / panel.width, (height * 0.5) / panel.height);
+        panel.setScale(s);
+        this._dialogRoot.add(panel);
+
+        const panelW = panel.displayWidth;
+        const panelH = panel.displayHeight;
+
+        // Add Kiko next to the dialog box
+        const kiko = this.add.image(
+            panel.x - panelW / 2 - 200,
+            panel.y + panelH * 0.45,
+            "kiko_dialog"
+        ).setOrigin(0.5, 1);
+
+        kiko.setScale((panelH * 0.90) / kiko.height);
+        this._dialogRoot.add(kiko);
+
+        this._dialogRoot.add(
+            this.add.text(
+                panel.x,
+                panel.y - panelH * 0.25,
+                "Let's Scrub!",
+                { fontFamily: "Chewy", fontSize: "42px", color: "#000000" }
+            ).setOrigin(0.5)
+        );
+
+        this._dialogRoot.add(
+            this.add.text(
+                panel.x,
+                panel.y - panelH * 0.005,
+                "Great job using tap! Now comes the most important part - we need to scrub our hands to chase away all the germs. \nCan you help me choose how to scrub?",
+                {
+                    fontFamily: "Montserrat",
+                    fontSize: "34px",
+                    color: "#2a4155",
+                    align: "center",
+                    wordWrap: { width: panelW * 0.9 }
+                }
+            ).setOrigin(0.5)
+        );
+
+        const arrow = this.add.image(
+            panel.x + panelW * 0.35,
+            panel.y + panelH * 0.25,
+            ARROW_RIGHT_KEY
+        )
+            .setOrigin(0.5)
+            .setInteractive({ useHandCursor: true });
+
+        const arrowSize = Math.min(panelH * 0.22, 140);
+        arrow.setScale(arrowSize / Math.max(arrow.width, arrow.height));
+        this._dialogRoot.add(arrow);
+
+        arrow.on("pointerdown", () => {
+            this._dialogRoot.destroy(true);
+            this._dialogRoot = null;
+            onClose?.();
         });
     }
 

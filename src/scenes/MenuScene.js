@@ -488,8 +488,8 @@ export default class MenuScene extends Phaser.Scene {
         const uiFont = getUIFont();
 
         const title = this.add
-            .text(panel.x, panel.y - panelH * 0.18, "Choose difficulty", {
-                fontFamily: uiFont, color: "#000000", align: "center"
+            .text(panel.x, panel.y - panelH * 0.18, "Choose Difficulty", {
+                fontFamily: "Chewy", color: "#000000", align: "center"
             })
             .setOrigin(0.5, 0.5);
         title.setFontSize(Math.max(42, Math.round(42 * s)));

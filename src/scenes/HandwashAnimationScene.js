@@ -34,6 +34,13 @@ export default class HandwashAnimationScene extends Phaser.Scene {
         if (!this.cache.audio.exists(KIKOS_KEY)) {
             this.load.audio(KIKOS_KEY, KIKOS_PATHS);
         }
+        if (!this.cache.audio.exists("handwashing")) {
+            this.load.audio("handwashing", "assets/sounds/handwashing.mp3");
+        }
+
+        if (!this.cache.audio.exists("magic_sparkle")) {
+            this.load.audio("magic_sparkle", "assets/sounds/magic-sparkle-190030.mp3");
+        }
     }
 
     create() {
@@ -115,10 +122,24 @@ export default class HandwashAnimationScene extends Phaser.Scene {
         // Step 1: show the first background for 5 seconds
         const first = fitScreen(WASH1_KEY);
 
+        // Play handwashing sound for the duration of the first screen (5s)
+        this.handwashingSfx = this.sound.add("handwashing", { volume: 15 });
+        this.handwashingSfx.play();
+
+        // Automatically stop it when transitioning to sparkle scene
+        this.time.delayedCall(5000, () => {
+            this.handwashingSfx?.stop();
+        });
+
         this.time.delayedCall(5000, () => {
             // Step 2: swap to the second background
             first.destroy();
             const second = fitScreen(WASH2_KEY);
+
+            // Play sparkle sound for 0.5s
+            const sparkle = this.sound.add("magic_sparkle", { volume: 30 });
+            sparkle.play();
+            this.time.delayedCall(850, () => sparkle.stop()); // stop after 0.5 seconds
 
             // Add the "Next" arrow to continue to the EndingScene
             const arrow = this.add.image(width * 0.78, height * 0.50, ARROW_RIGHT_KEY)
