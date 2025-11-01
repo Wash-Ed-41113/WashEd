@@ -468,16 +468,16 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         this._dialogRoot.add(overlay);
 
         // Balloon image
-        const balloon = this.add.image(width / 2 + 180, height * 0.15, DIALOG_BALLOON_KEY)
+        const balloon = this.add.image(width / 2 + 210, height * 0.13, DIALOG_BALLOON_KEY)
             .setOrigin(0.5);
         const scale = Math.min((width * 0.6) / balloon.width, (height * 0.2) / balloon.height);
-        balloon.setScale(scale * 1.5);
+        balloon.setScale(scale * 1.3);
         this._dialogRoot.add(balloon);
 
         // Text
         const text = this.add.text(balloon.x, balloon.y - 15, message, {
             fontFamily: "Montserrat",
-            fontSize: "25px",
+            fontSize: "20px",
             color: "#000000",
             align: "center",
             wordWrap: { width: balloon.displayWidth * 0.8 }
@@ -509,15 +509,15 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             .setInteractive();
         this._dialogRoot.add(overlay);
 
-        const balloon = this.add.image(width / 2 + 180, height * 0.15, DIALOG_BALLOON_KEY)
+        const balloon = this.add.image(width / 2 + 210, height * 0.13, DIALOG_BALLOON_KEY)
             .setOrigin(0.5);
         const scale = Math.min((width * 0.6) / balloon.width, (height * 0.2) / balloon.height);
-        balloon.setScale(scale * 1.5);
+        balloon.setScale(scale * 1.3);
         this._dialogRoot.add(balloon);
 
         const text = this.add.text(balloon.x, balloon.y - 15, message, {
             fontFamily: "Montserrat",
-            fontSize: "25px",
+            fontSize: "20px",
             color: "#000000",
             align: "center",
             wordWrap: { width: balloon.displayWidth * 0.8 }
