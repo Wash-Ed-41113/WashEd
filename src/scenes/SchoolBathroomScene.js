@@ -226,7 +226,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
                 this._enableStep2Hints(soapBar, soapBottle);
 
                 this._showCorrectDialog(
-                    "Good job! That’s the correct way to wash your hands. \n\n Now, let’s play Soap Splasher!",
+                    "Good job! \n\nThat’s the correct way to wash your hands. \n\nNow, let’s play Soap Splasher!",
                     () => {
                         this._fadeTo("CleanCatchExplain");
                     }, 3000
@@ -236,7 +236,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
             // After returning from Clean Catch: Tap is WRONG
             this._showSmallDialog(
-                "Oops, not that one. We need to scrub our hands to get the germs off.\nTry again, click the scrubbing hands!"
+                "Oops, not that one! \n\n We need to scrub our hands to get the germs off. \n\nTry again, click the scrubbing hands!"
             );
         }));
 
@@ -245,13 +245,13 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             if (!this._step1Done) {
                 // Wrong step — keep hint on tap
                 this._enableStep1Hints(tap, soapBar, soapBottle);
-                this._showSmallDialog("Oops, that’s not the first step.\nLet's try again!\n\nRemember: we always start at the beginning.\nYou can do it!");
+                this._showSmallDialog("Oops, that’s not the first step. \n\n Let's try again! \n\nRemember: we always start at the beginning. \n\nYou can do it!");
                 return;
             }
 
             // Correct after step 1 — soaps are right
             this._showCorrectDialog(
-                "That's right! Scrubbing our hands together is how we chase away all the germs. \n\n Let's start scrubbing and make those hands sparkle clean!",
+                "That's right! \n\nScrubbing our hands together is how we chase away all the germs. \n\nLet's start scrubbing and make those hands sparkle clean!",
                 () => {
                     // turning off hints is optional here; next scene is starting anyway
                     this._clearHints();
@@ -418,7 +418,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             this.add.text(
                 panel.x,
                 panel.y - panelH * 0.005,
-                "Great job using tap! Now comes the most important part - we need to scrub our hands to chase away all the germs. \nCan you help me choose how to scrub?",
+                "Great job using tap! \nNow comes the most important part - we need to scrub our hands to chase away all the germs.\nCan you help me choose how to scrub?",
                 {
                     fontFamily: "Montserrat",
                     fontSize: "34px",
@@ -476,7 +476,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
         // Text
         const text = this.add.text(balloon.x, balloon.y - 15, message, {
-            fontFamily: CONFIG.ui.fontFamily,
+            fontFamily: "Montserrat",
             fontSize: "25px",
             color: "#000000",
             align: "center",
@@ -516,7 +516,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         this._dialogRoot.add(balloon);
 
         const text = this.add.text(balloon.x, balloon.y - 15, message, {
-            fontFamily: CONFIG.ui.fontFamily,
+            fontFamily: "Montserrat",
             fontSize: "25px",
             color: "#000000",
             align: "center",

@@ -34,165 +34,124 @@ export default class CleanCatchExplain extends Phaser.Scene {
         const username   = this.registry.get("playerName") || "friend";
         const difficulty = data?.difficulty || this.registry.get("difficulty") || "easy";
 
-        // logo code - systems.ui.placeLogo(this);
-
-        // --- pause any global bgm ---
+        // Pause menu/global BGM if active
         try {
             const g = window.__GLOBAL_BGM__;
             if (g?.isPlaying) g.pause();
         } catch {}
 
-        // --- audio unlock setup ---
-        this.sound.pauseOnBlur = false;
-        this.sound.mute = false;
-
         const playBgmNow = () => {
             try { if (this.sound.locked) this.sound.unlock(); } catch {}
             try { this.sound.context?.resume?.(); } catch {}
             let inst = this.sound.get(BGM_KEY);
-            if (inst?.isPlaying) return;
             if (!inst) inst = this.sound.add(BGM_KEY, { loop: true, volume: 0.75 });
-            try { inst.play(); } catch (e) { console.warn("[CleanCatchExplain] play() failed:", e); }
+            if (!inst.isPlaying) inst.play();
             window.__MINI_BGM__ = inst;
             window.__GLOBAL_BGM__ = undefined;
         };
 
-        const fireOnce = () => {
-            if (this._gateFired) return;
-            this._gateFired = true;
-            playBgmNow();
-        };
-        this.input.once("pointerdown", fireOnce);
-        this.input.keyboard?.once("keydown", fireOnce);
-        window.addEventListener("mousedown", fireOnce, { once: true, passive: true });
-        window.addEventListener("touchstart", fireOnce, { once: true, passive: true });
-        if (!this.sound.locked) this.time.delayedCall(0, fireOnce);
+        this.input.once("pointerdown", playBgmNow);
+        this.input.keyboard?.once("keydown", playBgmNow);
 
-        // --- background & overlay ---
+        // Background
         this.add.image(W / 2, H / 2, "backgroundFullLives").setDisplaySize(W, H).setDepth(0);
         this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.45).setDepth(1);
 
-        // --- Kiko sprite ---
-        this.kiko = this.add.sprite(W * 0.09, H * 0.7, "KikoBase")
-            .setOrigin(0.5)
-            .setScale(0.35)
-            .setDepth(2);
-
-        // --- Dialogue panel ---
+        //────────── Dialog Panel Centered ──────────
         let panel;
-        if (this.textures.exists("DialogPanel"))
-            panel = this.add.image(W / 2, H * 0.75, "DialogPanel").setOrigin(0.5).setScale(0.5).setDepth(2);
-        else
-            panel = this.add.rectangle(W / 2, H * 0.75, Math.min(W * 0.8, 960), 260, 0xffffff, 1)
+        const maxPanelW = Math.min(W * 1.5, 1500);
+        const maxPanelH = Math.min(H * 2, 520);
+
+        if (this.textures.exists("DialogPanel")) {
+            panel = this.add.image(W / 2, H * 0.50, "DialogPanel")
+                .setOrigin(0.5)
+                .setDepth(2);
+            const scale = Math.min(maxPanelW / panel.width, maxPanelH / panel.height);
+            panel.setScale(scale);
+        } else {
+            panel = this.add.rectangle(W / 2, H * 0.55, maxPanelW, maxPanelH, 0xffffff)
                 .setStrokeStyle(4, 0x7ec8ff)
                 .setOrigin(0.5)
                 .setDepth(2);
-
-        const panelW = panel.displayWidth || panel.width || Math.min(W * 0.8, 900);
-
-        // --- preload Montserrat font to prevent fallback ---
-        if (document.fonts) {
-            document.fonts.load("10pt 'Montserrat'").then(() => {
-                this.game.events.emit("fontloaded");
-            });
         }
 
-        const style = {
-            fontFamily: "Montserrat",
-            fontSize: "59px", //size of text
-            color: "#000000",
-            wordWrap: { width: Math.max(120, Math.floor(panelW * 0.8)) },
-            align: "center",
-        };
+        const panelW = panel.displayWidth;
+        const panelH = panel.displayHeight;
 
+        //────────── Kiko left of dialog ──────────
+        this.kiko = this.add.sprite(
+            panel.x - panelW * 0.70,
+            panel.y + panelH * 0.47,
+            "KikoBase"
+        )
+            .setOrigin(0.5, 1)
+            .setDepth(3);
+
+        const kikoMaxH = panelH * 0.95;
+        this.kiko.setScale(kikoMaxH / this.kiko.height);
+
+        //────────── Dialogue Text Setup ──────────
         const lines = [
-            `${username}! Are you ready for the Soap Splash game? Let’s play!`,
-            `Here’s how it works: `,
-            `Catch the clean water drops and soap bubbles, they’re good for us!`,
-            `But be careful, you have 3 lives. Avoid the germs from spreading! Don’t let them touch your hands.`,
-            `You have 30 seconds to catch as much clean water and soap as you can!
-            Use your mouse to move my hands`,
-            `let’s see how many you can catch!`,
-            `When you’re ready, press PLAY!`,
+            `${username}! Are you ready for the Soap Splasher game? Let’s play!`,
+            `Here’s how it works --> `,
+            `Catch the clean WATER droplets and SOAP bubbles, they’re good for us!`,
+            `But be careful, you have 3 LIVES. Avoid the germs from spreading! Don’t let them touch your hands.`,
+            `You have 30 SECONDS to catch as much clean WATER and SOAP as you can!\nUse your MOUSE to move my hands.`,
+            `Let’s see how many you can CATCH!`,
+            `When you’re ready, press ARROW!`
         ];
 
         let i = 0;
-        let text;
-        const makeText = () => {
-            text = this.add.text(panel.x, panel.y, lines[i], style).setOrigin(0.5).setDepth(3);
+
+        const style = {
+            fontFamily: "Montserrat",
+            fontSize: Math.max(30, panelH * 0.10) + "px",
+            color: "#000000",
+            wordWrap: { width: panelW * 0.85 },
+            align: "center",
         };
-        if (document.fonts) {
-            document.fonts.ready.then(makeText);
-        } else {
-            makeText();
-        }
 
-        // --- Next button ---
-        let nextBtn, nextText = null;
-        const nx = W * 0.74, ny = H * 0.9;
+        const text = this.add.text(
+            panel.x,
+            panel.y,
+            lines[i],
+            style
+        ).setOrigin(0.5).setDepth(4);
 
-        if (this.textures.exists("UI_Next")) {
-            nextBtn = this.add.image(nx, ny, "UI_Next")
-                .setOrigin(0.5)
-                .setDepth(4)
-                .setInteractive({ useHandCursor: true, pixelPerfect: true });
-            const targetH = Math.min(120, H * 0.12);
-            const s = targetH / (nextBtn.height || 1);
-            nextBtn.setScale(s);
-            nextBtn.on("pointerover", () => nextBtn.setScale(s * 1.05));
-            nextBtn.on("pointerout",  () => nextBtn.setScale(s));
-            nextBtn.on("pointerdown", () => { nextBtn.setScale(s * 0.97); nextLine(); });
-            nextBtn.on("pointerup",   () => nextBtn.setScale(s * 1.05));
-        } else {
-            nextBtn = this.add.rectangle(nx, ny, 160, 60, 0x0077cc)
-                .setStrokeStyle(3, 0xffffff)
-                .setOrigin(0.5)
-                .setDepth(4)
-                .setInteractive({ useHandCursor: true });
-            nextText = this.add.text(nx, ny, "Next", {
-                fontFamily: "Montserrat",
-                fontSize: "32px",
-                color: "#fff",
-                fontStyle: "bold"
-            }).setOrigin(0.5).setDepth(5);
-            nextBtn.on("pointerdown", () => nextLine());
-        }
+        //────────── Next Button ──────────
+        const nx = panel.x + panelW * 0.60;
+        const ny = panel.y + panelH * 0.02;
+        const nextBtn = this.add.image(nx, ny, "UI_Next")
+            .setOrigin(0.5)
+            .setDepth(4)
+            .setInteractive({ useHandCursor: true });
 
-        // --- advance dialogue ---
-        const nextLine = () => {
+        const btnScale = Math.min(120, H * 0.12) / nextBtn.height;
+        nextBtn.setScale(btnScale);
+
+        nextBtn.on("pointerdown", () => {
             playBgmNow();
             i++;
-            if (i % 2 === 0 && this.textures.exists("KikoCheer"))
-                this.kiko.setTexture("KikoCheer");
-            else if (this.textures.exists("KikoBase"))
-                this.kiko.setTexture("KikoBase");
-
             if (i < lines.length) {
                 text.setText(lines[i]);
+                if (i % 2 === 0 && this.textures.exists("KikoCheer"))
+                    this.kiko.setTexture("KikoCheer");
+                else
+                    this.kiko.setTexture("KikoBase");
             } else {
-                const fadeTargets = [this.kiko, text, panel, nextBtn];
-                if (nextText) fadeTargets.push(nextText);
                 this.tweens.add({
-                    targets: fadeTargets,
+                    targets: [this.kiko, text, panel, nextBtn],
                     alpha: 0,
                     duration: 600,
                     onComplete: () => {
-                        this.scene.stop();
-                        const playerName = this.registry.get("playerName");
-                        console.log("[Explain →] starting CleanCatch with difficulty =", difficulty);
-                        this.scene.start("CleanCatch", { playerName, difficulty });
+                        this.scene.start("CleanCatch", { difficulty });
                     }
                 });
             }
-        };
-
-        // --- keyboard shortcut (Enter) ---
-        this.input.keyboard.on("keydown-ENTER", nextLine);
-
-        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-            try { this._unbinders.forEach(f => f && f()); } catch {}
-            this._unbinders = [];
         });
+
+        this.input.keyboard.on("keydown-ENTER", () => nextBtn.emit("pointerdown"));
     }
+
 }
 
