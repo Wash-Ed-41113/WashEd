@@ -1895,7 +1895,7 @@ const cleancatcher = {
             }
         }
 
-        //better time display
+        //better time display - 5 seconds turns red
         function formatTime(seconds) {
             const m = Math.floor(seconds / 60).toString().padStart(2, "0");
             const s = (seconds % 60).toString().padStart(2, "0");
