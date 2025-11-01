@@ -36,7 +36,7 @@ const CASTLE_FRAMES = [
     { key: "sandcastle04", path: "assets/images/sandground/sandcastle04.png" },
 ];
 
-const CASTLE_SIZE   = 0.6;
+const CASTLE_SIZE   = 0.4;
 const DOOR_X_FRAC   = 0.65;
 const DOOR_Y_OFFSET = 0;
 
@@ -48,9 +48,9 @@ class SpeechBubble extends Phaser.GameObjects.Container {
         super(scene, 0, 0);
         scene.add.existing(this);
 
-        this.maxWidth = opts.maxWidth ?? 640;
+        this.maxWidth = opts.maxWidth ?? 550;
         this.padding  = 22;
-        this.gap      = opts.gap ?? 28;
+        this.gap      = opts.gap ?? 25;
 
         this.bg = scene.add.image(0, 0, BUBBLE_KEY).setOrigin(0.5);
         const nativeW = this.bg.width || 1435;
@@ -58,7 +58,7 @@ class SpeechBubble extends Phaser.GameObjects.Container {
 
         this.label = scene.add.text(0, 0, "", {
             fontFamily: (window.CONFIG?.ui?.fontFamily),
-            fontSize: 34,
+            fontSize: 30,
             color: "#073B4C",
             wordWrap: { width: this.maxWidth - this.padding * 2 },
             align: "left",
@@ -209,7 +209,7 @@ export default class PlaygroundScene extends Phaser.Scene {
         const centerX = this.sandArea.centerX;
 
         // Castle (left)
-        const castleX = centerX - 220;
+        const castleX = centerX - 200;
         const castleY = centerY;
 
         // --- Kiko: sprite + rig container to avoid y tween conflicts -----------
@@ -236,7 +236,11 @@ export default class PlaygroundScene extends Phaser.Scene {
         });
 
         // Speech bubble anchored to the Kiko sprite (not the rig)
-        this.speech = new SpeechBubble(this, this._kiko, { maxWidth: 700, fontSize: 30, gap: -10 });
+        this.speech = this.speech = new SpeechBubble(this, this._kiko, {
+            maxWidth: 650,
+            x: this.scale.width * 0.7,  // move toward right side
+            y: this.scale.height * 0.22
+        });
         const name = (this.registry.get("playerName") || "friend");
         this.speech.say(`Hello, ${name}! My name is Kiko.\nLook! Let's make a sandcastle!\nTap the sand!`);
 
