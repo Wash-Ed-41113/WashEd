@@ -570,12 +570,25 @@ export default class SoapSplashScene extends Phaser.Scene {
 
     _commitFinalScore(reason = "finalize") {
         try {
+            // make sure score is recomputed once at end
             this.streakSys?._recompute?.();
-            const final = this.streakSys?.totalScore ?? 0, best = this.streakSys?.bestStreak ?? 0;
-            DB.logTyping?.("SoapSplash_end", { totalScore: final, bestStreak: best, reason });
-            DB.saveRound?.("SoapSplash", final, best);
-        } catch (e) { console.warn("[SoapSplash] _commitFinalScore failed:", e); }
+
+            const ssTotal = this.streakSys?.totalScore ?? 0;
+            const ssBest  = this.streakSys?.bestStreak ?? 0;
+
+            // --- lightweight mirrors (work even without DB) ---
+            try { this.registry?.set?.("ss:lastScore", ssTotal); } catch {}
+            try { this.registry?.set?.("ss:lastBestStreak", ssBest); } catch {}
+            try { window.__SS_LAST_SCORE__ = { total: ssTotal, bestStreak: ssBest, when: Date.now() }; } catch {}
+
+            // keep your existing DB “end” signals (unchanged)
+            DB.logTyping?.("SoapSplash_end", { totalScore: ssTotal, bestStreak: ssBest, reason });
+            DB.saveRound?.("SoapSplash", ssTotal, ssBest);
+        } catch (e) {
+            console.warn("[SoapSplash] _commitFinalScore failed:", e);
+        }
     }
+
 
     endGameAndGoto(next, data = {}, reason = "scene-change") {
         if (this._leaving) return;

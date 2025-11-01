@@ -1,7 +1,7 @@
 // src/scenes/EndingScene.js
 /* global Phaser, CONFIG */
 import systems from "../systems.js";
-import { DB } from "../db.js";
+// import { DB } from "../db.js";            // ❌ No DB anymore
 import { AudioManager } from "../systems.js";
 
 /**
@@ -10,90 +10,119 @@ import { AudioManager } from "../systems.js";
  */
 const ENTRY_SCENE = "MenuScene";
 
-/* ----------------------------- score helpers ------------------------------ */
+/* -------------------------------------------------------------------------- */
+/*                               NO-DB HELPERS                                */
+/* -------------------------------------------------------------------------- */
 
-/** Safe number coercion. */
-function num(v, d = 0) { const n = Number(v); return Number.isFinite(n) ? n : d; }
-
-/** Try a list of DB gameId aliases and return the first positive total. */
-function tryDbAliases(sessionId, aliases) {
-    for (const name of aliases) {
-        const val = DB?.query?.sessionGameTotal?.(sessionId, name);
-        if (Number.isFinite(val) && val > 0) return val;
-    }
-    return 0;
-}
-
-/** Resolve SoapSplash (typing) total with robust fallbacks. */
-function resolveSoapSplashTotal(scene, sessionId) {
-    // Primary + likely aliases used during dev
-    const db = tryDbAliases(sessionId, ["SoapSplash", "GermScrubber", "Germ Scrubber"]);
-    if (db > 0) return db;
-
-    // Mirrors set by SoapSplashScene
-    const reg = num(scene.registry.get("splash_score"));
-    if (reg > 0) return reg;
-
-    // Window/global last resort
-    try { const w = num(window.__SOAP_SPLASH_SCORE__); if (w > 0) return w; } catch {}
-
-    // LocalStorage last resort
-    try { const ls = num(localStorage.getItem("splash_score")); if (ls > 0) return ls; } catch {}
-
-    return 0;
-}
-
-/** Resolve CleanCatch (catching) total with robust fallbacks. */
-function resolveCleanCatchTotal(scene, sessionId) {
-    // Primary + likely aliases used during dev
-    const db = tryDbAliases(sessionId, ["CleanCatch", "SoapSplasher", "Soap Splasher"]);
-    if (db > 0) return db;
-
-    // Registry mirrors (the patched CleanCatchScene writes all three)
-    for (const k of ["catch_score", "cleanCatchScore", "cc_score"]) {
-        const v = num(scene.registry.get(k));
-        if (v > 0) return v;
-    }
-
-    // Window/global last resort
-    try { const w = num(window.__CLEAN_CATCH_SCORE__); if (w > 0) return w; } catch {}
-
-    // LocalStorage last resort
+// Player name: prefer registry, fallback to window
+function getPlayerName(scene) {
     try {
-        for (const k of ["catch_score", "cleanCatchScore", "cc_score"]) {
-            const v = num(localStorage.getItem(k));
-            if (v > 0) return v;
-        }
+        const r = scene.registry?.get?.("playerName");
+        if (r) return String(r);
     } catch {}
-
-    return 0;
+    try {
+        const w = (typeof window !== "undefined" && (window.__PLAYER_NAME__ || window.playerName));
+        if (w) return String(w);
+    } catch {}
+    return "Player";
 }
 
-/** Full app reset → go back to the very first entry scene. */
+// Scores: prefer registry mirrors from scenes, fallback to window mirrors
+// Mapping per request:
+//  - "Soap Splasher" row shows CLEAN CATCH total
+//  - "Germ Scrubber" row shows SOAP SPLASH total
+function getTotalsNoDB(scene) {
+    const toNum = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+    };
+
+    const hand = scene._handoff && scene._handoff.scores || null;
+    if (hand) {
+          const cc = toNum(hand.cc ?? hand.cleanCatch ?? hand.soapSplasher);
+          const ss = toNum(hand.ss ?? hand.soapSplash ?? hand.germScrubber);
+          return { soapSplasher: cc, germScrubber: ss, grand: toNum(cc) + toNum(ss) };
+        }
+
+    // ---------------- Clean Catch (→ "Soap Splasher" row) ----------------
+    // Try registry first (the three keys CleanCatchScene maintains)
+    let cc =
+        toNum(scene.registry?.get?.("catch_score")) ??
+        0;
+    if (cc === 0) cc = toNum(scene.registry?.get?.("cleanCatchScore"));
+    if (cc === 0) cc = toNum(scene.registry?.get?.("cc_score"));
+
+    // Fallbacks: localStorage and window global
+    if (cc === 0) {
+        try {
+            cc =
+                toNum(localStorage.getItem("catch_score")) ||
+                toNum(localStorage.getItem("cleanCatchScore")) ||
+                toNum(localStorage.getItem("cc_score")) ||
+                0;
+        } catch {}
+    }
+    if (cc === 0) {
+        try { cc = toNum((typeof window !== "undefined" && window.__CLEAN_CATCH_SCORE__) || 0); } catch {}
+    }
+
+    // ---------------- Soap Splash (→ "Germ Scrubber" row) ----------------
+    // As you already had it: registry → window mirror
+    let ss = toNum(scene.registry?.get?.("ss:lastScore"));
+    if (ss === 0) {
+        try {
+            const wss = (typeof window !== "undefined" && window.__SS_LAST_SCORE__) || null;
+            if (wss) ss = toNum(wss.total);
+        } catch {}
+    }
+
+    return {
+        soapSplasher: cc,     // Clean Catch → “Soap Splasher”
+        germScrubber: ss,     // Soap Splash → “Germ Scrubber”
+        grand: toNum(cc) + toNum(ss),
+    };
+}
+
+
+/* -------------------------------------------------------------------------- */
+/*                         FULL RESET (NO DB; PURE UI)                        */
+/* -------------------------------------------------------------------------- */
+
+/** Full app reset → go back to the very first entry scene (no DB). */
 async function fullResetAndGotoStart(scene) {
     try {
-        // End/reset DB session (non-fatal if stubs)
+        // Clear play flags + player info (registry)
         try {
-            const sid = window.__SESSION_ID__ || DB?.getSessionId?.() || scene.registry.get("sessionId");
-            if (sid && DB?.endSession) await DB.endSession(sid);
-        } catch (e) { console.warn("[Ending] endSession non-fatal:", e); }
-        try { await DB.resetCurrentSession?.(DB?.getSessionId?.() ?? scene.registry.get("sessionId")); } catch {}
-
-        // Clear play flags + player info
-        try {
-            scene.registry.set("completedSoapSplash", false);
-            scene.registry.set("completedCleanCatch", false);
-            scene.registry.set("bathroomPlayed", false);
-            scene.registry.set("playgroundPlayed", false);
-            scene.registry.set("playerName", null);
-            scene.registry.set("difficulty", null);
+            const KEYS = [
+                // mini-game completion / gating
+                "cc_done", "cleanCatchDone", "cleanCatchPlayed", "hasPlayedCleanCatch",
+                "ss_done", "soapSplashDone", "soapSplashPlayed", "hasPlayedSoapSplash",
+                // bathroom / flow
+                "bathroom:ccComplete", "bathroom:soapComplete", "bathroom:ccLocked",
+                "flow:enteredBathroom", "flow:enteredPlayground", "flowStage",
+                // misc state
+                "visitedPlayground", "difficulty",
+                // mirrors
+                "playerName", "cc:lastScore", "ss:lastScore", "ss:lastBestStreak",
+                "sessionId"
+            ];
+            for (const k of KEYS) {
+                try { scene.registry.set(k, false); } catch {}
+                try { scene.registry.remove(k); } catch {}
+            }
         } catch {}
 
-        try { window.__SESSION_ID__ = null; } catch {}
+        // Window mirrors
+        try { if (typeof window !== "undefined") {
+            window.__PLAYER_NAME__ = null;
+            window.__CC_LAST_SCORE__ = null;
+            window.__SS_LAST_SCORE__ = null;
+            window.__SESSION_ID__ = null;
+        }} catch {}
 
-        // Kill audio/timers
-        try { scene.sound?.stopAll?.(); }   catch {}
-        try { scene.tweens?.killAll?.(); }  catch {}
+        // Kill audio/timers/tweens gracefully
+        try { scene.sound?.stopAll?.(); } catch {}
+        try { scene.tweens?.killAll?.(); } catch {}
         try { scene.time?.removeAllEvents?.(); } catch {}
     } finally {
         try { scene.scene.stop(); } catch {}
@@ -101,7 +130,9 @@ async function fullResetAndGotoStart(scene) {
     }
 }
 
-/* --------------------------------- Scene ---------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                                   SCENE                                    */
+/* -------------------------------------------------------------------------- */
 
 export default class EndingScene extends Phaser.Scene {
     constructor() {
@@ -109,14 +140,20 @@ export default class EndingScene extends Phaser.Scene {
         this.music = null;
         this._confettiCancelled = false;
         this._btnPlayAgain = null;
+        this._handoff = null; // cache data passed from the previous scene
     }
+
+    init(data) {
+        this._handoff = data || null;
+    }
+
 
     preload() {
         // Art used here
         this.load.image("kiko_cheer", "assets/images/WashEd_kiko_sprite/kiko_cheer.png");
         this.load.image("confetti", "assets/images/background/confetti.png");
         this.load.image("dialogPanel", CONFIG.assets.ui.dialogPanel);
-        // this.load.image("homeResetButton", "assets/images/UI/washed_kikos-day_UI-Button_HOME.png");
+        // this.load.image("homeResetButton", "assets/images/UI/washed_kikos-day_UI-Button_HOME.png"); // ❌ kept commented
         this.load.image("classroom_bg", "assets/images/background/Classroom.png");
     }
 
@@ -196,20 +233,11 @@ export default class EndingScene extends Phaser.Scene {
             this.scene.stop("SoapSplashExplain");
         } catch {}
 
-        // Session bootstrap
-        DB.init?.();
-        let sessionId = window.__SESSION_ID__ || this.registry.get("sessionId") || DB?.getSessionId?.();
-        if (!sessionId) {
-            const nm = this.registry.get("playerName") || "Player";
-            sessionId = DB.beginSession?.(nm);
-            this.registry.set("sessionId", sessionId);
-            try { window.__SESSION_ID__ = sessionId; } catch {}
-        }
+        // ❌ NO DB BOOTSTRAP, NO SESSION ID
 
-        // Compute totals
-        const soapSplashTotal = resolveSoapSplashTotal(this, sessionId); // typing game
-        const cleanCatchTotal = resolveCleanCatchTotal(this, sessionId); // catching game
-        const grandTotal = num(soapSplashTotal) + num(cleanCatchTotal);
+        // Totals (NO DB)
+        const playerName = getPlayerName(this);
+        const totals = getTotalsNoDB(this); // { soapSplasher, germScrubber, grand }
 
         // Background
         this.add.image(width / 2, height / 2, "classroom_bg").setDisplaySize(width, height);
@@ -232,9 +260,7 @@ export default class EndingScene extends Phaser.Scene {
 
         systems.ui.placeLogo(this);
 
-        // Chalkboard scoreboard (names intentionally mapped to the correct game)
-        //  - "Germ Scrubber"  == SoapSplash (typing)
-        //  - "Soap Splasher"  == CleanCatch (catching)
+        /* ---------------------------- Chalkboard UI ---------------------------- */
         {
             const W = width, H = height;
             const board = { x: W * 0.56, y: H * 0.14, w: W * 0.36, h: H * 0.34 };
@@ -244,20 +270,22 @@ export default class EndingScene extends Phaser.Scene {
             const styleTitle = { fontFamily: "Chewy", fontSize: "48px", color: "#F3F0E6", align: "left", wordWrap: { width: board.w - 20 } };
             const styleLine  = { fontFamily: "Chewy", fontSize: "34px", color: "#F3F0E6", align: "left", wordWrap: { width: board.w - 20 } };
 
-            const playerName = this.registry.get("playerName") || "Player";
             const c  = this.add.container(board.x, board.y).setDepth(5).setMask(mask);
+
             const t1 = this.add.text(0, 0, "Scoreboard", styleTitle).setOrigin(0, 0);
-            const t2 = this.add.text(0, 60, playerName, styleLine).setOrigin(0, 0);
-            const t3 = this.add.text(0, 60 + 44,       `Soap Splasher : ${cleanCatchTotal}`, styleLine).setOrigin(0, 0);
-            const t4 = this.add.text(0, 60 + 44 + 38, `Germ Scrubber : ${soapSplashTotal}`, styleLine).setOrigin(0, 0);
-            const t5 = this.add.text(0, 60 + 44 + 38 + 40, `Grand Total : ${grandTotal}`, styleLine).setOrigin(0, 0);
-            c.add([t1, t2, t3, t4, t5]);
-            [t1, t2, t3, t4, t5].forEach(t => t.setShadow(0, 1, "#FFFFFF22", 2));
+            const t2 = this.add.text(0, 60, playerName,   styleLine ).setOrigin(0, 0);
+
+            const yBase = 60 + 44;
+            const l1 = this.add.text(0, yBase,           `Soap Splasher : ${totals.soapSplasher}`, styleLine).setOrigin(0, 0);
+            const l2 = this.add.text(0, yBase + 38,      `Germ Scrubber : ${totals.germScrubber}`, styleLine).setOrigin(0, 0);
+            const l3 = this.add.text(0, yBase + 38 + 34, `Grand Total   : ${totals.grand}`,        styleLine).setOrigin(0, 0);
+
+            c.add([t1, t2, l1, l2, l3]);
+            [t1, t2, l1, l2, l3].forEach(t => t.setShadow(0, 1, "#FFFFFF22", 2));
         }
 
-        // Ending dialogue (tier based on grand total)
-        const playerName = this.registry.get("playerName") || "Player";
-        const tier = (grandTotal >= 500 ? "high" : grandTotal >= 250 ? "medium" : "low");
+        /* ------------------------------ Dialogue ------------------------------ */
+        const tier = (totals.grand >= 500 ? "high" : totals.grand >= 250 ? "medium" : "low");
         const lines = {
             high: [
                 `Great work, ${playerName}! Because of you, Kiko is happy, healthy, and ready for more fun.`,
@@ -288,7 +316,7 @@ export default class EndingScene extends Phaser.Scene {
         this.tweens.add({ targets: dialog, alpha: 1, duration: 600, ease: "Sine.inOut" });
         this.tweens.add({ targets: msg,    alpha: 1, duration: 800, ease: "Sine.inOut", delay: 200 });
 
-        // Confetti loop
+        /* ------------------------------ Confetti ------------------------------ */
         this.MAX_LIVE_CONFETTI = 40;
         this.liveConfetti = 0;
         this.DELAY_MIN = 600;
@@ -337,25 +365,25 @@ export default class EndingScene extends Phaser.Scene {
             AudioManager.play(this, "global_bg", { group: "global", volume: 0.6 });
         } catch {}
 
-        // // Home/reset icon (top-right) → full reset to ENTRY_SCENE
+        // // Home/reset icon (top-right) → full reset to ENTRY_SCENE (kept commented)
         // const home = this.add.image(width * 0.95, height * 0.1, "homeResetButton")
-        //     .setOrigin(0.5).setScale(0.1).setDepth(20).setInteractive({ useHandCursor: true });
+        //   .setOrigin(0.5).setScale(0.1).setDepth(20).setInteractive({ useHandCursor: true });
         // home.on("pointerover", () => home.setScale(0.103));
         // home.on("pointerout",  () => home.setScale(0.1));
         // home.on("pointerdown", () => { home.disableInteractive(); this.cameras.main.fadeOut(500, 0, 0, 0); });
         // this.cameras.main.once("camerafadeoutcomplete", async () => {
-        //     this._confettiCancelled = true;
-        //     try {
-        //         if (this.music) {
-        //             await new Promise((res) => {
-        //                 this.tweens.add({
-        //                     targets: this.music, volume: 0, duration: 600, ease: "Sine.easeOut",
-        //                     onComplete: () => { this.music?.stop(); res(); }
-        //                 });
-        //             });
-        //         }
-        //     } catch {}
-        //     await fullResetAndGotoStart(this);
+        //   this._confettiCancelled = true;
+        //   try {
+        //     if (this.music) {
+        //       await new Promise((res) => {
+        //         this.tweens.add({
+        //           targets: this.music, volume: 0, duration: 600, ease: "Sine.easeOut",
+        //           onComplete: () => { this.music?.stop(); res(); }
+        //         });
+        //       });
+        //     }
+        //   } catch {}
+        //   await fullResetAndGotoStart(this);
         // });
 
         // Fade-in + Play Again
