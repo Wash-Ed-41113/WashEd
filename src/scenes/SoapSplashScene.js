@@ -441,7 +441,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
 
         // === CHEWY COUNTDOWN (center-top) — PERCENT: 100 → 00 ===
-        this._roundMs = 100000;                         // 100 seconds total
+        this._roundMs = 60000;
         this._roundEndAt = this.time.now + this._roundMs;
         this._lastTimerNow = this.time.now;             // for pause-freeze
 
@@ -474,13 +474,16 @@ export default class SoapSplashScene extends Phaser.Scene {
                 this._lastTimerNow = now;
                 if (this._paused) { this._roundEndAt += dt; return; }
 
+                // AFTER
                 const remainMs = Math.max(0, this._roundEndAt - now);
-                // clamp to 0..100 in whole seconds (ceil so display changes right at the tick)
-                let count = Math.ceil(remainMs / 1000);       // 100, 99, ..., 0
-                if (count < 0) count = 0;
+
+// Convert remaining time (0..60000ms) → percent (100..0) in whole steps
+                let count = Math.ceil((remainMs / this._roundMs) * 100);  // 100, 99, ..., 0
+                if (count < 0)   count = 0;
                 if (count > 100) count = 100;
 
                 this.chewyTimer.setText(_fmtChewy(count));
+
 
                 // color cues (same feel as before)
                 if (count <= 10) this.chewyTimer.setColor("#ff6666");
