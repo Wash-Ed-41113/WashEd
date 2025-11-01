@@ -37,51 +37,38 @@ function getTotalsNoDB(scene) {
         return Number.isFinite(n) ? n : 0;
     };
 
-    const hand = scene._handoff && scene._handoff.scores || null;
-    if (hand) {
-          const cc = toNum(hand.cc ?? hand.cleanCatch ?? hand.soapSplasher);
-          const ss = toNum(hand.ss ?? hand.soapSplash ?? hand.germScrubber);
-          return { soapSplasher: cc, germScrubber: ss, grand: toNum(cc) + toNum(ss) };
-        }
+    // Priority: data passed directly via scene.start()
+    if (scene._handoff?.scores) {
+        const cc = toNum(scene._handoff.scores.cc);
+        const ss = toNum(scene._handoff.scores.ss);
+        return { soapSplasher: cc, germScrubber: ss, grand: cc + ss };
+    }
 
-    // ---------------- Clean Catch (→ "Soap Splasher" row) ----------------
-    // Try registry first (the three keys CleanCatchScene maintains)
+    // Clean Catch ("Soap Splasher") score
+    // Try everything: window → localStorage → registry
     let cc =
-        toNum(scene.registry?.get?.("catch_score")) ??
+        toNum(window.__CLEAN_CATCH_SCORE__) ||
+        toNum(localStorage.getItem("cc_score")) ||
+        toNum(scene.game.registry?.get("cc_score")) ||
+        toNum(scene.registry?.get("cc_score")) ||
         0;
-    if (cc === 0) cc = toNum(scene.registry?.get?.("cleanCatchScore"));
-    if (cc === 0) cc = toNum(scene.registry?.get?.("cc_score"));
 
-    // Fallbacks: localStorage and window global
-    if (cc === 0) {
-        try {
-            cc =
-                toNum(localStorage.getItem("catch_score")) ||
-                toNum(localStorage.getItem("cleanCatchScore")) ||
-                toNum(localStorage.getItem("cc_score")) ||
-                0;
-        } catch {}
-    }
-    if (cc === 0) {
-        try { cc = toNum((typeof window !== "undefined" && window.__CLEAN_CATCH_SCORE__) || 0); } catch {}
-    }
+    // Soap Splash ("Germ Scrubber") score
+    let ss =
+        toNum(window.__SS_LAST_SCORE__?.total) ||
+        toNum(localStorage.getItem("ss_score")) ||
+        toNum(scene.game.registry?.get("ss_score")) ||
+        toNum(scene.registry?.get("ss_score")) ||
+        0;
 
-    // ---------------- Soap Splash (→ "Germ Scrubber" row) ----------------
-    // As you already had it: registry → window mirror
-    let ss = toNum(scene.registry?.get?.("ss:lastScore"));
-    if (ss === 0) {
-        try {
-            const wss = (typeof window !== "undefined" && window.__SS_LAST_SCORE__) || null;
-            if (wss) ss = toNum(wss.total);
-        } catch {}
-    }
-
+    // Return final totals
     return {
-        soapSplasher: cc,     // Clean Catch → “Soap Splasher”
-        germScrubber: ss,     // Soap Splash → “Germ Scrubber”
-        grand: toNum(cc) + toNum(ss),
+        soapSplasher: cc,
+        germScrubber: ss,
+        grand: cc + ss,
     };
 }
+
 
 
 /* -------------------------------------------------------------------------- */
@@ -303,6 +290,9 @@ export default class EndingScene extends Phaser.Scene {
                 `Yay ${playerName}! You finished your adventure with Kiko! Every try makes you a better WASH Hero - don't give up!`
             ]
         };
+
+        console.log("Scores found:", totals);
+
         const selected = lines[tier][Math.floor(Math.random() * lines[tier].length)];
 
         const dialogY = height * 0.97;
