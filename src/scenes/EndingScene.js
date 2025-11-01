@@ -28,7 +28,7 @@ function getPlayerName(scene) {
 }
 
 // Scores: prefer registry mirrors from scenes, fallback to window mirrors
-// Mapping per request:
+// LEADERBOARDDD
 //  - "Soap Splasher" row shows CLEAN CATCH total
 //  - "Germ Scrubber" row shows SOAP SPLASH total
 function getTotalsNoDB(scene) {
