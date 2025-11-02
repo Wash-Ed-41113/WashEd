@@ -181,7 +181,7 @@ export default class EndingScene extends Phaser.Scene {
         this.load.image("confetti", "assets/images/background/confetti.png");
         this.load.image("dialogPanel", CONFIG.assets.ui.dialogPanel);
         // this.load.image("homeResetButton", "assets/images/UI/washed_kikos-day_UI-Button_HOME.png"); // ❌ kept commented
-        this.load.image("classroom_bg", "assets/images/background/Classroom.png");
+        this.load.image("classroom_bg", "assets/images/background/classroom.png");
     }
 
     /** Create (or reuse) a rounded “Easy-style” button texture. */
