@@ -1,7 +1,7 @@
 // src/scenes/EndingScene.js
 /* global Phaser, CONFIG */
 import systems from "../systems.js";
-// import { DB } from "../db.js";            // ❌ No DB anymore
+// import { DB } from "../db.js";            //no DB anymore
 import { AudioManager } from "../systems.js";
 
 /**
@@ -307,8 +307,8 @@ export default class EndingScene extends Phaser.Scene {
             const mask = clip.createGeometryMask();
 
             // ↑↑ NEW: scale text from screen height so it uses the space better
-            const titleFS = Math.max(56, Math.round(H * 0.045));
-            const lineFS  = Math.max(40, Math.round(H * 0.032));
+            const titleFS = Math.max(56, Math.round(H * 0.07));
+            const lineFS  = Math.max(40, Math.round(H * 0.05));
 
             const styleTitle = {
                 fontFamily: "Chewy",
