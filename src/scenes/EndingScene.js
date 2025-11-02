@@ -201,47 +201,56 @@ export default class EndingScene extends Phaser.Scene {
         return key;
     }
 
-    // /** Fixed bottom-right “Play Again” button that hard-resets to ENTRY_SCENE. */
-    // _addPlayAgainButton() {
-    //     const { width, height } = this.scale;
-    //     const texKey = this._ensureEasyBtnTexture(1);
-    //     const x = Math.round(width * 0.14);
-    //     const y = Math.round(height * 0.90);
-    //
-    //     const img = this.add.image(x, y, texKey).setOrigin(0.5).setDepth(300).setInteractive({ useHandCursor: true });
-    //     const label = this.add.text(x, y, "Play Again", {
-    //         fontFamily: (window.CONFIG?.ui?.fontFamily) || "Montserrat",
-    //         color: "#073B4C",
-    //         align: "center"
-    //     }).setOrigin(0.5, 0.55).setDepth(301);
-    //
-    //     const btnH = img.displayHeight || 100;
-    //     label.setFontSize(Math.round(btnH * 0.35));
-    //
-    //     const base = { y: img.y, ly: label.y, sI: img.scale, sL: label.scale };
-    //     img.on("pointerover", () => {
-    //         this.tweens.add({ targets: img,   scale: base.sI * 1.04, y: base.y  - 4, duration: 120, ease: "Sine.easeOut" });
-    //         this.tweens.add({ targets: label, scale: base.sL * 1.04, y: base.ly - 4, duration: 120, ease: "Sine.easeOut" });
-    //     });
-    //     img.on("pointerout", () => {
-    //         this.tweens.add({ targets: img,   scale: base.sI, y: base.y,  duration: 120, ease: "Sine.easeOut" });
-    //         this.tweens.add({ targets: label, scale: base.sL, y: base.ly, duration: 120, ease: "Sine.easeOut" });
-    //     });
-    //
-    //     const go = async () => {
-    //         img.disableInteractive(); label.disableInteractive();
-    //         this._confettiCancelled = true;
-    //         this.cameras.main.fadeOut(450, 0, 0, 0);
-    //         this.cameras.main.once("camerafadeoutcomplete", async () => {
-    //             try { this.music?.stop(); } catch {}
-    //             await fullResetAndGotoStart(this);
-    //         });
-    //     };
-    //     img.on("pointerup", go);
-    //     label.on("pointerup", go);
-    //
-    //     // this._btnPlayAgain = { img, label };
-    // }
+    /** Fixed bottom-right “Play Again” button that hard-reloads the page. */
+    _addPlayAgainButton() {
+        const { width, height } = this.scale;
+        const texKey = this._ensureEasyBtnTexture(1);
+        const x = Math.round(width * 0.14);
+        const y = Math.round(height * 0.90);
+
+        const img = this.add.image(x, y, texKey)
+            .setOrigin(0.5)
+            .setDepth(300)
+            .setInteractive({ useHandCursor: true });
+
+        const label = this.add.text(x, y, "Play Again", {
+            fontFamily: (window.CONFIG?.ui?.fontFamily) || "Montserrat",
+            color: "#073B4C",
+            align: "center"
+        }).setOrigin(0.5, 0.55).setDepth(301);
+
+        const btnH = img.displayHeight || 100;
+        label.setFontSize(Math.round(btnH * 0.35));
+
+        const base = { y: img.y, ly: label.y, sI: img.scale, sL: label.scale };
+        img.on("pointerover", () => {
+            this.tweens.add({ targets: img,   scale: base.sI * 1.04, y: base.y  - 4, duration: 120, ease: "Sine.easeOut" });
+            this.tweens.add({ targets: label, scale: base.sL * 1.04, y: base.ly - 4, duration: 120, ease: "Sine.easeOut" });
+        });
+        img.on("pointerout", () => {
+            this.tweens.add({ targets: img,   scale: base.sI, y: base.y,  duration: 120, ease: "Sine.easeOut" });
+            this.tweens.add({ targets: label, scale: base.sL, y: base.ly, duration: 120, ease: "Sine.easeOut" });
+        });
+
+        const go = () => {
+            // Disable further clicks and stop celebratory stuff
+            img.disableInteractive();
+            label.disableInteractive();
+            this._confettiCancelled = true;
+
+            // (Optional) stop music softly, then hard reload
+            try { this.music?.stop(); } catch {}
+            try { this.sound?.stopAll?.(); } catch {}
+
+            // Immediate hard reload (equivalent to Ctrl+R)
+            // If you prefer cache-busting, use: location.reload(true) (older browsers)
+            location.reload();
+        };
+
+        img.on("pointerup", go);
+        label.on("pointerup", go);
+    }
+
 
     create() {
         const { width, height } = this.scale;
@@ -418,7 +427,7 @@ export default class EndingScene extends Phaser.Scene {
 
         // Fade-in + Play Again
         this.cameras.main.fadeIn(600, 0, 0, 0);
-        // this._addPlayAgainButton();
+        this._addPlayAgainButton();
 
         // Cleanup
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
