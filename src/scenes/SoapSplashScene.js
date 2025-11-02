@@ -177,46 +177,9 @@ export default class SoapSplashScene extends Phaser.Scene {
         if (badSrc && !this.cache.audio.exists("SS_SND_INCORRECT")) this.load.audio("SS_SND_INCORRECT", badSrc);
     }
 
-    // _buildPauseOverlay() {
-    //     const { width: W, height: H } = this.scale;
-    //
-    //     const g = this.add.container(0, 0).setDepth(99999);
-    //     const overlay = this.add.rectangle(0, 0, W, H, 0xffffff, 0.45).setOrigin(0, 0).setInteractive(); g.add(overlay);
-    //
-    //     let panel;
-    //     if (this.textures.exists("DialogPanel")) {
-    //         panel = this.add.image(W / 2, H / 2, "DialogPanel").setOrigin(0.5);
-    //         const tw = Math.min(W * 0.8, 980); panel.setDisplaySize(tw, tw * 0.58);
-    //     } else {
-    //         const gfx = this.add.graphics();
-    //         const pw = Math.min(W * 0.8, 980), ph = Math.min(H * 0.6, 520), px = (W - pw) / 2, py = (H - ph) / 2;
-    //         gfx.fillStyle(0xffffff, 1).fillRoundedRect(px, py, pw, ph, 28).lineStyle(6, 0x222222, 0.18).strokeRoundedRect(px, py, pw, ph, 28);
-    //         panel = gfx;
-    //     }
-    //     g.add(panel);
-    //
-    //     const title = this.add.text(W / 2, H / 2 - 170, "Game Paused", { fontFamily: "Chewy", fontSize: "72px", color: "#000", align: "center" }).setOrigin(0.5); g.add(title);
-    //     const score = this.streakSys?.totalScore ?? 0, best = this.streakSys?.bestStreak ?? 0, breaches = this.breaches ?? 0;
-    //     const stats = this.add.text(W / 2, H / 2 - 10, `Score: ${score}\nBest Streak: ${best}\nBreaches: ${breaches}`, {
-    //         fontFamily: "Montserrat", fontSize: "40px", color: "#000", align: "center", lineSpacing: 12
-    //     }).setOrigin(0.5); g.add(stats);
-    //
-    //     g.destroy = () => {
-    //         try { panel?.destroy(); title?.destroy(); stats?.destroy(); } catch { }
-    //         finally {
-    //             this._pauseUi = null; this._paused = false;
-    //             this.time.timeScale = 1; this.tweens.timeScale = 1;
-    //             if (this.physics?.world) this.physics.world.isPaused = false;
-    //             this.sound?.resumeAll?.();
-    //             if (this._origSysPauseOverlay) { systems.ui.pauseOverlay = this._origSysPauseOverlay; this._origSysPauseOverlay = null; }
-    //         }
-    //     };
-    //     this._pauseUi = g; return g;
-    // }
-    //
-    // // ─────────────────────────────────────────────
-    // // Toast builder (bottom-right, Chewy font)
-    // // ─────────────────────────────────────────────
+    // _buildPauseOverlay() { ... } // (kept commented)
+
+    // Toast builder
     _makeToast({ mood = "happy", text, ttl = 1800 }) {
         const { width: W, height: H } = this.scale;
         if (!this._toastStack) this._toastStack = [];
@@ -296,7 +259,6 @@ export default class SoapSplashScene extends Phaser.Scene {
     }
 
     showKikoSad(messageOverride = null) {
-        // tiny cooldown to avoid spam
         if (this._sadCooldownUntil && this.time.now < this._sadCooldownUntil) return;
         this._sadCooldownUntil = this.time.now + 400;
         const LINES = [
@@ -383,6 +345,24 @@ export default class SoapSplashScene extends Phaser.Scene {
         };
         this.events.on("wake", _fullUnpause); this.events.on("resume", _fullUnpause);
 
+        // ✅ Patch A — Pause/Resume handlers to extend end time by wall-clock pause duration & guard-start
+        this._scenePausedAtWall = null;
+        this.events.on(Phaser.Scenes.Events.PAUSE, () => {
+            this._scenePausedAtWall = Date.now(); // Phaser's clock freezes; use wall time
+            this._paused = true;
+        });
+        this.events.on(Phaser.Scenes.Events.RESUME, () => {
+            if (this._scenePausedAtWall != null && this._roundStarted && this._roundEndAt != null) {
+                const pausedFor = Date.now() - this._scenePausedAtWall;
+                this._roundEndAt += pausedFor; // extend the round by the real pause
+            }
+            this._scenePausedAtWall = null;
+            this._lastTimerNow = this.time.now; // reset per-tick baseline
+            this._paused = false;
+            // this._ensureRoundStarted?.("resume");
+        });
+        // —— end Patch A ——
+
         if (!this._typingBooted) {
             systems.soapsplash.typing.init(this);
             this._typingBooted = true;
@@ -396,11 +376,6 @@ export default class SoapSplashScene extends Phaser.Scene {
             okEvents.forEach (ev => this.events.on(ev,  () => this._playCorrectSfx()));
             badEvents.forEach(ev => this.events.on(ev, () => this._playIncorrectSfx()));
         }
-        // if (!this.typeHud || !this.typeHud.scene) {
-        //     this.typeHud = this.add.text(16, 14, "Score: 0  (base 0 × 1.0)   Streak: 0", {
-        //         fontFamily: CONFIG.ui?.fontFamily || "Montserrat", fontSize: "20px", color: "#fff"
-        //     }).setDepth(200);
-        // }
 
         this.gameStartAt = this.time.now;
 
@@ -440,14 +415,17 @@ export default class SoapSplashScene extends Phaser.Scene {
             if (this.bgVideo.video?.readyState >= 2) setScale(); else { this.bgVideo.once("play", setScale); this.bgVideo.once("loadeddata", setScale); }
         }
 
-        // === CHEWY COUNTDOWN (center-top) — PERCENT: 100 → 00 ===
+        // === CHEWY COUNTDOWN (center-top) — SECONDS: 60 → 00 ===
+        // Defer starting the countdown until the first germ actually spawns (or resume).
         this._roundMs = 60000;
-        this._roundEndAt = this.time.now + this._roundMs;
-        this._lastTimerNow = this.time.now;             // for pause-freeze
+        this._roundStarted = false;
+        this._roundEndAt = null;
+        this._lastTimerNow = null;
+        this._chewyTimerEvt = null;
 
-// Big Chewy timer at top-center (100 → 00)
+        // Big Chewy timer at top-center (60 → 00)
         const Wc = this.scale.width;
-        this.chewyTimer = this.add.text(Wc / 2, 16, "100", {
+        this.chewyTimer = this.add.text(Wc / 2, 16, "60", {
             fontFamily: "Chewy",
             fontSize: "48px",
             color: "#ffffff",
@@ -458,58 +436,64 @@ export default class SoapSplashScene extends Phaser.Scene {
             .setOrigin(0.5, 0)
             .setDepth(1000);
 
-// helper to format: keep "100" at start, then "99".."00" with zero-pad to 2 digits
-        const _fmtChewy = (n) => (n === 100 ? "100" : String(Math.max(0, n)).padStart(2, "0"));
+        // helper to format: "60" at start, then "59".."00" with zero-pad to 2 digits
+        const _fmtChewySec = (n) => (n === 60 ? "60" : String(Math.max(0, n)).padStart(2, "0"));
 
-// Drive the display and auto-end the round at 0 (identical path to breaches)
-        this._chewyTimerEvt = this.time.addEvent({
-            delay: 1000, // update every 1s for a clean 100→00 step
-            loop: true,
-            callback: () => {
-                if (this.gameOver) return;
+        // arm the ticking event (called once, when round starts)
+        this._armChewyTick = () => {
+            if (this._chewyTimerEvt) return;
+            this._chewyTimerEvt = this.time.addEvent({
+                delay: 1000,
+                loop: true,
+                callback: () => {
+                    if (this.gameOver || !this._roundStarted) return;
 
-                // freeze countdown while paused
-                const now = this.time.now;
-                const dt = now - (this._lastTimerNow || now);
-                this._lastTimerNow = now;
-                if (this._paused) { this._roundEndAt += dt; return; }
+                    // pause-aware (scene or our own flag)
+                    const now = this.time.now;
+                    const dt = now - (this._lastTimerNow || now);
+                    this._lastTimerNow = now;
+                    if (this._paused) { this._roundEndAt += dt; return; }
 
-                // AFTER
-                const remainMs = Math.max(0, this._roundEndAt - now);
+                    const remainMs = Math.max(0, this._roundEndAt - now);
 
-// Convert remaining time (0..60000ms) → percent (100..0) in whole steps
-                let count = Math.ceil((remainMs / this._roundMs) * 100);  // 100, 99, ..., 0
-                if (count < 0)   count = 0;
-                if (count > 100) count = 100;
+                    let secs = Math.ceil(remainMs / 1000); // 60..0
+                    if (secs < 0) secs = 0;
+                    if (secs > 60) secs = 60;
 
-                this.chewyTimer.setText(_fmtChewy(count));
+                    this.chewyTimer.setText(_fmtChewySec(secs));
 
+                    // color cues
+                    if (secs <= 10) this.chewyTimer.setColor("#ff6666");
+                    else if (secs <= 30) this.chewyTimer.setColor("#ffcc33");
+                    else this.chewyTimer.setColor("#ffffff");
 
-                // color cues (same feel as before)
-                if (count <= 10) this.chewyTimer.setColor("#ff6666");
-                else if (count <= 30) this.chewyTimer.setColor("#ffcc33");
-                else this.chewyTimer.setColor("#ffffff");
-
-                if (remainMs <= 0) {
-                    if (!this._timeUpFired) {
+                    if (remainMs <= 0 && !this._timeUpFired) {
                         this._timeUpFired = true;
                         try { this._chewyTimerEvt?.remove?.(); } catch {}
                         try { this.chewyTimer?.setText("00"); } catch {}
                         try { this.showKikoSad?.("Time’s up!"); } catch {}
 
-                        // EXACT SAME PATH as breach-limit end:
                         try {
                             systems.soapsplash.timer?.endGame?.(this, "Time's up");
                         } catch (e) {
-                            // safety fallback if helper missing
                             this.finalizeRound("Time's up");
                             this.leaveTo("HandwashAnimationScene", { skipIntro: true });
                         }
                     }
-                }
-            },
-        });
+                },
+            });
+        };
 
+        // ensure round is started (idempotent)
+        this._ensureRoundStarted = (why = "unknown") => {
+            if (this._roundStarted) return;
+            this._roundStarted = true;
+            this._lastTimerNow = this.time.now;
+            this._roundEndAt = this.time.now + this._roundMs;
+            this.chewyTimer?.setText("60");
+            console.log("[ChewyTimer] started via:", why); // <-- debug line
+            this._armChewyTick();
+        };
 
         if (SS.useSpawner) {
             const d = Math.hypot(SS.width - this.sinkPosition.x, 0 - this.sinkPosition.y);
@@ -537,9 +521,6 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.topbar?.setTimerVisible?.(false);
         try { this.topbar?.timerText?.destroy?.(); } catch (_) {}
 
-        // LEGACY HUD disabled by default now (Chewy is authoritative)
-        // this._buildCountdownHUD();
-
         // systems.soapsplash.typing.updateHud(this);
         if (!this.typing?.activeId && this.germs.length) systems.soapsplash.typing.pickNearest(this);
 
@@ -547,6 +528,8 @@ export default class SoapSplashScene extends Phaser.Scene {
             this.gameStartAt = this.time.now;
             if (this.germs.length && (!this.typing || !this.typing.activeId)) systems.soapsplash.typing.pickNearest(this);
             ensureBgm();
+            // ✅ Patch C — also start on your existing RESUME-once hook
+            // this._ensureRoundStarted?.("resume-once");
         });
 
         // explain overlay, watchdog resume
@@ -592,7 +575,6 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
     }
 
-
     endGameAndGoto(next, data = {}, reason = "scene-change") {
         if (this._leaving) return;
         this._leaving = true;
@@ -625,7 +607,6 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
     }
 
-    // Bridge/fallback: prefer timer.endGame path; keep for backward-compat
     _handleTimeUpToGameOver() {
         this._paused = true;
         if (this.physics?.world) this.physics.world.isPaused = true;
@@ -651,13 +632,7 @@ export default class SoapSplashScene extends Phaser.Scene {
     }
 
     // Legacy mini HUD; Chewy is authoritative now
-    // _buildCountdownHUD() {
-    //     const { width: W } = this.scale;
-    //     this._countdownMsTotal = 100000; this._countdownMsLeft = 100000; this._lastShownSec = 101; this._urgentPulsing = false;
-    //     this.countdownText = this.add.text(W / 2, 16, "100", {
-    //         fontFamily: "Chewy", fontSize: "64px", color: "#fff", align: "center"
-    //     }).setOrigin(0.5, 0).setStroke("#000", 8).setShadow(0, 4, "#00000099", 8, true, true).setDepth(1000);
-    // }
+    // _buildCountdownHUD() { ... }
 
     _updateCountdown(delta) {
         // intentionally left available but UNUSED; Chewy timer now owns time-up
@@ -703,6 +678,8 @@ export default class SoapSplashScene extends Phaser.Scene {
         if (noActors && idle > 3000) {
             try {
                 systems.soapsplash.spawn.spawnGerm(this);
+                // ✅ Patch B — start timer on first spawn (watchdog path)
+                this._ensureRoundStarted?.("first-spawn-watchdog");
                 const cap = (CONFIG.soapSplash?.waveCap ?? CONFIG.soapSplash?.maxGerms ?? 5);
                 this._pendingSpawns = Math.max(0, cap - 1);
                 this._nextSpawnAt = time + (CONFIG.soapSplash?.spawnIntervalMs ?? 1200);
@@ -723,6 +700,8 @@ export default class SoapSplashScene extends Phaser.Scene {
         if (!this._waveActive && this.germs.length === 0) { this._waveActive = true; this._pendingSpawns = cap; this._nextSpawnAt = this._nextSpawnAt ?? (time + (this._betweenWaveDelayMs ?? 900)); }
         if (this._waveActive && time >= (this._nextSpawnAt ?? 0) && this._pendingSpawns > 0) {
             try { systems.soapsplash.spawn.spawnGerm(this); } catch (err) { console.error("Spawn error:", err); }
+            // ✅ Patch B — start timer on first spawn (normal wave path)
+            this._ensureRoundStarted?.("first-spawn-wave");
             this._pendingSpawns--; const j = Phaser.Math.Between(-jitter, jitter); this._nextSpawnAt = time + base + j;
         }
         if (this._waveActive && this._pendingSpawns <= 0 && this.germs.length === 0) { this._waveActive = false; this._nextSpawnAt = time + (this._betweenWaveDelayMs ?? 900); }

@@ -31,37 +31,46 @@ function getPlayerName(scene) {
 // LEADERBOARDDD
 //  - "Soap Splasher" row shows CLEAN CATCH total
 //  - "Germ Scrubber" row shows SOAP SPLASH total
+// Scores: prefer registry mirrors from scenes, fallback to window mirrors
+// LEADERBOARDDD
+//  - "Soap Splasher" row shows CLEAN CATCH total
+//  - "Germ Scrubber" row shows SOAP SPLASH total
 function getTotalsNoDB(scene) {
     const toNum = (v) => {
         const n = Number(v);
         return Number.isFinite(n) ? n : 0;
     };
 
+    // tiny helpers to avoid unsafe property walks
+    const regGet = (s, key) => {
+        try { return s?.registry?.get?.(key); } catch { return undefined; }
+    };
+    const gameRegGet = (s, key) => {
+        try { return s?.game?.registry?.get?.(key); } catch { return undefined; }
+    };
+    const win = (typeof window !== "undefined") ? window : undefined;
+
     // Priority: data passed directly via scene.start()
-    if (scene._handoff?.scores) {
+    if (scene?._handoff?.scores) {
         const cc = toNum(scene._handoff.scores.cc);
         const ss = toNum(scene._handoff.scores.ss);
         return { soapSplasher: cc, germScrubber: ss, grand: cc + ss };
     }
 
     // Clean Catch ("Soap Splasher") score
-    // Try everything: window → localStorage → registry
-    let cc =
-        toNum(window.__CLEAN_CATCH_SCORE__) ||
-        toNum(localStorage.getItem("cc_score")) ||
-        toNum(scene.game.registry?.get("cc_score")) ||
-        toNum(scene.registry?.get("cc_score")) ||
-        0;
+    let cc = 0;
+    cc = cc || toNum(win?.__CLEAN_CATCH_SCORE__);
+    try { cc = cc || toNum(localStorage.getItem("cc_score")); } catch {}
+    cc = cc || toNum(gameRegGet(scene, "cc_score"));
+    cc = cc || toNum(regGet(scene, "cc_score"));
 
     // Soap Splash ("Germ Scrubber") score
-    let ss =
-        toNum(window.__SS_LAST_SCORE__?.total) ||
-        toNum(localStorage.getItem("ss_score")) ||
-        toNum(scene.game.registry?.get("ss_score")) ||
-        toNum(scene.registry?.get("ss_score")) ||
-        0;
+    let ss = 0;
+    ss = ss || toNum(win?.__SS_LAST_SCORE__?.total);
+    try { ss = ss || toNum(localStorage.getItem("ss_score")); } catch {}
+    ss = ss || toNum(gameRegGet(scene, "ss_score"));
+    ss = ss || toNum(regGet(scene, "ss_score"));
 
-    // Return final totals
     return {
         soapSplasher: cc,
         germScrubber: ss,
@@ -69,6 +78,57 @@ function getTotalsNoDB(scene) {
     };
 }
 
+
+/* -------------------------------------------------------------------------- */
+/*                       PROGRESS / GATING FLAGS CLEAR                        */
+/* -------------------------------------------------------------------------- */
+
+function _clearProgressFlags(scene) {
+    // All gating + mirrors we’ve used across scenes
+    const KEYS = [
+        // mini-game completion / gating
+        "cc_done", "cleanCatchDone", "cleanCatchPlayed", "hasPlayedCleanCatch",
+        "ss_done", "soapSplashDone", "soapSplashPlayed", "hasPlayedSoapSplash",
+        // bathroom / flow
+        "bathroom:ccComplete", "bathroom:soapComplete", "bathroom:ccLocked",
+        "flow:enteredBathroom", "flow:enteredPlayground", "flowStage",
+        // misc state
+        "visitedPlayground", "difficulty",
+        // mirrors / scores / identity
+        "playerName", "cc_score", "ss_score",
+        "cc:lastScore", "ss:lastScore", "ss:lastBestStreak",
+        "sessionId"
+    ];
+
+    // Registry
+    for (const k of KEYS) {
+        try { scene.registry.set(k, false); } catch {}
+        try { scene.registry.remove(k); } catch {}
+    }
+
+    // Window mirrors (belt & braces)
+    try {
+        if (typeof window !== "undefined") {
+            window.__PLAYER_NAME__      = null;
+            window.__CC_LAST_SCORE__    = null;
+            window.__CLEAN_CATCH_SCORE__= null;
+            window.__SS_LAST_SCORE__    = null;
+            window.__SESSION_ID__       = null;
+
+            // optional: any ad-hoc booleans you used anywhere
+            window.__SOAP_SPLASH_PLAYED__ = false;
+            window.__CLEAN_CATCH_PLAYED__ = false;
+        }
+    } catch {}
+
+    // Local/session storage (only if you used these keys)
+    try {
+        localStorage.removeItem("cc_score");
+        localStorage.removeItem("ss_score");
+        sessionStorage.removeItem("cc_score");
+        sessionStorage.removeItem("ss_score");
+    } catch {}
+}
 
 
 /* -------------------------------------------------------------------------- */
@@ -78,44 +138,24 @@ function getTotalsNoDB(scene) {
 /** Full app reset → go back to the very first entry scene (no DB). */
 async function fullResetAndGotoStart(scene) {
     try {
-        // Clear play flags + player info (registry)
-        try {
-            const KEYS = [
-                // mini-game completion / gating
-                "cc_done", "cleanCatchDone", "cleanCatchPlayed", "hasPlayedCleanCatch",
-                "ss_done", "soapSplashDone", "soapSplashPlayed", "hasPlayedSoapSplash",
-                // bathroom / flow
-                "bathroom:ccComplete", "bathroom:soapComplete", "bathroom:ccLocked",
-                "flow:enteredBathroom", "flow:enteredPlayground", "flowStage",
-                // misc state
-                "visitedPlayground", "difficulty",
-                // mirrors
-                "playerName", "cc:lastScore", "ss:lastScore", "ss:lastBestStreak",
-                "sessionId"
-            ];
-            for (const k of KEYS) {
-                try { scene.registry.set(k, false); } catch {}
-                try { scene.registry.remove(k); } catch {}
-            }
-        } catch {}
-
-        // Window mirrors
-        try { if (typeof window !== "undefined") {
-            window.__PLAYER_NAME__ = null;
-            window.__CC_LAST_SCORE__ = null;
-            window.__SS_LAST_SCORE__ = null;
-            window.__SESSION_ID__ = null;
-        }} catch {}
+        // Clear gating + mirrors
+        _clearProgressFlags(scene);
 
         // Kill audio/timers/tweens gracefully
         try { scene.sound?.stopAll?.(); } catch {}
         try { scene.tweens?.killAll?.(); } catch {}
         try { scene.time?.removeAllEvents?.(); } catch {}
+
+        // Make sure game SFX group is down and global is free to resume in Menu
+        try { AudioManager.stopGroup?.("game"); } catch {}
+        try { AudioManager.resumeGroup?.("global"); } catch {}
     } finally {
         try { scene.scene.stop(); } catch {}
+        // 👇 This is the key bit that your plan called out
         scene.scene.start(ENTRY_SCENE, { resetSession: true });
     }
 }
+
 
 /* -------------------------------------------------------------------------- */
 /*                                   SCENE                                    */
@@ -126,7 +166,7 @@ export default class EndingScene extends Phaser.Scene {
         super("EndingScene");
         this.music = null;
         this._confettiCancelled = false;
-        this._btnPlayAgain = null;
+        // this._btnPlayAgain = null;
         this._handoff = null; // cache data passed from the previous scene
     }
 
@@ -161,47 +201,47 @@ export default class EndingScene extends Phaser.Scene {
         return key;
     }
 
-    /** Fixed bottom-right “Play Again” button that hard-resets to ENTRY_SCENE. */
-    _addPlayAgainButton() {
-        const { width, height } = this.scale;
-        const texKey = this._ensureEasyBtnTexture(1);
-        const x = Math.round(width * 0.14);
-        const y = Math.round(height * 0.90);
-
-        const img = this.add.image(x, y, texKey).setOrigin(0.5).setDepth(300).setInteractive({ useHandCursor: true });
-        const label = this.add.text(x, y, "Play Again", {
-            fontFamily: (window.CONFIG?.ui?.fontFamily) || "Montserrat",
-            color: "#073B4C",
-            align: "center"
-        }).setOrigin(0.5, 0.55).setDepth(301);
-
-        const btnH = img.displayHeight || 100;
-        label.setFontSize(Math.round(btnH * 0.35));
-
-        const base = { y: img.y, ly: label.y, sI: img.scale, sL: label.scale };
-        img.on("pointerover", () => {
-            this.tweens.add({ targets: img,   scale: base.sI * 1.04, y: base.y  - 4, duration: 120, ease: "Sine.easeOut" });
-            this.tweens.add({ targets: label, scale: base.sL * 1.04, y: base.ly - 4, duration: 120, ease: "Sine.easeOut" });
-        });
-        img.on("pointerout", () => {
-            this.tweens.add({ targets: img,   scale: base.sI, y: base.y,  duration: 120, ease: "Sine.easeOut" });
-            this.tweens.add({ targets: label, scale: base.sL, y: base.ly, duration: 120, ease: "Sine.easeOut" });
-        });
-
-        const go = async () => {
-            img.disableInteractive(); label.disableInteractive();
-            this._confettiCancelled = true;
-            this.cameras.main.fadeOut(450, 0, 0, 0);
-            this.cameras.main.once("camerafadeoutcomplete", async () => {
-                try { this.music?.stop(); } catch {}
-                await fullResetAndGotoStart(this);
-            });
-        };
-        img.on("pointerup", go);
-        label.on("pointerup", go);
-
-        this._btnPlayAgain = { img, label };
-    }
+    // /** Fixed bottom-right “Play Again” button that hard-resets to ENTRY_SCENE. */
+    // _addPlayAgainButton() {
+    //     const { width, height } = this.scale;
+    //     const texKey = this._ensureEasyBtnTexture(1);
+    //     const x = Math.round(width * 0.14);
+    //     const y = Math.round(height * 0.90);
+    //
+    //     const img = this.add.image(x, y, texKey).setOrigin(0.5).setDepth(300).setInteractive({ useHandCursor: true });
+    //     const label = this.add.text(x, y, "Play Again", {
+    //         fontFamily: (window.CONFIG?.ui?.fontFamily) || "Montserrat",
+    //         color: "#073B4C",
+    //         align: "center"
+    //     }).setOrigin(0.5, 0.55).setDepth(301);
+    //
+    //     const btnH = img.displayHeight || 100;
+    //     label.setFontSize(Math.round(btnH * 0.35));
+    //
+    //     const base = { y: img.y, ly: label.y, sI: img.scale, sL: label.scale };
+    //     img.on("pointerover", () => {
+    //         this.tweens.add({ targets: img,   scale: base.sI * 1.04, y: base.y  - 4, duration: 120, ease: "Sine.easeOut" });
+    //         this.tweens.add({ targets: label, scale: base.sL * 1.04, y: base.ly - 4, duration: 120, ease: "Sine.easeOut" });
+    //     });
+    //     img.on("pointerout", () => {
+    //         this.tweens.add({ targets: img,   scale: base.sI, y: base.y,  duration: 120, ease: "Sine.easeOut" });
+    //         this.tweens.add({ targets: label, scale: base.sL, y: base.ly, duration: 120, ease: "Sine.easeOut" });
+    //     });
+    //
+    //     const go = async () => {
+    //         img.disableInteractive(); label.disableInteractive();
+    //         this._confettiCancelled = true;
+    //         this.cameras.main.fadeOut(450, 0, 0, 0);
+    //         this.cameras.main.once("camerafadeoutcomplete", async () => {
+    //             try { this.music?.stop(); } catch {}
+    //             await fullResetAndGotoStart(this);
+    //         });
+    //     };
+    //     img.on("pointerup", go);
+    //     label.on("pointerup", go);
+    //
+    //     // this._btnPlayAgain = { img, label };
+    // }
 
     create() {
         const { width, height } = this.scale;
@@ -378,16 +418,16 @@ export default class EndingScene extends Phaser.Scene {
 
         // Fade-in + Play Again
         this.cameras.main.fadeIn(600, 0, 0, 0);
-        this._addPlayAgainButton();
+        // this._addPlayAgainButton();
 
         // Cleanup
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             this._confettiCancelled = true;
             try { this.music?.stop(); } catch {}
             this.music?.destroy?.(); this.music = null;
-            this._btnPlayAgain?.img?.destroy?.();
-            this._btnPlayAgain?.label?.destroy?.();
-            this._btnPlayAgain = null;
+            // this._btnPlayAgain?.img?.destroy?.();
+            // this._btnPlayAgain?.label?.destroy?.();
+            // this._btnPlayAgain = null;
         });
     }
 }
