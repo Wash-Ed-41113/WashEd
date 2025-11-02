@@ -67,7 +67,7 @@ export default class MenuScene extends Phaser.Scene {
             this.scene.stop("SoapSplashExplain");
         } catch {}
 
-        // ─────────────────────────────────────────────
+        // ─────────────────────────────────────────────==
 // AUDIO: gesture-gated start (idempotent, safe)
 // ─────────────────────────────────────────────
         try {
@@ -492,7 +492,7 @@ export default class MenuScene extends Phaser.Scene {
                 fontFamily: "Chewy", color: "#000000", align: "center"
             })
             .setOrigin(0.5, 0.5);
-        title.setFontSize(Math.max(42, Math.round(42 * s)));
+        title.setFontSize(Math.max(85, Math.round(85 * s)));
         title.setFontStyle("bold");
         title.setWordWrapWidth(innerW, true);
         dialogRoot.add(title);

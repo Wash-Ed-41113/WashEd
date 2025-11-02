@@ -207,7 +207,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
 
         const label = this.add.text(0, 0, text, {
-            fontFamily: "Chewy, Arial, sans-serif",
+            fontFamily: "Chewy",
             fontSize: "44px",
             color: "#ffffff",
             align: "right",

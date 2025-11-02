@@ -236,7 +236,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
             // After returning from Clean Catch: Tap is WRONG
             this._showSmallDialog(
-                "Oops, not that one! \n\n We need to scrub our hands to get the germs off. \n\nTry again, click the scrubbing hands!"
+                "Oops, not that one! \n\n We need to scrub our hands to get the germs off. \n\nTry again — click the soap dispenser or soap bar."
             );
         }));
 
@@ -418,7 +418,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             this.add.text(
                 panel.x,
                 panel.y - panelH * 0.005,
-                "Great job using tap! \nNow comes the most important part - we need to scrub our hands to chase away all the germs.\nCan you help me choose how to scrub?",
+                "Great job using the tap! \nNow comes the most important part — we need to scrub our hands to chase away all the germs.\nCan you help me choose how to scrub?",
                 {
                     fontFamily: "Montserrat",
                     fontSize: "34px",

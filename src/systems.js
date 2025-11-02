@@ -1128,7 +1128,7 @@ const soapsplash = (() => {
             const uiFontBody = "Montserrat";
 
             // Title
-            const title = scene.add.text(panel.x, panel.y - panelH * 0.28, "GAME OVER!", {
+            const title = scene.add.text(panel.x, panel.y - panelH * 0.28, "GAME OVER", {
                 fontFamily: uiFont,
                 color: "#000000"
             }).setOrigin(0.5);
@@ -1152,7 +1152,7 @@ const soapsplash = (() => {
             ];
             const loMsgs = [
                 "The germs were hard to scrub off this time. But with more practice, you’ll be even stronger!",
-                "Next time, you’ll win!"
+                "Next time, you’ll do even better!"
             ];
             const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
             const resultMsg = (score >= 80) ? pick(hiMsgs) : pick(loMsgs);

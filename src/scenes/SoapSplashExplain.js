@@ -97,7 +97,7 @@ export default class SoapSplashExplain extends Phaser.Scene {
         const lines = [
             `Okay, ${username}, it’s time for the Germ Scrubber Showdown!`,
             `The GERMS are coming and we need your HELP to STOP them.`,
-            `You have 1 MINUTE to TYPE the clean WORDS to make GERMS go away.`,
+            `You have 1 MINUTE to TYPE the clean WORDS to make the GERMS go away.`,
             `Each clean WORD helps you SCRUB better with SOAP so the GERMS disappear!`,
             `You have 3 LIVES. If you miss one, the GERMS reach the sink and you LOSE a LIFE.`,
             `Let’s fight the GERMS together!`,

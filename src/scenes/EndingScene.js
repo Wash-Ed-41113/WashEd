@@ -181,7 +181,7 @@ export default class EndingScene extends Phaser.Scene {
         this.load.image("confetti", "assets/images/background/confetti.png");
         this.load.image("dialogPanel", CONFIG.assets.ui.dialogPanel);
         // this.load.image("homeResetButton", "assets/images/UI/washed_kikos-day_UI-Button_HOME.png"); // ❌ kept commented
-        this.load.image("classroom_bg", "assets/images/background/classroom.png");
+        this.load.image("classroom_bg", "assets/images/background/Classroom.png");
     }
 
     /** Create (or reuse) a rounded “Easy-style” button texture. */
@@ -201,27 +201,35 @@ export default class EndingScene extends Phaser.Scene {
         return key;
     }
 
-    /** Fixed bottom-right “Play Again” button that hard-reloads the page. */
+    /** Fixed Play Again button (same position as original, hard reload). */
     _addPlayAgainButton() {
         const { width, height } = this.scale;
         const texKey = this._ensureEasyBtnTexture(1);
+
+        // same coords as your original version
         const x = Math.round(width * 0.14);
         const y = Math.round(height * 0.90);
 
         const img = this.add.image(x, y, texKey)
             .setOrigin(0.5)
-            .setDepth(300)
+            .setDepth(1000)              // way above everything
+            .setScrollFactor(0)          // stick to screen, not world/camera
             .setInteractive({ useHandCursor: true });
 
         const label = this.add.text(x, y, "Play Again", {
             fontFamily: (window.CONFIG?.ui?.fontFamily) || "Montserrat",
             color: "#073B4C",
-            align: "center"
-        }).setOrigin(0.5, 0.55).setDepth(301);
+            align: "center",
+        })
+            .setOrigin(0.5, 0.55)
+            .setDepth(1001)
+            .setScrollFactor(0);
 
+        // responsive label size
         const btnH = img.displayHeight || 100;
         label.setFontSize(Math.round(btnH * 0.35));
 
+        // hover micro-anim
         const base = { y: img.y, ly: label.y, sI: img.scale, sL: label.scale };
         img.on("pointerover", () => {
             this.tweens.add({ targets: img,   scale: base.sI * 1.04, y: base.y  - 4, duration: 120, ease: "Sine.easeOut" });
@@ -232,25 +240,21 @@ export default class EndingScene extends Phaser.Scene {
             this.tweens.add({ targets: label, scale: base.sL, y: base.ly, duration: 120, ease: "Sine.easeOut" });
         });
 
+        // original behavior: hard page reload
         const go = () => {
-            // Disable further clicks and stop celebratory stuff
-            img.disableInteractive();
-            label.disableInteractive();
+            img.disableInteractive(); label.disableInteractive();
             this._confettiCancelled = true;
-
-            // (Optional) stop music softly, then hard reload
             try { this.music?.stop(); } catch {}
             try { this.sound?.stopAll?.(); } catch {}
-
-            // Immediate hard reload (equivalent to Ctrl+R)
-            // If you prefer cache-busting, use: location.reload(true) (older browsers)
             location.reload();
         };
-
         img.on("pointerup", go);
         label.on("pointerup", go);
-    }
 
+        // ensure topmost if anything new is added later
+        this.children.bringToTop(img);
+        this.children.bringToTop(label);
+    }
 
     create() {
         const { width, height } = this.scale;
@@ -269,7 +273,6 @@ export default class EndingScene extends Phaser.Scene {
             this.scene.stop("SoapSplashExplain");
         } catch {}
 
-        // ❌ NO DB BOOTSTRAP, NO SESSION ID
 
         // Totals (NO DB)
         const playerName = getPlayerName(this);
@@ -299,57 +302,101 @@ export default class EndingScene extends Phaser.Scene {
         /* ---------------------------- Chalkboard UI ---------------------------- */
         {
             const W = width, H = height;
-            const board = { x: W * 0.56, y: H * 0.14, w: W * 0.36, h: H * 0.34 };
+            const board = { x: W * 0.56, y: H * 0.14, w: W * 0.70, h: H * 0.70 };
             const clip = this.add.graphics().fillStyle(0x000000, 0).fillRect(board.x, board.y, board.w, board.h);
             const mask = clip.createGeometryMask();
 
-            const styleTitle = { fontFamily: "Chewy", fontSize: "48px", color: "#F3F0E6", align: "left", wordWrap: { width: board.w - 20 } };
-            const styleLine  = { fontFamily: "Chewy", fontSize: "34px", color: "#F3F0E6", align: "left", wordWrap: { width: board.w - 20 } };
+            // ↑↑ NEW: scale text from screen height so it uses the space better
+            const titleFS = Math.max(56, Math.round(H * 0.045));
+            const lineFS  = Math.max(40, Math.round(H * 0.032));
+
+            const styleTitle = {
+                fontFamily: "Chewy",
+                fontSize: `${titleFS}px`,
+                color: "#F3F0E6",
+                align: "left",
+                wordWrap: { width: board.w - 20 }
+            };
+            const styleLine  = {
+                fontFamily: "Chewy",
+                fontSize: `${lineFS}px`,
+                color: "#F3F0E6",
+                align: "left",
+                wordWrap: { width: board.w - 20 }
+            };
 
             const c  = this.add.container(board.x, board.y).setDepth(5).setMask(mask);
 
             const t1 = this.add.text(0, 0, "Scoreboard", styleTitle).setOrigin(0, 0);
-            const t2 = this.add.text(0, 60, playerName,   styleLine ).setOrigin(0, 0);
+            const t2 = this.add.text(0, titleFS + 12, playerName, styleLine).setOrigin(0, 0);
 
-            const yBase = 60 + 44;
-            const l1 = this.add.text(0, yBase,           `Soap Splasher : ${totals.soapSplasher}`, styleLine).setOrigin(0, 0);
-            const l2 = this.add.text(0, yBase + 38,      `Germ Scrubber : ${totals.germScrubber}`, styleLine).setOrigin(0, 0);
-            const l3 = this.add.text(0, yBase + 38 + 34, `Grand Total   : ${totals.grand}`,        styleLine).setOrigin(0, 0);
+            // ↑↑ NEW: consistent single space *after* the colon, none before
+            const rowGap = Math.round(lineFS * 0.95);
+            const yBase  = titleFS + 12 + lineFS + 14;
+
+            const l1 = this.add.text(0, yBase,              `Soap Splasher: ${totals.soapSplasher}`, styleLine).setOrigin(0, 0);
+            const l2 = this.add.text(0, yBase + rowGap,     `Germ Scrubber: ${totals.germScrubber}`, styleLine).setOrigin(0, 0);
+            const l3 = this.add.text(0, yBase + rowGap * 2, `Grand Total: ${totals.grand}`,          styleLine).setOrigin(0, 0);
 
             c.add([t1, t2, l1, l2, l3]);
             [t1, t2, l1, l2, l3].forEach(t => t.setShadow(0, 1, "#FFFFFF22", 2));
         }
 
+
         /* ------------------------------ Dialogue ------------------------------ */
-        const tier = (totals.grand >= 500 ? "high" : totals.grand >= 250 ? "medium" : "low");
+
         const lines = {
             high: [
                 `Great work, ${playerName}! Because of you, Kiko is happy, healthy, and ready for more fun.`,
                 `Amazing ${playerName}! You helped Kiko every step of the way. Those germs didn’t stand a chance!`,
-                `Wow ${playerName}! You made Kiko's day super clean and helped him stay healthy. You're a true WASH Hero!`
+                // Day → capital D
+                `Wow ${playerName}! You made Kiko’s Day super clean and helped him stay healthy. You're a true WASH Hero!`
             ],
             medium: [
                 `Awesome ${playerName}! You helped Kiko finish his day with clean hands!`,
-                `Great job ${playerName}! You guided Kiko through the whole day - and look, his hands are clean and safe`,
+                `Great job ${playerName}! You guided Kiko through the whole day - and look, his hands are clean and safe.`,
                 `Nice work ${playerName}! You kept Kiko healthy. Each try makes you stronger!`
             ],
             low: [
-                `Thanks for your help, ${playerName}! You finished Kiko’s day and learned how to stay clean and healthy. Next time, you'll be even faster`,
+                // Day → capital D, and new ending sentence with full stop
+                `Thanks for your help, ${playerName}! You finished Kiko’s Day and learned how to stay clean and healthy. Next time, you'll score even higher.`,
                 `Good effort ${playerName}! You know how to stay clean and safe. Let’s play again and keep practicing!`,
                 `Yay ${playerName}! You finished your adventure with Kiko! Every try makes you a better WASH Hero - don't give up!`
             ]
         };
 
-        console.log("Scores found:", totals);
 
-        const selected = lines[tier][Math.floor(Math.random() * lines[tier].length)];
+        const tier = (totals.grand >= 500 ? "high" : totals.grand >= 250 ? "medium" : "low");
+// (lines object stays; we’ll fix the specific strings in Step 3)
 
         const dialogY = height * 0.97;
+
+// Keep your same image key and initial scale
         const dialog = this.add.image(width * 0.58, dialogY, "dialogPanel")
             .setOrigin(0.5, 1).setAlpha(0).setDepth(25).setScale(0.5);
-        const panelCenterY = dialogY - (dialog.height * dialog.scaleY) / 2;
+
+// Compute panel dimensions after scale
+        const panelW = dialog.width  * dialog.scaleX;
+        const panelH = dialog.height * dialog.scaleY;
+
+// NEW: text sizing & wrap from panel size so it never touches the border
+        const msgFontPx = Math.max(28, Math.round(panelH * 0.085)); // smaller than 64px and responsive
+        const msgWrapW  = Math.round(panelW * 0.78);                 // generous side padding
+
+// Vertical centering: center Y of the panel area
+        const panelCenterY = dialogY - (panelH / 2);
+
+        const selected = (()=>{
+            const arr = lines[tier];
+            return arr[Math.floor(Math.random() * arr.length)];
+        })();
+
         const msg = this.add.text(width * 0.58, panelCenterY, selected, {
-            fontFamily: "Montserrat", fontSize: "64px", color: "#000000", wordWrap: { width: 870 }, align: "center"
+            fontFamily: "Montserrat",
+            fontSize: `${msgFontPx}px`,
+            color: "#000000",
+            wordWrap: { width: msgWrapW },
+            align: "center"
         }).setOrigin(0.5).setAlpha(0).setDepth(26);
 
         this.tweens.add({ targets: dialog, alpha: 1, duration: 600, ease: "Sine.inOut" });

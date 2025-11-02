@@ -93,12 +93,12 @@ export default class CleanCatchExplain extends Phaser.Scene {
         //────────── Dialogue Text Setup ──────────
         const lines = [
             `${username}! Are you ready for the Soap Splasher game? Let’s play!`,
-            `Here’s how it works --> `,
-            `Catch the clean WATER droplets and SOAP bubbles, they’re good for us!`,
-            `But be careful, you have 3 LIVES. Avoid the germs from spreading! Don’t let them touch your hands.`,
+            `Here’s how it works!`,
+            `Catch the clean WATER droplets and SOAP bubbles — they’re good for us!`,
+            `But be careful — you have 3 LIVES. Avoid the germs from spreading! Don’t let them touch your hands.`,
             `You have 30 SECONDS to catch as much clean WATER and SOAP as you can!\nUse your MOUSE to move my hands.`,
             `Let’s see how many you can CATCH!`,
-            `When you’re ready, press ARROW!`
+            `When you’re ready, click the green ARROW!`
         ];
 
         let i = 0;
@@ -108,7 +108,7 @@ export default class CleanCatchExplain extends Phaser.Scene {
             fontSize: Math.max(30, panelH * 0.10) + "px",
             color: "#000000",
             wordWrap: { width: panelW * 0.85 },
-            align: "center",
+            align: "center"
         };
 
         const text = this.add.text(
