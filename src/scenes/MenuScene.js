@@ -497,7 +497,7 @@ export default class MenuScene extends Phaser.Scene {
         title.setWordWrapWidth(innerW, true);
         dialogRoot.add(title);
 
-        const rowY = panel.y + Math.round(panelH * 0.02);
+        const rowY = panel.y + Math.round(panelH * 0.10);
         const btnW = Math.min(width * 0.22, 360);
         const btnH = Math.min(height * 0.12, 120);
         const radius = Math.round(btnH * 0.28);
