@@ -36,7 +36,7 @@ export default class HandwashAnimationScene extends Phaser.Scene {
         }
 
         if (!this.cache.audio.exists("magic_sparkle")) {
-            this.load.audio("magic_sparkle", "assets/sounds/magic-sparkle-190030.mp3");
+            this.load.audio("magic_sparkle", "assets/sounds/magic_sparkle.mp3");
         }
     }
 

@@ -491,7 +491,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         });
     }
 
-    _showCorrectDialog(message, onDone, duration = 5000) {
+    _showCorrectDialog(message, onDone, duration = 8000) {
         const onlyIfNoDialog = (fn) => () => {
             if (this._dialogRoot) {
                 this._dialogRoot.destroy(true);
