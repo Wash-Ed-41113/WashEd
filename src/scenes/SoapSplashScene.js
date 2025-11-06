@@ -1,11 +1,17 @@
+// this scene implements the soap splash typing mini game core loop
+// it manages audio bgm spawns movement scoring toasts timer and round finalization
+// comments explain each block purpose flow and how state is coordinated across systems and db
+
 /* global Phaser, CONFIG */
 import systems from "../systems.js";
 import { DB } from "../db.js";
 import { AudioManager } from "../systems.js";
 
+// constants for the mini game background music loaded once and reused
 const MINI_KEY = "germ_scrubber_music";
 const MUSIC_PATHS = ["assets/sounds/germ-scrubber.mp3", "./assets/sounds/germ-scrubber.mp3"];
 
+// scene constructor sets up guards runtime state ui flags spawn geometry visuals and db round handle
 export default class SoapSplashScene extends Phaser.Scene {
     constructor() {
         super("SoapSplash");
@@ -27,13 +33,13 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         // spawner loop
         this._waveActive = false; this._pendingSpawns = 0; this._nextSpawnAt = 0; this._betweenWaveDelayMs = 900;
-        // toast state (Kiko reactions)
+        // toast state kiko reactions and encouragement cadence
         this._lastSadAtBreaches = 0; this._lastEncouragementAt = 0;
         this._toastStack = [];
-        // SFX trackers (new)
+        // sfx trackers to rate limit tap sounds and follow streak changes
         this._lastStreakVal = 0;           // detect streak changes for SFX
         this._sfxCooldownUntil = 0;        // anti-spam guard (ms)
-        // timer HUD (legacy small HUD; Chewy is authoritative now)
+        // legacy small hud fields chewy timer is authoritative now kept for compatibility
         this._countdownMsTotal = 100000; this._countdownMsLeft = 100000; this._lastShownSec = 101; this._urgentPulsing = false; this.countdownText = null;
         // misc runtime
         this._spawnArmed = false; this._idleWatchStart = 0; this._debugTick = 0;
@@ -41,7 +47,8 @@ export default class SoapSplashScene extends Phaser.Scene {
         this._bgmArmed = false;
     }
 
-    // --- one-shots for correct / incorrect typing (direct Phaser playback) ---
+    // small helpers to play correct or incorrect sfx using phaser sound api with safe guards
+    // these are triggered by event taps and streak changes
     _playCorrectSfx() {
         try {
             if (!this.cache.audio.exists("SS_SND_CORRECT")) return;
@@ -59,7 +66,8 @@ export default class SoapSplashScene extends Phaser.Scene {
         } catch (_) {}
     }
 
-    // --- wire SFX to *all* typing logs without editing other files ---
+    // wraps db logTyping to listen for success or failure tokens so sfx fire regardless of where events originate
+    // leaves original behavior intact and passes through args
     _wireSfxTaps() {
         if (this._logTapInstalled) return;
         this._logTapInstalled = true;
@@ -85,6 +93,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         };
     }
 
+    // single time up path that mirrors breach limit end logic clamps hud triggers reaction and transitions safely
     _onTimeUp() {
         if (this._timeUpFired || this.gameOver) return;
         this._timeUpFired = true;
@@ -105,13 +114,15 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
     }
 
-    // ---- helper: ALWAYS use this to leave SoapSplash ----
+    // central exit helper stops game audio resumes global and switches scenes used by all leaves
+    // guarantees no lingering scene instance
     leaveTo(targetKey, data) {
         try { AudioManager.stop(this); AudioManager.stopGroup("game"); AudioManager.resumeGroup("global"); } catch {}
         this.scene.stop(this.scene.key);
         if (targetKey) this.scene.start(targetKey, data);
     }
 
+    // init resets per round state difficulty flags clocks and trackers for a clean start
     init(data) {
         this.germs = []; this.lastSpawn = 0; this.germSeq = 0; this.breaches = 0; this.gameOver = false; this.gameStartAt = null;
         this._paused = false; this._pauseUi = null;
@@ -129,11 +140,12 @@ export default class SoapSplashScene extends Phaser.Scene {
 
         this._timeUpFired = false;
 
-        // reset SFX trackers
+        // reset sfx trackers for streak change sounds
         this._lastStreakVal = 0;
         this._sfxCooldownUntil = 0;
     }
 
+    // preload all art audio and video for the mini game including dynamic frame loads and safety handlers
     preload() {
         const set = CONFIG.assets.soapSplash.backgrounds;
         this._bgKeys = set.map((p, i) => { const k = `SS_BG_${i}`; this.load.image(k, p); return k; });
@@ -154,32 +166,34 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.load.image("Germ", CONFIG.assets.soapSplash.germ);
         this.load.image("ss_end_bg", "assets/images/SoapSplash/washed_kikos-day_LEVEL_01_scene_05_action_01_germ-catcher_HIT-zero.png");
 
-        // Kiko sprites for toasts
+        // kiko reaction sprites used in toasts
         if (CONFIG.assets.kiko?.jump) this.load.image("KikoJump", CONFIG.assets.kiko.jump);
         this.load.image("KikoCheer", CONFIG.assets.kiko.cheer);
         this.load.image("KikoSad",   CONFIG.assets.kiko.sad);
 
-        // ui
+        // ui chrome elements
         this.load.image("DialogPanel", CONFIG.assets.ui.dialogPanel);
         this.load.image("ui_home", CONFIG.assets.ui.homeBut);
         this.load.image("ui_pause", CONFIG.assets.ui.pauseBut);
 
-        // music
+        // music with cache guard and error log
         if (!this.cache.audio.exists(MINI_KEY)) {
             this.load.audio(MINI_KEY, MUSIC_PATHS);
             this.load.on(Phaser.Loader.Events.LOAD_ERROR, (f) => { if (f?.key === MINI_KEY) console.warn("[Scene] music load error:", f.src || f.url); });
         }
 
-        // --- SFX for correct / incorrect typings ---
+        // sfx for typing feedback optional and guarded by cache checks
         const okSrc  = CONFIG.assets?.soapSplash?.correctAud;
         const badSrc = CONFIG.assets?.soapSplash?.incorrectAud;
         if (okSrc  && !this.cache.audio.exists("SS_SND_CORRECT"))   this.load.audio("SS_SND_CORRECT", okSrc);
         if (badSrc && !this.cache.audio.exists("SS_SND_INCORRECT")) this.load.audio("SS_SND_INCORRECT", badSrc);
     }
 
+    // pause overlay builder intentionally omitted retained for future ui work
     // _buildPauseOverlay() { ... } // (kept commented)
 
-    // Toast builder
+    // toast factory builds a small stackable notification with kiko art and animated entrance exit
+    // used for encouragement and gentle corrections without blocking gameplay
     _makeToast({ mood = "happy", text, ttl = 1800 }) {
         const { width: W, height: H } = this.scale;
         if (!this._toastStack) this._toastStack = [];
@@ -215,7 +229,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         }).setOrigin(1, 1).setStroke("#000000", 6).setAlpha(0);
         g.add(label);
 
-        // stack at bottom-right
+        // stack at bottom right with gentle motion and timed dismissal
         const stackH = this._toastStack.reduce((a, it) => a + (it.h + 6), 0);
         const baseX = W - margin, baseY = H - margin - stackH;
         label.setPosition(baseX - (kiko ? 80 : 0), baseY);
@@ -247,6 +261,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         return g;
     }
 
+    // convenience wrappers to show mood specific toasts with randomized lines and minimal cooldowns
     showKikoEncouragement(messageOverride = null) {
         const LINES = [
             "Keep going!",
@@ -273,10 +288,11 @@ export default class SoapSplashScene extends Phaser.Scene {
 
     // togglePause() { ... }  // (intentionally disabled UI button; ESC handler kept)
 
+    // create is the main scene setup it prepares audio resumes context wires timers builds background and spawner config and launches explain overlay
     create() {
         const SS = CONFIG.soapSplash;
 
-        // --- Master audio sanity ---
+        // master audio setup pause global resume context and ensure game bgm with robust unlock flow
         AudioManager.pauseGroup("global");
         try { this.sound.context?.resume?.(); } catch {}
         this.registry.set("mute", false);
@@ -321,6 +337,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             });
         }
 
+        // cleanup handlers to stop timers and swap audio groups when scene ends
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             try { this._chewyTimerEvt?.remove?.(); } catch {}
             try { this.chewyTimer?.destroy?.(); } catch {}
@@ -336,6 +353,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         systems.ui.placeLogo(this);
         this.sound?.resumeAll?.();
 
+        // boot only once wire teardown on shutdown or sleep and define full unpause to restore clocks and bgm
         if (!this._booted) { this.events.once("shutdown", this._teardown, this); this.events.on("sleep", this._teardown, this); this._booted = true; }
         const _fullUnpause = () => {
             this._paused = false; this._spawnArmed = false;
@@ -345,7 +363,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         };
         this.events.on("wake", _fullUnpause); this.events.on("resume", _fullUnpause);
 
-        // ✅ Patch A — Pause/Resume handlers to extend end time by wall-clock pause duration & guard-start
+        // patch a pause resume bookkeeping uses wall clock to extend end time so timer remains fair
         this._scenePausedAtWall = null;
         this.events.on(Phaser.Scenes.Events.PAUSE, () => {
             this._scenePausedAtWall = Date.now(); // Phaser's clock freezes; use wall time
@@ -361,28 +379,31 @@ export default class SoapSplashScene extends Phaser.Scene {
             this._paused = false;
             // this._ensureRoundStarted?.("resume");
         });
-        // —— end Patch A ——
+        // end patch a
 
+        // initialize typing subsystem once attach sfx taps and event listeners for ok and miss signals
         if (!this._typingBooted) {
             systems.soapsplash.typing.init(this);
             this._typingBooted = true;
 
-            // ensure SFX always fire on every judged word
+            // ensure sfx always fire on every judged word
             this._wireSfxTaps();
 
-            // keep the event listeners too (harmless if not emitted)
+            // keep the event listeners too harmless if not emitted
             const okEvents  = ["typing:word:ok", "typing:word:correct", "ss:word:ok", "soapsplash:word:ok", "germ:splashed"];
             const badEvents = ["typing:word:miss", "typing:word:wrong", "ss:word:miss", "soapsplash:word:miss", "germ:breach"];
             okEvents.forEach (ev => this.events.on(ev,  () => this._playCorrectSfx()));
             badEvents.forEach(ev => this.events.on(ev, () => this._playIncorrectSfx()));
         }
 
+        // store a baseline timestamp and resolve difficulty to numeric level
         this.gameStartAt = this.time.now;
 
         const raw = this.registry.get("difficulty"); const map = { easy: 1, normal: 2, medium: 2, hard: 3 };
         const levelNum = (typeof raw === "number") ? Phaser.Math.Clamp(Math.round(raw), 1, 3) : (map[String(raw ?? "").toLowerCase()] ?? 2);
         SS.activeDifficulty = levelNum;
 
+        // build word deck api or fallback stub when absent also expose nextWordFn for external systems
         if (CONFIG?.soapSplash?.resetDeck && CONFIG?.soapSplash?.getDeck) {
             CONFIG.soapSplash.resetDeck(levelNum);
             this._nextWord = CONFIG.soapSplash.getDeck(levelNum);
@@ -392,6 +413,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             this._nextWord = () => "wash"; CONFIG.soapSplash.nextWordFn = this._nextWord;
         }
 
+        // apply difficulty tuning for spawn rate speed caps and timers then compute derivative values
         switch (levelNum) {
             case 1: SS.spawnEveryMs = 1600; SS.spawnJitterMs = 120; SS.germBaseSpeed = 70;  SS.maxGerms = 5;  SS.waveCap = 4; break;
             case 3: SS.spawnEveryMs = 900;  SS.spawnJitterMs = 160; SS.germBaseSpeed = 120; SS.maxGerms = 10; SS.waveCap = 6; break;
@@ -399,6 +421,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
         SS.spawnIntervalMs = SS.spawnEveryMs; SS.timerMs = 100000;
 
+        // compute sink position and radius then set background image or fallback rectangle
         const sink = { x: SS.width * SS.sinkHitRel.x, y: SS.height * SS.sinkHitRel.y };
         this.sinkPosition = { ...sink }; this.getSinkHitPoint = () => sink;
         this.rSink = (SS.rSinkRel != null) ? Math.round(SS.height * SS.rSinkRel) : (SS.rSinkPx ?? 70);
@@ -407,6 +430,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         this.bgSprite = firstKey ? this.add.sprite(SS.width / 2, SS.height / 2, firstKey).setDepth(0).setDisplaySize(SS.width, SS.height)
             : this.add.rectangle(0, 0, SS.width, SS.height, 0x1b2a3a, 1).setOrigin(0, 0).setDepth(0);
 
+        // optional background video scaled and looped silently for ambient motion
         if (this.cache.video.exists("SS_BG_VIDEO")) {
             const W = SS.width, H = SS.height, targetW = W * 0.18;
             this.bgVideo = this.add.video(W * 0.53, H * 0.15, "SS_BG_VIDEO").setOrigin(0.5).setDepth(3).setLoop(true).setMute(true);
@@ -415,6 +439,8 @@ export default class SoapSplashScene extends Phaser.Scene {
             if (this.bgVideo.video?.readyState >= 2) setScale(); else { this.bgVideo.once("play", setScale); this.bgVideo.once("loadeddata", setScale); }
         }
 
+        // chewy countdown fields and event wires the 60 to 00 timer starts on first spawn or resume and respects pauses
+        // looks authoritative for end of round and emits time up through shared timer path
         // === CHEWY COUNTDOWN (center-top) — SECONDS: 60 → 00 ===
         // Defer starting the countdown until the first germ actually spawns (or resume).
         this._roundMs = 60000;
@@ -436,10 +462,10 @@ export default class SoapSplashScene extends Phaser.Scene {
             .setOrigin(0.5, 0)
             .setDepth(1000);
 
-        // helper to format: "60" at start, then "59".."00" with zero-pad to 2 digits
+        // helper to format 60 then two digit seconds with zero pad
         const _fmtChewySec = (n) => (n === 60 ? "60" : String(Math.max(0, n)).padStart(2, "0"));
 
-        // arm the ticking event (called once, when round starts)
+        // arm the ticking event once safe against duplicates updates text color and triggers time up
         this._armChewyTick = () => {
             if (this._chewyTimerEvt) return;
             this._chewyTimerEvt = this.time.addEvent({
@@ -448,7 +474,7 @@ export default class SoapSplashScene extends Phaser.Scene {
                 callback: () => {
                     if (this.gameOver || !this._roundStarted) return;
 
-                    // pause-aware (scene or our own flag)
+                    // pause aware using our own wall time compensation
                     const now = this.time.now;
                     const dt = now - (this._lastTimerNow || now);
                     this._lastTimerNow = now;
@@ -462,7 +488,7 @@ export default class SoapSplashScene extends Phaser.Scene {
 
                     this.chewyTimer.setText(_fmtChewySec(secs));
 
-                    // color cues
+                    // color cues for urgency
                     if (secs <= 10) this.chewyTimer.setColor("#ff6666");
                     else if (secs <= 30) this.chewyTimer.setColor("#ffcc33");
                     else this.chewyTimer.setColor("#ffffff");
@@ -484,7 +510,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             });
         };
 
-        // ensure round is started (idempotent)
+        // idempotent start of round captures baseline times and arms tick event logs for debugging
         this._ensureRoundStarted = (why = "unknown") => {
             if (this._roundStarted) return;
             this._roundStarted = true;
@@ -495,6 +521,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             this._armChewyTick();
         };
 
+        // compute spawn geometry based on sink hit point and margins when using spawner system
         if (SS.useSpawner) {
             const d = Math.hypot(SS.width - this.sinkPosition.x, 0 - this.sinkPosition.y);
             this.rOuter = Math.max(0, d - SS.cornerMargin); this.rInner = Math.max(0, this.rOuter - SS.cornerBandWidth);
@@ -503,7 +530,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             if (this.angleMinDeg > this.angleMaxDeg) { const t = this.angleMinDeg; this.angleMinDeg = this.angleMaxDeg; this.angleMaxDeg = t; }
         }
 
-        // round reset bits
+        // reset round locals wave counters and encouragement trackers and open a db round id
         this.germs = []; this.lastSpawn = 0; this.germSeq = 0; this.breaches = 0; this.gameOver = false;
         this._waveActive = false; this._pendingSpawns = 0; this._nextSpawnAt = 0;
         this._lastSadAtBreaches = 0; this._lastEncouragementAt = 0;
@@ -511,28 +538,30 @@ export default class SoapSplashScene extends Phaser.Scene {
         const diff = this.registry.get("difficulty");
         this.roundId = DB.beginRound(window.__SESSION_ID__, "SoapSplash", String(diff));
 
-        // ESC to close overlay if present
+        // esc key handler for any overlay and cleanup on scene end
         this.input.keyboard?.on("keydown-ESC", () => { if (this._paused && this._pauseUi?.destroy) this._pauseUi.destroy(); });
         this.events.once("shutdown", () => { this._pauseUi?.destroy?.(); });
         this.events.once("destroy",  () => { this._pauseUi?.destroy?.(); });
 
-        // Hide generic systems timer text if exposed
+        // hide generic topbar timer if present because chewy timer replaces it
         this.topbar?.timerText?.setVisible(false);
         this.topbar?.setTimerVisible?.(false);
         try { this.topbar?.timerText?.destroy?.(); } catch (_) {}
 
+        // if typing has no active target but enemies exist pick nearest to keep flow smooth
         // systems.soapsplash.typing.updateHud(this);
         if (!this.typing?.activeId && this.germs.length) systems.soapsplash.typing.pickNearest(this);
 
+        // on resume reselect targets ensure bgm and optionally start timer via existing hook if used
         this.events.once(Phaser.Scenes.Events.RESUME, () => {
             this.gameStartAt = this.time.now;
             if (this.germs.length && (!this.typing || !this.typing.activeId)) systems.soapsplash.typing.pickNearest(this);
             ensureBgm();
-            // ✅ Patch C — also start on your existing RESUME-once hook
+            // patch c also start on resume once hook kept commented to avoid duplicate start
             // this._ensureRoundStarted?.("resume-once");
         });
 
-        // explain overlay, watchdog resume
+        // launch explain overlay pause game and watchdog auto resume in case of stuck state
         this.time.delayedCall(800, () => {
             this.scene.launch("SoapSplashExplain", { parentKey: "SoapSplash" });
             this.scene.bringToTop("SoapSplashExplain");
@@ -545,15 +574,18 @@ export default class SoapSplashScene extends Phaser.Scene {
             });
         });
 
+        // helper to swap background by index called externally by systems or debug keys
         this.setSoapSplashBackground = (b) => {
             const i = Math.min(b, this._bgKeys.length - 1);
             const k = this._bgKeys[i] || this._bgKeys[0];
             if (k && this.bgSprite.setTexture) this.bgSprite.setTexture(k);
         };
 
+        // if the scene shuts down unexpectedly finalize the round to persist progress
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { if (!this.gameOver) this.finalizeRound("Scene shutdown"); });
     }
 
+    // compute and mirror final score to registry and window then call db end hooks for scoreboard and persistence
     _commitFinalScore(reason = "finalize") {
         try {
             // make sure score is recomputed once at end
@@ -562,12 +594,12 @@ export default class SoapSplashScene extends Phaser.Scene {
             const ssTotal = this.streakSys?.totalScore ?? 0;
             const ssBest  = this.streakSys?.bestStreak ?? 0;
 
-            // --- lightweight mirrors (work even without DB) ---
+            // --- lightweight mirrors work even without db ---
             try { this.registry?.set?.("ss:lastScore", ssTotal); } catch {}
             try { this.registry?.set?.("ss:lastBestStreak", ssBest); } catch {}
             try { window.__SS_LAST_SCORE__ = { total: ssTotal, bestStreak: ssBest, when: Date.now() }; } catch {}
 
-            // keep your existing DB “end” signals (unchanged)
+            // keep your existing db end signals unchanged
             DB.logTyping?.("SoapSplash_end", { totalScore: ssTotal, bestStreak: ssBest, reason });
             DB.saveRound?.("SoapSplash", ssTotal, ssBest);
         } catch (e) {
@@ -575,6 +607,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
     }
 
+    // wraps finalize and scene transition ensuring one shot behavior and stopping overlays before navigation
     endGameAndGoto(next, data = {}, reason = "scene-change") {
         if (this._leaving) return;
         this._leaving = true;
@@ -592,6 +625,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
     }
 
+    // finalizeRound safely records end state and writes a summary to the db using optional overrides then locks gameover
     finalizeRound(reason = "Time up", overrides = {}) {
         if (this.gameOver) return; this.gameOver = true;
         this.streakSys?._recompute?.(); this._commitFinalScore(reason);
@@ -607,6 +641,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
     }
 
+    // handles the transition from timer zero to game over including audio fade ui fallback and navigation to next scene
     _handleTimeUpToGameOver() {
         this._paused = true;
         if (this.physics?.world) this.physics.world.isPaused = true;
@@ -631,9 +666,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         });
     }
 
-    // Legacy mini HUD; Chewy is authoritative now
-    // _buildCountdownHUD() { ... }
-
+    // legacy countdown updater retained for compatibility chewy timer now owns time progression
     _updateCountdown(delta) {
         // intentionally left available but UNUSED; Chewy timer now owns time-up
         if (this._paused || this.gameOver) return;
@@ -666,6 +699,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
     }
 
+    // per frame update drives spawn waves movement breach checks sfx cadence and debug logs
     update(time, delta) {
         const active = this.sys?.isActive?.() ?? true;
         if (this._tearingDown || this._paused || !active) return;
@@ -678,7 +712,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         if (noActors && idle > 3000) {
             try {
                 systems.soapsplash.spawn.spawnGerm(this);
-                // ✅ Patch B — start timer on first spawn (watchdog path)
+                // patch b start timer on first spawn via watchdog
                 this._ensureRoundStarted?.("first-spawn-watchdog");
                 const cap = (CONFIG.soapSplash?.waveCap ?? CONFIG.soapSplash?.maxGerms ?? 5);
                 this._pendingSpawns = Math.max(0, cap - 1);
@@ -693,14 +727,14 @@ export default class SoapSplashScene extends Phaser.Scene {
         const SS = CONFIG.soapSplash || {};
         if (this.gameStartAt == null) this.gameStartAt = time;
 
-        // IMPORTANT: legacy countdown disabled to avoid double-timer
+        // legacy countdown intentionally disabled to avoid double timer
         // this._updateCountdown?.(delta);
 
         const base = SS.spawnIntervalMs ?? SS.spawnEveryMs ?? 1200, jitter = SS.spawnJitterMs ?? 140, cap = SS.waveCap ?? SS.maxGerms ?? 5;
         if (!this._waveActive && this.germs.length === 0) { this._waveActive = true; this._pendingSpawns = cap; this._nextSpawnAt = this._nextSpawnAt ?? (time + (this._betweenWaveDelayMs ?? 900)); }
         if (this._waveActive && time >= (this._nextSpawnAt ?? 0) && this._pendingSpawns > 0) {
             try { systems.soapsplash.spawn.spawnGerm(this); } catch (err) { console.error("Spawn error:", err); }
-            // ✅ Patch B — start timer on first spawn (normal wave path)
+            // patch b start timer on first spawn during normal wave
             this._ensureRoundStarted?.("first-spawn-wave");
             this._pendingSpawns--; const j = Phaser.Math.Between(-jitter, jitter); this._nextSpawnAt = time + base + j;
         }
@@ -710,7 +744,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         systems.soapsplash.rules.checkBreaches(this);
         // systems.soapsplash.timer.updateHUD(this, time);
 
-        // ── Kiko reactions + SFX binding to gameplay signals ──
+        // kiko reaction logic and sfx bindings based on breaches and streak deltas with anti spam cooldown
         // Breach -> SAD toast + incorrect SFX
         if (this.breaches > (this._lastSadAtBreaches ?? -1)) {
             this._lastSadAtBreaches = this.breaches;
@@ -728,7 +762,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             this.showKikoEncouragement?.();
         }
 
-        // SFX on streak change (increase: correct; drop: incorrect)
+        // SFX on streak change increase plays correct drop plays incorrect respecting cooldown
         if (curStreak !== this._lastStreakVal) {
             if (time >= (this._sfxCooldownUntil || 0)) {
                 if (curStreak > this._lastStreakVal) this._playCorrectSfx();
@@ -738,6 +772,7 @@ export default class SoapSplashScene extends Phaser.Scene {
             this._lastStreakVal = curStreak;
         }
 
+        // lightweight debug log once per second to trace wave state and timers
         if (!this._debugTick || time - this._debugTick > 1000) {
             this._debugTick = time;
             console.log("[SS update]", {
@@ -748,6 +783,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         }
     }
 
+    // teardown removes timers tweens inputs overlays and clears all germs then resets flags
     _teardown() {
         try { this.time?.removeAllEvents?.(); } catch {}
         try { this.tweens?.killAll?.(); } catch {}
@@ -756,5 +792,7 @@ export default class SoapSplashScene extends Phaser.Scene {
         this._pauseUi = null; this._paused = false;
         try { this.germs?.slice().forEach((g, i) => systems.movement?.removeGermByIndex?.(this, i)); this.germs = []; } catch {}
     }
+
+    // shutdown hook calls teardown and stops background video if present safe for multiple calls
     shutdown() { this._teardown(); this.bgVideo?.stop?.(); }
 }

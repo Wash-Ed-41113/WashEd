@@ -8,15 +8,17 @@ window.CONFIG = {
     width: 1920,
     height: 1080,
 
-
+    // feature flags and switches for build variants or in-dev behavior
     isLeaderboardsSwas: false,
 
-    // ui related defaults for fonts buttons topbar and pause overlayy
+    // ui defaults: fonts, sizes, and common widget styling read by systems.ui helpers
+    // keep these generic so scenes don’t hardcode visuals
     ui: {
         fontFamily: "Montserrat",        // default font for text
         titleFontSize: 230,         // large font size for title text
-        typeSpeedMs: 120,
+        typeSpeedMs: 120,           // default typewriter speed for dialog
 
+        // shared button styling (width/height/colors/typography)
         button: {
             width: 300,             // button rectangle width
             height: 76,             // button rectangle height
@@ -26,11 +28,15 @@ window.CONFIG = {
             fontSize: 28,           // button text font size
             fontColor: "#111",      // button text color
         },
+
+        // top navigation bar layout used by systems.ui.buildTopbar
         topbar: {
             padding: 16,            // spacing around icons
             gap: 16,                // space between icons
             iconSize: 72,           // size of each topbar icon
         },
+
+        // pause overlay panel look and feel (semi-transparent backdrop + framed panel)
         pauseOverlay: {
             bgColor: 0x000000,      // overlay background color
             bgAlpha: 0.55,          // overlay transparency
@@ -40,7 +46,7 @@ window.CONFIG = {
         }
     },
 
-    // menu layout config
+    // menu screen layout: relative y positions to place title and buttons responsively
     menu: {
         titleY: 0.35,               // vertical placement of menu title
         buttonsY: {                 // relative y positions of buttons
@@ -50,22 +56,29 @@ window.CONFIG = {
         },
     },
 
+    // development toggle: enables keyboard shortcuts, logs, and faster loops when true
     isDevMode: true,
 
-    // file paths for all images used in the game
+    // asset catalog: all image/audio paths grouped by feature area so loaders can reference by key
     assets: {
         logo : "assets/images/washed_day_UI-Logo__WashEd.png",
+
+        // kiko character sprites used in dialogs/toasts/animations
         kiko: {
             base: "assets/images/Kiko/WashEd_kiko_sprite_base.png",
             cheer: "assets/images/Kiko/WashEd_kiko_sprite_thumbs-up.png",
             jump: "assets/images/Kiko/WashEd_kiko_sprite_side-jump.png",
             sad: "assets/images/Kiko/WashEd_kiko_sprite_sad.png",
         },
+
+        // generic backgrounds (frontpage and placeholders for future scenes)
         backgrounds: {
             frontpage: "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png",
             sand: "assets/images/backgrounds/sand.png",     // placeholder
             school: "assets/images/backgrounds/school.png", // placeholder
         },
+
+        // shared UI components: buttons, dialog panels, and navigation affordances
         ui: {
             pauseBut: "assets/images/UI/washed_kikos-day_UI-Button_PAUSE.png",
             settingsBut: "assets/images/UI/washed_kikos-day_UI-Button_SETTINGS.png",
@@ -75,6 +88,8 @@ window.CONFIG = {
             next: "assets/images/UI/washed_kikos-day_UI-Button_ARROW_Right.png",
             closeBut: "assets/images/UI/washed_kikos-day_UI-Button_EXIT.png"
         },
+
+        // Soap Splash mini-game art/sfx/video; backgrounds progress as breaches increase
         soapSplash: {
             sink: "assets/images/soap/sink.png", // sink sprite
             germ: "assets/images/Germs/washed_kikos-day_LEVEL_01_scene_05_germ-catcher_GERM_01.png",
@@ -93,6 +108,8 @@ window.CONFIG = {
             incorrectAud: "assets/sounds/Typed-incorrectly-Germ-scrubber.mp3",
 
         },
+
+        // Clean Catch mini-game art and background set keyed by remaining lives
         cleanCatch: {
             germ: "assets/images/Germs/washed_kikos-day_LEVEL_01_scene_05_germ-catcher_GERM_01.png",
             player: "assets/images/CleanCatcher/washed_day_UI_LEVEL_01_scene_04_soap-splasher_Hands-outline.png",
@@ -103,14 +120,14 @@ window.CONFIG = {
             backgroundOneLife: "assets/images/CleanCatcher/3.jpg",
             backgroundNoLife: "assets/images/CleanCatcher/4.jpg",
             backgroundAud: "assets/images/CleanCatcher/5.jpg",
-
-
-
         },
+
+        // menu specific art (front page / landing background)
         menu: {
             frontpage: "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png",
         },
 
+        // ending / scoreboard screen assets including music and celebration overlays
         endingScreen: {
             classroom_bg: "assets/images/background/updatedClassroom.png",
             kiko_cheer: "assets/images/WashEd_kiko_sprite/kiko_cheer.png",
@@ -119,20 +136,23 @@ window.CONFIG = {
         },
     },
 
-    // rules and parameters for the soap splash mini game
+    // Soap Splash rules: geometry, spawn parameters, speeds, visuals, fx, and wordbank
+    // scenes read these live to adapt difficulty and presentation without code edits
     soapSplash: {
         width: 1920,
         height: 1080,
 
+        // sink hit target (relative coords) and radius in px
         sinkHitRel: { x: 0.11, y: 0.82 }, // relative sink position
         rSinkPx: 150,                     // sink radius in pixels
 
-
+        // spawn band geometry and spread used by systems.soapsplash.spawn
         innerRadiusRel: 0.15,
         outerRadiusRel: 0.48,
         spawnAngleDeg: { min: 25, max: 155 }, // germ spawn angle range
         maxGerms: 8,                          // limit of germs on screen
 
+        // cadence of germ waves (base/jitter/cap) and movement tuning
         spawnEveryMs: 1200, // base spawn interval
         spawnJitterMs: 350, // random spawn variation
         waveCap: 5,         // max germs per wave
@@ -141,30 +161,36 @@ window.CONFIG = {
         germSpeedRand: 20,
         germHitRadiusPx: 50,
 
+        // typography and sizing for on-germ labels
         fontFamily: "Montserrat",
         labelTextSize: "40px",
         verticalSpaceLabel: 60,
         germSpriteSize: 0.15,
 
+        // round timing and failure limits
         timerMs: 60000,          // round length
         breachesAllowed: 5,      // max failures allowed
 
+        // legacy/alt timer + spawn controls (kept for compatibility with systems.timer)
         spawnIntervalMs: 1500,
         maxSpawnAttempts: 7,
 
+        // additional motion/cleanup tunables (used by movement + rules)
         germSpeed: 110,
         wobble: 0.12,
         despawnMargin: 64,
 
+        // sink + scoring rules (duplicated keys kept for older modules)
         rSink: 70,
         maxBreaches: 5,
         breachPenalty: 100,
 
+        // HUD formatting hints for text timers
         gameDurationMin: 1,
         gameDurationTextHud: "01:00",
         reason: "Time up",
 
-
+        // spatial spawn helper configuration for the “corner band” method
         useSpawner: true,          // <- must be true
         cornerMargin: 40,          // distance from the corner to start the band
         cornerBandWidth: 140,      // thickness of the band
@@ -172,7 +198,7 @@ window.CONFIG = {
         minSpawnSeparationPx: 32,  // avoid overlaps
         minSinkDistancePx: 220,
 
-        // debug options to show circles for sink and germs
+        // debug overlays: enable to visualize sink and germ hit radii
         debug: {
             showSinkCircle: false,
             sinkColor: 0x00ff00,
@@ -182,7 +208,7 @@ window.CONFIG = {
             germAlpha: 0.20
         },
 
-        // blur effect settings
+        // post-processing blur spot used to emphasize focused germ
         spotBlur: {
             enabled: true,
             strength: 0.9,
@@ -191,7 +217,7 @@ window.CONFIG = {
             steps: 7
         },
 
-        // highlighting style when germ is focused
+        // focus highlight style for the active target (tints/halo/glow/additive sprite)
         focusTint: 0xfff4b1,
         focusHaloPadding: 18,
         focusHaloFill: 0xfff176,
@@ -200,7 +226,7 @@ window.CONFIG = {
         focusHaloStrokeW: 4,
         focusHaloPulseMs: 800,
 
-        // extra focus effects
+        // finer control of focus effects (glow cycle + additive sprite “aura”)
         focus: {
             useGlow: true,
             glowColor: 0xffffff,
@@ -222,7 +248,7 @@ window.CONFIG = {
             haloPulseMs: 900,
         },
 
-        // text colors for word typing
+        // text color palette for typed vs remaining letters and error states
         colors: {
             typed: "#000000",
             remain: "#000000",
@@ -230,11 +256,12 @@ window.CONFIG = {
             errorRemain: "#ff4d4d"
         },
 
-        // word bank for typing
+        // word bank injected at runtime (e.g., by deck builder based on difficulty)
         words: []
     },
 
-    // rules and parameters for the clean catch mini game
+    // Clean Catch rules: canvas size, player/germ droplet sizes, and word pools
+    // kept minimal; scene implements physics and scoring around these values
     cleanCatch: {
         width: 1920, height: 1080,
         player: { width: 220, bottom: 36, fallbackSize: 180 },

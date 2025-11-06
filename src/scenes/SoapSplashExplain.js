@@ -1,16 +1,26 @@
+// this scene shows a short tutorial before the soap splash mini game
+// it loads kiko art dialog panel and next button and plays the mini game bgm
+// it pauses global menu music ensures audio unlock on user gesture and resumes soap splash when finished
+
 /* global Phaser, CONFIG */
+
+// shared systems for ui helpers and audio manager for grouped sound control
 import systems from "../systems.js";
 import { AudioManager } from "../systems.js";
 
+// audio key and urls for the mini game track loaded once and reused across entries
 const MINI_KEY  = "germ_scrubber_music";
 const MINI_URLS = ["assets/sounds/germ-scrubber.mp3", "./assets/sounds/germ-scrubber.mp3"];
 
+// scene class holds a one time arming flag used to attach gesture fallbacks for webaudio unlock
 export default class SoapSplashExplain extends Phaser.Scene {
     constructor() {
         super("SoapSplashExplain");
         this._armed = false;
     }
 
+    // preload pulls kiko base and cheer sprites dialog panel ui next button and the mini game bgm
+    // audio load is guarded so we do not duplicate cache entries
     preload() {
         const explain = CONFIG.assets.kiko;
         this.load.image("KikoBase", explain.base);
@@ -22,18 +32,22 @@ export default class SoapSplashExplain extends Phaser.Scene {
         this.load.on("loaderror", (f) => { if (f?.key === MINI_KEY) console.warn("[Explain] BGM load failed:", f.src||f.url); });
     }
 
+    // create prepares audio state builds the overlay panel kiko sprite instructional text and a next control
+    // it pauses any global bgm and starts the mini game bgm with resilient unlock handling
+    // advancing through lines toggles kiko texture and on final line fades ui then resumes SoapSplash
     create() {
         const { width: W, height: H } = this.scale;
         const username = this.registry.get("playerName") || "friend";
         systems.ui.placeLogo(this);
 
-        // --- Master audio sanity ---
+        // master audio sanity wake audio context force unmute and volume and disable pause on blur for continuity
         try { this.sound.context?.resume?.(); } catch {}
         this.sound.pauseOnBlur = false;
         this.registry.set("mute", false);
         this.sound.mute = false;
         this.sound.setVolume?.(1);
 
+        // pause menu music by group and by specific handles including a window cache if present
         try { AudioManager.pauseGroup?.("global"); } catch {}
         try {
             this.sound.get("kikos_day")?.isPlaying && this.sound.get("kikos_day").pause();
@@ -41,6 +55,7 @@ export default class SoapSplashExplain extends Phaser.Scene {
             if (typeof window !== "undefined" && window.__GLOBAL_BGM__?.isPlaying) window.__GLOBAL_BGM__.pause();
         } catch {}
 
+        // ensurePlay starts or restarts the mini game bgm and stores a handle on window for debugging
         const ensurePlay = () => {
             try { this.sound.unlock?.(); } catch {}
             let inst = this.sound.get(MINI_KEY);
@@ -58,12 +73,12 @@ export default class SoapSplashExplain extends Phaser.Scene {
                 console.log("[Explain] play check", { locked: this.sound.locked, ctx: this.sound.context?.state, playing: !!inst?.isPlaying });
             };
 
-            // if webaudio is locked, wait for unlock once
+            // if the audio system is locked wait for the unlocked event once then play
             if (this.sound.locked) this.sound.once("unlocked", reallyPlay);
             else reallyPlay();
         };
 
-        // immediate try + gesture/visibility fallbacks
+        // attempt immediate play and set up gesture fallbacks so audio starts on first user input or when tab becomes visible
         ensurePlay();
         if (!this._armed) {
             this._armed = true;
@@ -75,13 +90,13 @@ export default class SoapSplashExplain extends Phaser.Scene {
             document.addEventListener("visibilitychange", () => { if (!document.hidden) { try { this.sound.context?.resume?.(); } catch {} ensurePlay(); }});
         }
 
-        // keep music alive on exit (no stop here)
+        // keep music alive across lifecycle events we do not stop it here so the game scene can reuse it
         const noop = () => {};
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, noop);
         this.events.once(Phaser.Scenes.Events.SLEEP,    noop);
         this.events.once(Phaser.Scenes.Events.DESTROY,  noop);
 
-        // ---- UI ----
+        // ui overlay darkens the background adds kiko sprite and a dialog panel or a rectangle fallback
         this.add.rectangle(W/2, H/2, W, H, 0x000000, 0.5);
         let kikoKey = "KikoBase";
         if (!this.textures.exists(kikoKey)) { const any = Object.keys(this.textures.list)[0]; if (any) kikoKey = any; }
@@ -91,9 +106,11 @@ export default class SoapSplashExplain extends Phaser.Scene {
         if (this.textures.exists("DialogPanel")) panel = this.add.image(W/2, H*0.50, "DialogPanel").setOrigin(0.5).setScale(0.5);
         else panel = this.add.rectangle(W/2, H*0.75, Math.min(W*0.8, 960), 260, 0xffffff, 1).setStrokeStyle(4, 0x7ec8ff).setOrigin(0.5);
 
+        // text style uses configured font family and wraps to panel width for readability
         const panelW = panel.displayWidth || panel.width || Math.min(W*0.8, 900);
         const style = { fontFamily: CONFIG.ui.fontFamily, fontSize: "64px", color: "#000", wordWrap: { width: Math.max(120, Math.floor(panelW*0.8)) }, align: "center" };
 
+        // instructional lines advanced by next button or enter key toggling kiko cheer every other line for feedback
         const lines = [
             `Okay, ${username}, it’s time for the Germ Scrubber Showdown!`,
             `The GERMS are coming and we need your HELP to STOP them.`,
@@ -105,8 +122,9 @@ export default class SoapSplashExplain extends Phaser.Scene {
         let i = 0;
         const text = this.add.text(panel.x, panel.y, lines[i], style).setOrigin(0.5).setDepth((panel.depth||0)+1);
 
+        // nextLine advances the script ensures bgm playing and fades out ui on completion then resumes SoapSplash
         const nextLine = () => {
-            ensurePlay(); // 버튼/엔터 제스처마다 재확인
+            ensurePlay(); // 버튼 엔터 제스처마다 재확인
             i++;
             if (i % 2 === 0 && this.textures.exists("KikoCheer")) this.kiko.setTexture("KikoCheer");
             else if (this.textures.exists("KikoBase")) this.kiko.setTexture("KikoBase");
@@ -118,6 +136,7 @@ export default class SoapSplashExplain extends Phaser.Scene {
             }
         };
 
+        // next control uses the themed image when available otherwise a simple rectangle with text
         let nextBtn, nextText = null;
         const nx = W*0.85, ny = H*0.5;
         if (this.textures.exists("UI_Next")) {
@@ -136,6 +155,8 @@ export default class SoapSplashExplain extends Phaser.Scene {
                 .setOrigin(0.5).setDepth((panel.depth||0)+3);
             nextBtn.on("pointerdown", nextLine);
         }
+
+        // enter key also advances the tutorial for keyboard users
         this.input.keyboard.on("keydown-ENTER", nextLine);
     }
 }

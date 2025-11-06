@@ -1,20 +1,12 @@
-// src/scenes/EndingScene.js
-/* global Phaser, CONFIG */
+// this import pulls shared helpers and ui widgets from systems which centralizes audio ui and mini game engines used by scenes
 import systems from "../systems.js";
-// import { DB } from "../db.js";            //no DB anymore
+// this import exposes audiomanager from systems so this scene can pause resume and switch bgm groups between global and game tracks
 import { AudioManager } from "../systems.js";
 
-/**
- * Entry scene to restart the whole flow (your video + Start button lives here).
- * Change to "PreloadScene" if that's your true first scene.
- */
+// entry_scene names the scene we jump to on a hard reset it is the starting menu scene for a clean restart flow
 const ENTRY_SCENE = "MenuScene";
 
-/* -------------------------------------------------------------------------- */
-/*                               NO-DB HELPERS                                */
-/* -------------------------------------------------------------------------- */
-
-// Player name: prefer registry, fallback to window
+// getPlayerName reads the player display name defensively it checks phaser registry then window globals and falls back to Player so ui text is always valid scope is local helper
 function getPlayerName(scene) {
     try {
         const r = scene.registry?.get?.("playerName");
@@ -27,21 +19,14 @@ function getPlayerName(scene) {
     return "Player";
 }
 
-// Scores: prefer registry mirrors from scenes, fallback to window mirrors
-// LEADERBOARDDD
-//  - "Soap Splasher" row shows CLEAN CATCH total
-//  - "Germ Scrubber" row shows SOAP SPLASH total
-// Scores: prefer registry mirrors from scenes, fallback to window mirrors
-// LEADERBOARDDD
-//  - "Soap Splasher" row shows CLEAN CATCH total
-//  - "Germ Scrubber" row shows SOAP SPLASH total
+// getTotalsNoDB collects scoreboard totals without using db it coerces numbers from window globals storage game registry and scene registry then returns soapSplasher germScrubber and grand for the scoreboard scope is local helper
 function getTotalsNoDB(scene) {
     const toNum = (v) => {
         const n = Number(v);
         return Number.isFinite(n) ? n : 0;
     };
 
-    // tiny helpers to avoid unsafe property walks
+    // small getters that tolerate missing objects so the function never crashes when scenes change order
     const regGet = (s, key) => {
         try { return s?.registry?.get?.(key); } catch { return undefined; }
     };
@@ -50,27 +35,28 @@ function getTotalsNoDB(scene) {
     };
     const win = (typeof window !== "undefined") ? window : undefined;
 
-    // Priority: data passed directly via scene.start()
+    // prefer scores passed via _handoff when available to keep transitions deterministic
     if (scene?._handoff?.scores) {
         const cc = toNum(scene._handoff.scores.cc);
         const ss = toNum(scene._handoff.scores.ss);
         return { soapSplasher: cc, germScrubber: ss, grand: cc + ss };
     }
 
-    // Clean Catch ("Soap Splasher") score
+    // collect clean catch mirrors from several places then pick the first valid number
     let cc = 0;
     cc = cc || toNum(win?.__CLEAN_CATCH_SCORE__);
     try { cc = cc || toNum(localStorage.getItem("cc_score")); } catch {}
     cc = cc || toNum(gameRegGet(scene, "cc_score"));
     cc = cc || toNum(regGet(scene, "cc_score"));
 
-    // Soap Splash ("Germ Scrubber") score
+    // collect soap splash mirrors from several places then pick the first valid number
     let ss = 0;
     ss = ss || toNum(win?.__SS_LAST_SCORE__?.total);
     try { ss = ss || toNum(localStorage.getItem("ss_score")); } catch {}
     ss = ss || toNum(gameRegGet(scene, "ss_score"));
     ss = ss || toNum(regGet(scene, "ss_score"));
 
+    // final normalized object for ui rendering
     return {
         soapSplasher: cc,
         germScrubber: ss,
@@ -78,35 +64,31 @@ function getTotalsNoDB(scene) {
     };
 }
 
-
-/* -------------------------------------------------------------------------- */
-/*                       PROGRESS / GATING FLAGS CLEAR                        */
-/* -------------------------------------------------------------------------- */
-
+// _clearProgressFlags wipes progress and score mirrors across registry window globals and web storage it resets played flags difficulty last scores and session id so the next run is clean scope is internal utility
 function _clearProgressFlags(scene) {
-    // All gating + mirrors we’ve used across scenes
+
     const KEYS = [
-        // mini-game completion / gating
+
         "cc_done", "cleanCatchDone", "cleanCatchPlayed", "hasPlayedCleanCatch",
         "ss_done", "soapSplashDone", "soapSplashPlayed", "hasPlayedSoapSplash",
-        // bathroom / flow
+
         "bathroom:ccComplete", "bathroom:soapComplete", "bathroom:ccLocked",
         "flow:enteredBathroom", "flow:enteredPlayground", "flowStage",
-        // misc state
+
         "visitedPlayground", "difficulty",
-        // mirrors / scores / identity
+
         "playerName", "cc_score", "ss_score",
         "cc:lastScore", "ss:lastScore", "ss:lastBestStreak",
         "sessionId"
     ];
 
-    // Registry
+    // clear likely keys from the scene registry without throwing if absent
     for (const k of KEYS) {
         try { scene.registry.set(k, false); } catch {}
         try { scene.registry.remove(k); } catch {}
     }
 
-    // Window mirrors (belt & braces)
+    // clear related window globals so old scores do not leak into new sessions
     try {
         if (typeof window !== "undefined") {
             window.__PLAYER_NAME__      = null;
@@ -115,13 +97,12 @@ function _clearProgressFlags(scene) {
             window.__SS_LAST_SCORE__    = null;
             window.__SESSION_ID__       = null;
 
-            // optional: any ad-hoc booleans you used anywhere
             window.__SOAP_SPLASH_PLAYED__ = false;
             window.__CLEAN_CATCH_PLAYED__ = false;
         }
     } catch {}
 
-    // Local/session storage (only if you used these keys)
+    // clear browser storage mirrors covering both local and session scopes
     try {
         localStorage.removeItem("cc_score");
         localStorage.removeItem("ss_score");
@@ -131,60 +112,49 @@ function _clearProgressFlags(scene) {
 }
 
 
-/* -------------------------------------------------------------------------- */
-/*                         FULL RESET (NO DB; PURE UI)                        */
-/* -------------------------------------------------------------------------- */
-
-/** Full app reset → go back to the very first entry scene (no DB). */
+// fullResetAndGotoStart performs a comprehensive cleanup then jumps to ENTRY_SCENE it clears flags stops audio tweens and timers switches audio groups and restarts the flow with resetSession metadata scope is async utility
 async function fullResetAndGotoStart(scene) {
     try {
-        // Clear gating + mirrors
         _clearProgressFlags(scene);
 
-        // Kill audio/timers/tweens gracefully
         try { scene.sound?.stopAll?.(); } catch {}
         try { scene.tweens?.killAll?.(); } catch {}
         try { scene.time?.removeAllEvents?.(); } catch {}
 
-        // Make sure game SFX group is down and global is free to resume in Menu
         try { AudioManager.stopGroup?.("game"); } catch {}
         try { AudioManager.resumeGroup?.("global"); } catch {}
     } finally {
         try { scene.scene.stop(); } catch {}
-        // 👇 This is the key bit that your plan called out
         scene.scene.start(ENTRY_SCENE, { resetSession: true });
     }
 }
 
 
-/* -------------------------------------------------------------------------- */
-/*                                   SCENE                                    */
-/* -------------------------------------------------------------------------- */
-
+// class EndingScene represents the final screen it shows totals congratulates the player plays confetti and provides a play again control it can read optional data via _handoff and coordinates audio groups scope is phaser scene
 export default class EndingScene extends Phaser.Scene {
+    // constructor initializes fields for music confetti cancel and handoff storage used during create
     constructor() {
         super("EndingScene");
         this.music = null;
         this._confettiCancelled = false;
-        // this._btnPlayAgain = null;
-        this._handoff = null; // cache data passed from the previous scene
+        this._handoff = null;
     }
 
+    // init captures incoming data for later use without coupling to previous scenes
     init(data) {
         this._handoff = data || null;
     }
 
-
+    // preload ensures required textures exist before create runs keys map to asset files and CONFIG for consistency
     preload() {
-        // Art used here
+
         this.load.image("kiko_cheer", "assets/images/WashEd_kiko_sprite/kiko_cheer.png");
         this.load.image("confetti", "assets/images/background/confetti.png");
         this.load.image("dialogPanel", CONFIG.assets.ui.dialogPanel);
-        // this.load.image("homeResetButton", "assets/images/UI/washed_kikos-day_UI-Button_HOME.png"); // ❌ kept commented
         this.load.image("classroom_bg", "assets/images/background/Classroom.png");
     }
 
-    /** Create (or reuse) a rounded “Easy-style” button texture. */
+    // _ensureEasyBtnTexture builds and caches a rounded button texture sized from the viewport so no external sprite is needed scope is private factory
     _ensureEasyBtnTexture(scaleHint = 1) {
         const key = "btn_diff_easy";
         if (this.textures.exists(key)) return key;
@@ -201,12 +171,11 @@ export default class EndingScene extends Phaser.Scene {
         return key;
     }
 
-    /** Fixed Play Again button (same position as original, hard reload). */
+    // _addPlayAgainButton pins a button and label to the viewport adds hover tweens and on click disables input cancels confetti stops audio and reloads the page to hard reset scope is local ui builder
     _addPlayAgainButton() {
         const { width, height } = this.scale;
         const texKey = this._ensureEasyBtnTexture(1);
 
-        // same coords as your original version
         const x = Math.round(width * 0.14);
         const y = Math.round(height * 0.90);
 
@@ -225,11 +194,9 @@ export default class EndingScene extends Phaser.Scene {
             .setDepth(1001)
             .setScrollFactor(0);
 
-        // responsive label size
         const btnH = img.displayHeight || 100;
         label.setFontSize(Math.round(btnH * 0.35));
 
-        // hover micro-anim
         const base = { y: img.y, ly: label.y, sI: img.scale, sL: label.scale };
         img.on("pointerover", () => {
             this.tweens.add({ targets: img,   scale: base.sI * 1.04, y: base.y  - 4, duration: 120, ease: "Sine.easeOut" });
@@ -240,7 +207,6 @@ export default class EndingScene extends Phaser.Scene {
             this.tweens.add({ targets: label, scale: base.sL, y: base.ly, duration: 120, ease: "Sine.easeOut" });
         });
 
-        // original behavior: hard page reload
         const go = () => {
             img.disableInteractive(); label.disableInteractive();
             this._confettiCancelled = true;
@@ -251,21 +217,21 @@ export default class EndingScene extends Phaser.Scene {
         img.on("pointerup", go);
         label.on("pointerup", go);
 
-        // ensure topmost if anything new is added later
         this.children.bringToTop(img);
         this.children.bringToTop(label);
     }
 
+    // create orchestrates the entire ending screen flow including music stopping prior scenes computing totals setting background animating kiko placing logo building a responsive scoreboard selecting a congratulatory line running confetti restoring global audio fading in and wiring cleanup scope is main scene lifecycle
     create() {
         const { width, height } = this.scale;
 
-        // BGM (optional)
+        // start ending music if the key exists to avoid errors in builds without audio packs
         if (this.cache.audio.exists("endingMusic")) {
             this.music = this.sound.add("endingMusic", { loop: true, volume: 0.6 });
             this.music.play();
         }
 
-        // Ensure minigames are stopped by their scene keys
+        // stop any leftover mini game scenes so timers inputs and audio do not leak into the ending
         try {
             this.scene.stop("CleanCatch");
             this.scene.stop("CleanCatchExplain");
@@ -273,20 +239,17 @@ export default class EndingScene extends Phaser.Scene {
             this.scene.stop("SoapSplashExplain");
         } catch {}
 
-
-        // Totals (NO DB)
+        // read player name and totals using defensive helpers to ensure ui always has values
         const playerName = getPlayerName(this);
         const totals = getTotalsNoDB(this); // { soapSplasher, germScrubber, grand }
 
-        // Background
+        // set the classroom background to fill the viewport then spawn kiko and add bounce and squash for lively feedback
         this.add.image(width / 2, height / 2, "classroom_bg").setDisplaySize(width, height);
 
-        // Kiko celebratory sprite (kept ABOVE dialog bubble)
         const kiko = this.add.image(width * 0.16, height * 0.90, "kiko_cheer")
             .setOrigin(0.5, 1)
             .setDisplaySize(Math.min(650, width * 0.38), Math.min(650, height * 0.85))
             .setDepth(40);
-        // Gentle hop animation
         const jumpH = Math.round(height * 0.04);
         const jumpD = 520;
         this.tweens.add({ targets: kiko, y: kiko.y - jumpH, duration: jumpD, ease: "Sine.inOut", yoyo: true, repeat: -1 });
@@ -297,9 +260,10 @@ export default class EndingScene extends Phaser.Scene {
             duration: 120, yoyo: true, repeat: -1, repeatDelay: jumpD - 120
         });
 
+        // place the project logo using systems ui helper so it pins correctly across resolutions
         systems.ui.placeLogo(this);
 
-        /* ---------------------------- Chalkboard UI ---------------------------- */
+        // build the scoreboard container with a geometry mask dynamic font sizing and three rows for per game totals plus a grand total add subtle shadow for readability
         {
             const W = width, H = height;
             const board = { x: W * 0.56, y: H * 0.14, w: W * 0.70, h: H * 0.70 };
@@ -330,7 +294,6 @@ export default class EndingScene extends Phaser.Scene {
             const t1 = this.add.text(0, 0, "Scoreboard", styleTitle).setOrigin(0, 0);
             const t2 = this.add.text(0, titleFS + 12, playerName, styleLine).setOrigin(0, 0);
 
-            // ↑↑ NEW: consistent single space *after* the colon, none before
             const rowGap = Math.round(lineFS * 0.95);
             const yBase  = titleFS + 12 + lineFS + 14;
 
@@ -342,9 +305,7 @@ export default class EndingScene extends Phaser.Scene {
             [t1, t2, l1, l2, l3].forEach(t => t.setShadow(0, 1, "#FFFFFF22", 2));
         }
 
-
-        /* ------------------------------ Dialogue ------------------------------ */
-
+        // define message tiers high medium and low the scene will pick one at random within the chosen tier to keep feedback fresh
         const lines = {
             high: [
                 `Great work, ${playerName}! Because of you, Kiko is happy, healthy, and ready for more fun.`,
@@ -365,23 +326,19 @@ export default class EndingScene extends Phaser.Scene {
             ]
         };
 
-
+        // choose a tier from total score then create and fade in a dialog panel with a centered wrapped message sized from the panel to fit cleanly on all screens
         const tier = (totals.grand >= 500 ? "high" : totals.grand >= 250 ? "medium" : "low");
-// (lines object stays; we’ll fix the specific strings in Step 3)
 
         const dialogY = height * 0.97;
 
-// Keep your same image key and initial scale
         const dialog = this.add.image(width * 0.58, dialogY, "dialogPanel")
             .setOrigin(0.5, 1).setAlpha(0).setDepth(25).setScale(0.5);
 
-// Compute panel dimensions after scale
         const panelW = dialog.width  * dialog.scaleX;
         const panelH = dialog.height * dialog.scaleY;
 
-// NEW: text sizing & wrap from panel size so it never touches the border
-        const msgFontPx = Math.max(28, Math.round(panelH * 0.085)); // smaller than 64px and responsive
-        const msgWrapW  = Math.round(panelW * 0.78);                 // generous side padding
+        const msgFontPx = Math.max(28, Math.round(panelH * 0.085));
+        const msgWrapW  = Math.round(panelW * 0.78);
 
 // Vertical centering: center Y of the panel area
         const panelCenterY = dialogY - (panelH / 2);
@@ -402,13 +359,14 @@ export default class EndingScene extends Phaser.Scene {
         this.tweens.add({ targets: dialog, alpha: 1, duration: 600, ease: "Sine.inOut" });
         this.tweens.add({ targets: msg,    alpha: 1, duration: 800, ease: "Sine.inOut", delay: 200 });
 
-        /* ------------------------------ Confetti ------------------------------ */
+        // configure confetti limits and timing so effects stay lightweight and deterministic across devices
         this.MAX_LIVE_CONFETTI = 40;
         this.liveConfetti = 0;
         this.DELAY_MIN = 600;
         this.DELAY_MAX = 1200;
         this._confettiCancelled = false;
 
+        // shoot spawns a small burst of confetti with random direction distance rotation and lifetime while respecting live limits and cancel flag
         const shoot = (x, y, pieces = 6) => {
             if (this._confettiCancelled || this.liveConfetti >= this.MAX_LIVE_CONFETTI) return;
             const count = Math.min(pieces, this.MAX_LIVE_CONFETTI - this.liveConfetti);
@@ -433,6 +391,7 @@ export default class EndingScene extends Phaser.Scene {
             }
         };
 
+        // loop schedules the next burst with a randomized delay creating a gentle ongoing celebration until canceled
         const loop = () => {
             if (this._confettiCancelled) return;
             shoot(
@@ -444,46 +403,21 @@ export default class EndingScene extends Phaser.Scene {
         };
         loop();
 
-        // Global music group
+        // restore audio routing by stopping the game group resuming the global group and playing a global background track when configured
         try {
             AudioManager.stopGroup?.("game");
             AudioManager.resumeGroup?.("global");
             AudioManager.play(this, "global_bg", { group: "global", volume: 0.6 });
         } catch {}
 
-        // // Home/reset icon (top-right) → full reset to ENTRY_SCENE (kept commented)
-        // const home = this.add.image(width * 0.95, height * 0.1, "homeResetButton")
-        //   .setOrigin(0.5).setScale(0.1).setDepth(20).setInteractive({ useHandCursor: true });
-        // home.on("pointerover", () => home.setScale(0.103));
-        // home.on("pointerout",  () => home.setScale(0.1));
-        // home.on("pointerdown", () => { home.disableInteractive(); this.cameras.main.fadeOut(500, 0, 0, 0); });
-        // this.cameras.main.once("camerafadeoutcomplete", async () => {
-        //   this._confettiCancelled = true;
-        //   try {
-        //     if (this.music) {
-        //       await new Promise((res) => {
-        //         this.tweens.add({
-        //           targets: this.music, volume: 0, duration: 600, ease: "Sine.easeOut",
-        //           onComplete: () => { this.music?.stop(); res(); }
-        //         });
-        //       });
-        //     }
-        //   } catch {}
-        //   await fullResetAndGotoStart(this);
-        // });
-
-        // Fade-in + Play Again
+        // fade in the camera for a soft entrance add the play again button and register shutdown cleanup to stop music and confetti
         this.cameras.main.fadeIn(600, 0, 0, 0);
         this._addPlayAgainButton();
 
-        // Cleanup
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             this._confettiCancelled = true;
             try { this.music?.stop(); } catch {}
             this.music?.destroy?.(); this.music = null;
-            // this._btnPlayAgain?.img?.destroy?.();
-            // this._btnPlayAgain?.label?.destroy?.();
-            // this._btnPlayAgain = null;
         });
     }
 }

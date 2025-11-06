@@ -1,13 +1,13 @@
-// src/scenes/MenuScene.js
-/* global Phaser, CONFIG */
-
+// this block imports shared helpers used by the menu and game flow and audio systems and the client side db layer
 import systems from "../systems.js";
 import { DB } from "../db.js";
 import { AudioManager } from "../systems.js";
 
-const DLG = { W_FRAC: 0.80, H_FRAC: 0.60 }; // dialog occupies 80% width, 60% height
+// these ui constants define dialog sizing as a fraction of the screen and a small helper to read the font family from CONFIG
+const DLG = { W_FRAC: 0.80, H_FRAC: 0.60 };
 const getUIFont = () => CONFIG.ui?.fontFamily || "Montserrat";
 
+// this scene is the entry menu that shows the animated background handles name and difficulty capture and routes to the hub
 export default class MenuScene extends Phaser.Scene {
     constructor() {
         super("MenuScene");
@@ -18,48 +18,41 @@ export default class MenuScene extends Phaser.Scene {
         this.startShadow = null;
         this.startLabel = null;
 
-        // inside constructor()
-        this._leaving = false;      // avoid double transition
-        this._audioEnsured = false; // guard for one-time audio unlock (DOM-first)
-        this._gateArmed = false;    // NEW: gesture gate armed?
-        this._uiBlocker = null;     // NEW: transparent blocker while gating
+        this._leaving = false;
+        this._audioEnsured = false;
+        this._gateArmed = false;
+        this._uiBlocker = null;
 
-
-        this._leaving = false;     // avoid double transition
-        this._audioEnsured = false; // guard for one-time audio unlock (DOM-first)
     }
 
+    // preload loads the light assets needed by the menu including bg image looping video dialog art and bgm
     preload() {
-        // Fallback background if video fails
         const BG = (typeof CONFIG !== "undefined" && CONFIG.assets && CONFIG.assets.backgrounds) || {};
         this.load.image("frontpage_background", BG.frontpage || "assets/images/backgrounds/frontpage.png");
 
-        // Background video (muted)
         this.load.video(
             "menu_bg_video",
             "assets/videos/washed_kikos-day_LEVEL_01_scene_01_action_01_launcher.mp4",
             "loadeddata",
             false,
-            true // noAudio
+            true
         );
 
-        // UI textures
         this.load.image("dialog_skin", "assets/images/UI/washed_kikos-day_UI-dialogue-box-v1.png");
         this.load.image("ui_exit", "assets/images/UI/washed_kikos-day_UI-Button_EXIT.png");
         this.load.image("kiko_dialog", "assets/images/Kiko/WashEd_kiko_sprite_base.png");
         this.load.image("ui_continue", "assets/images/UI/washed_kikos-day_UI-Button_ARROW_Right.png");
 
-        // Shared BGM key used across scenes
         this.load.audio("kikos_day", "assets/sounds/kikos_day.mp3");
     }
 
+    // create wires audio bootstrapping global bgm and builds the background video and start button then opens name and difficulty flow or quick restart
     create(data) {
-        // Coming from EndingScene "New Player" path — reset session only
         if (data?.resetSession) {
             window.__SESSION_ID__ = null;
         }
 
-        // Ensure minigame scenes are not lingering
+        // safety stop for any running minigame scenes to ensure a clean return to menu
         try {
             this.scene.stop("CleanCatchScene");
             this.scene.stop("CleanCatchExplain");
@@ -67,9 +60,7 @@ export default class MenuScene extends Phaser.Scene {
             this.scene.stop("SoapSplashExplain");
         } catch {}
 
-        // ─────────────────────────────────────────────==
-// AUDIO: gesture-gated start (idempotent, safe)
-// ─────────────────────────────────────────────
+        // audio bootstrap ensures menu bgm plays once after a first user gesture and stores a global handle for later scenes
         try {
             const KEY = "kikos_day";
             const VOL = 0.6;
@@ -92,11 +83,9 @@ export default class MenuScene extends Phaser.Scene {
                 }
             };
 
-            // prevent double-arming across re-entries
             if (!this._gateArmed) {
                 this._gateArmed = true;
 
-                // keep a reference for safe teardown
                 this._uiBlocker = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0)
                     .setOrigin(0, 0)
                     .setScrollFactor(0)
@@ -107,14 +96,12 @@ export default class MenuScene extends Phaser.Scene {
                     const g = this._uiBlocker;
                     this._uiBlocker = null;
                     if (g && g.scene) {
-                        // removeInteractive() avoids touching scene.sys
                         try { g.removeInteractive?.(); } catch {}
                         try { g.destroy?.(); } catch {}
                     }
                 };
 
                 const onFirstGesture = () => {
-                    // Only run once (protect against multiple sources)
                     if (!this._gateArmed) return;
                     this._gateArmed = false;
 
@@ -122,18 +109,14 @@ export default class MenuScene extends Phaser.Scene {
                     try { this.sound.context?.resume?.(); } catch {}
 
                     playNow();
-                    // gate may already be gone if Start emitted first — guard it
                     safeKillGate();
                 };
 
-                // Use pointer *up* so the gate doesn't eat Start’s click
                 this._uiBlocker.once("pointerup", onFirstGesture);
                 this.input.keyboard?.once("keydown", onFirstGesture);
 
-                // DOM/other paths can emit this:
                 this.events.once("menu:startPressed", onFirstGesture);
 
-                // If already unlocked, kick on next tick
                 if (!this.sound.locked) this.time.delayedCall(0, onFirstGesture);
             }
 
@@ -143,30 +126,28 @@ export default class MenuScene extends Phaser.Scene {
             console.warn("[MenuScene] audio bootstrap error:", e);
         }
 
-
-        // Also ensure DOM-only interactions emit the start signal at least once
+        // this call adds a one time global gesture listener that fires menu start to wake audio contexts on browsers with gesture guards
         this.ensureAudioStartOnce();
 
-        // ─────────────────────────────────────────────
-        // Visual setup
-        // ─────────────────────────────────────────────
+        // place the brand logo pinned to screen using systems ui helper
         systems.ui.placeLogo(this);
 
         const { width, height } = this.scale;
 
+        // reset transition state and clear visual fx for a clean entry each time
         this._leaving = false;
         this.input.enabled = true;
         this.tweens.killAll();
         this.cameras.main.resetFX();
 
-        // Fallback background
+        // background still image used as a fallback under the video
         this.fallback = this.add
             .image(0, 0, "frontpage_background")
             .setOrigin(0, 0)
             .setDisplaySize(width, height)
             .setDepth(-3);
 
-        // Video background
+        // looping muted background video centered and scaled to cover the screen
         this.video = this.add
             .video(width / 2, height / 2, "menu_bg_video")
             .setOrigin(0.5)
@@ -174,6 +155,7 @@ export default class MenuScene extends Phaser.Scene {
             .setLoop(true);
         this.video.setMute(true).play(true);
 
+        // this function scales the video to cover while keeping aspect and also resizes the fallback image
         const resizeVideo = () => {
             const W = this.scale.width;
             const H = this.scale.height;
@@ -191,9 +173,7 @@ export default class MenuScene extends Phaser.Scene {
         this.video.on("loadeddata", resizeVideo);
         resizeVideo();
 
-        // ─────────────────────────────────────────────
-        // Start flow (Start → Name → Difficulty → Playground)
-        // ─────────────────────────────────────────────
+        // startFlow collects player name then opens difficulty picker and begins a session before entering the hub
         const startFlow = () => {
             const cachedName = this.registry.get("playerName");
 
@@ -201,7 +181,7 @@ export default class MenuScene extends Phaser.Scene {
                 const name = (rawName || "").trim() || "Player";
                 this.registry.set("playerName", name);
 
-                // Open difficulty dialog; when chosen, ensure session and go
+                // open difficulty picker then ensure session and navigate smoothly
                 this.openDifficultyDialog((lvl) => {
                     window.__SESSION_ID__ = window.__SESSION_ID__ ?? DB.beginSession(name);
                     this.registry.set("difficulty", lvl);
@@ -213,13 +193,11 @@ export default class MenuScene extends Phaser.Scene {
             else proceedAfterName(cachedName);
         };
 
-        // Optional quick-restart
+        // quick restart path used for developer or instant retry flows to skip dialogs
         this._quickRestart = !!data?.quickRestart;
         this._qrName = data?.restartName || "Kiko";
-        this._qrReuseDifficulty = (data?.reuseDifficulty !== false);
 
         const onStartPressed = () => {
-            // Ensure BGM start even if the interaction happened on DOM
             this.events.emit("menu:startPressed");
 
             if (this._quickRestart) {
@@ -239,35 +217,34 @@ export default class MenuScene extends Phaser.Scene {
             startFlow();
         };
 
-        // Wire START button
+        // build start button using art if present or a drawn fallback then hook to onStartPressed
         this.createStartButton(onStartPressed);
 
-        // Responsive layout
+        // keep layout responsive on resize including bg video and button placement
         this.scale.on("resize", () => {
             resizeVideo();
             this.layoutUI();
         });
 
+        // gentle fade in for a polished entrance
         this.cameras.main.fadeIn(800, 0, 0, 0);
     }
 
-    // Smoothly leave this scene (fade-out) then start PlaygroundScene
+    // this helper performs a guarded fade out transition to PlaygroundScene and prevents double navigation and also removes the audio gate blocker
     goToPlaygroundSmooth(playerName, difficulty, dur = 600) {
 
-        // kill any leftover blocker safely
         if (this._uiBlocker) {
             try { this._uiBlocker.removeInteractive?.(); this._uiBlocker.destroy?.(); } catch {}
             this._uiBlocker = null;
         }
         this._gateArmed = false;
 
-
         if (this._leaving) return;
         this._leaving = true;
 
         this.input.enabled = false;
         this.tweens.killAll();
-        this.video?.stop(); // stop video only (do NOT touch BGM)
+        this.video?.stop();
 
         this.cameras.main.once("camerafadeoutcomplete", () => {
             this.scene.start("PlaygroundScene", { playerName, difficulty });
@@ -275,21 +252,17 @@ export default class MenuScene extends Phaser.Scene {
         this.cameras.main.fadeOut(dur, 0, 0, 0);
     }
 
-    // ─────────────────────────────────────────────
-    // Name input popup
-    // ─────────────────────────────────────────────
+    // openNameDialog draws a modal dialog with a dom input captures a validated name and calls back then disposes all listeners and nodes
     openNameDialog(onOk) {
         const { width, height } = this.scale;
         const dialogRoot = this.add.container(0, 0).setDepth(20);
 
-        // Dim overlay
         const overlay = this.add
             .rectangle(0, 0, width, height, 0x000000, 0.35)
             .setOrigin(0, 0)
             .setInteractive();
         dialogRoot.add(overlay);
 
-        // Panel scale
         const skinImg = this.textures.get("dialog_skin").getSourceImage();
         const s = Math.min(
             (width * DLG.W_FRAC) / skinImg.width,
@@ -312,7 +285,6 @@ export default class MenuScene extends Phaser.Scene {
         const rightX = innerLeft + leftColW + gutter;
         const rightW = innerW - leftColW - gutter;
 
-        // Kiko art (left column)
         if (this.textures.exists("kiko_dialog")) {
             const kd = this.add
                 .image(innerLeft + leftColW / 2, panel.y + panelH * 0.35, "kiko_dialog")
@@ -324,7 +296,6 @@ export default class MenuScene extends Phaser.Scene {
 
         const uiFont = getUIFont();
 
-        // Title
         const title = this.add
             .text(rightX, panel.y - panelH * 0.12, "Hey, I’m Kiko. What’s your name?", {
                 fontFamily: uiFont,
@@ -335,7 +306,6 @@ export default class MenuScene extends Phaser.Scene {
         title.setWordWrapWidth(rightW, true);
         dialogRoot.add(title);
 
-        // DOM form (input + hidden button)
         const html = `
           <div id="wrap" style="font-family:${uiFont}">
             <input id="nameInput" type="text" placeholder="Type your name..." style="font-family:${uiFont}" />
@@ -365,9 +335,8 @@ export default class MenuScene extends Phaser.Scene {
         input.style.borderRadius = `${Math.round(10 * s)}px`;
         input.style.outline = "none";
 
-        ok.style.display = "none"; // we use the arrow image as the submit
+        ok.style.display = "none";
 
-        // Continue arrow button
         const btnSize = Math.round(170 * s);
         const continueBtn = this.add
             .image(panel.x, panel.y + panelH * 0.27, "ui_continue")
@@ -416,7 +385,6 @@ export default class MenuScene extends Phaser.Scene {
 
         form.node.addEventListener("keydown", onKey);
 
-        // Close (X) button
         const closeBtn = this.add
             .image(
                 panel.x + panelW / 2 - Math.round(46 * s),
@@ -448,13 +416,11 @@ export default class MenuScene extends Phaser.Scene {
         closeBtn.on("pointerdown", destroyDialog);
         this.events.once("shutdown", destroyDialog);
 
-        // Ensure audio unlock also fires when user interacts only with DOM
+        // ensure audio gesture is armed while dialog is active on locked browsers
         this.ensureAudioStartOnce();
     }
 
-    // ─────────────────────────────────────────────
-    // Difficulty select popup (Easy / Normal / Hard)
-    // ─────────────────────────────────────────────
+    // openDifficultyDialog renders three large buttons easy normal hard and returns a numeric level to the caller while cleaning up listeners and tweens on close
     openDifficultyDialog(onPick) {
         const { width, height } = this.scale;
 
@@ -569,7 +535,6 @@ export default class MenuScene extends Phaser.Scene {
             dialogRoot.add(lab);
         });
 
-        // Close (X)
         const closeBtn = this.add
             .image(
                 panel.x + panelW / 2 - Math.round(46 * s),
@@ -598,9 +563,7 @@ export default class MenuScene extends Phaser.Scene {
         this.events.once("shutdown", destroyDialog);
     }
 
-    // =======================
-    // START button (image or generated)
-    // =======================
+    // createStartButton draws either a sprite based start button or a vector fallback wires hover and click tweens and stores references for responsive layout
     createStartButton(onStart) {
         const { width, height } = this.scale;
         const bx = (typeof CONFIG !== "undefined" && CONFIG.menu?.buttonsX?.start) ?? 0.72;
@@ -654,7 +617,6 @@ export default class MenuScene extends Phaser.Scene {
             this.startShadow = shadow;
             this.startLabel = null;
         } else {
-            // Generated button fallback
             const bw = Math.min(width * 0.5, 520);
             const bh = Math.min(height * 0.2, 140);
             const radius = Math.min(24, bh * 0.25);
@@ -717,6 +679,7 @@ export default class MenuScene extends Phaser.Scene {
         this.layoutUI();
     }
 
+    // layoutUI repositions and rescales the start button and its shadow and label when the screen size or config positioning changes
     layoutUI() {
         const { width, height } = this.scale;
         const bx = (typeof CONFIG !== "undefined" && CONFIG.menu?.buttonsX?.start) ?? 0.72;
@@ -742,6 +705,7 @@ export default class MenuScene extends Phaser.Scene {
         }
     }
 
+    // calcButtonScale computes a scale factor for the start button sprite so it fits a target fraction of the viewport
     calcButtonScale(nativeW, nativeH) {
         const { width, height } = this.scale;
         const sW = (width * 0.38) / nativeW;
@@ -749,16 +713,13 @@ export default class MenuScene extends Phaser.Scene {
         return Math.min(sW, sH);
     }
 
-    // ─────────────────────────────────────────────
-    // One-time audio unlock that also works for DOM interactions
-    // ─────────────────────────────────────────────
+    // ensureAudioStartOnce adds one shot global gesture listeners that emit menu start to unlock web audio on platforms with user gesture requirements
     ensureAudioStartOnce() {
         if (this._audioEnsured) return;
         this._audioEnsured = true;
 
         const fire = () => {
             try { if (this.sound.locked) this.sound.unlock(); } catch {}
-            // Route into the gesture gate (menu:startPressed handler)
             this.events.emit("menu:startPressed");
         };
 

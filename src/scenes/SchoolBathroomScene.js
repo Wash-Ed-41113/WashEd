@@ -1,11 +1,18 @@
+// this scene is the bathroom hub that teaches the correct order of handwashing
+// it loads bathroom assets restores the global menu bgm places interactive tap and soap items and guides the player with dialogs and glow hints
+// it routes to CleanCatch after the tap and to SoapSplash after selecting soap and returns to the ending or hub cleanly
+
 // SchoolBathroomScene.js
 
+// asset keys and paths for background and ui images kept as constants for reuse and safe preload checks
 const BG_KEY = "washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png";
 const BG_PATH = "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png";
 
+// shared systems and audio utilities used for ui logo placement and grouped audio control
 import systems from "../systems.js";
 import { AudioManager } from "../systems.js";
 
+// keys and paths for interactive items tap soap bar and soap bottle
 const TAP_KEY = "washed_day_UI_LEVEL_01_scene_02_bathroom__Tap.png";
 const TAP_PATH = "assets/images/UI/washed_day_UI_LEVEL_01_scene_02_bathroom__Tap.png";
 
@@ -15,12 +22,14 @@ const SOAPBAR_PATH = "assets/images/UI/washed_day_UI_LEVEL_01_scene_02_bathroom_
 const SOAPBOTTLE_KEY = "washed_day_UI_LEVEL_01_scene_02_bathroom__Soap-bottle.png";
 const SOAPBOTTLE_PATH = "assets/images/UI/washed_day_UI_LEVEL_01_scene_02_bathroom__Soap-bottle.png";
 
+// keys for dialog arrow button and balloon skin
 const ARROW_RIGHT_KEY = "ui_arrow_right";
 const ARROW_RIGHT_PATH = "assets/images/UI/washed_kikos-day_UI-Button_ARROW_Right.png";
 
 const DIALOG_BALLOON_KEY = "dialog_balloon";
 const DIALOG_BALLOON_PATH = "assets/images/UI/washed_kikos-day_UI-dialogue-box-v2.png";
 
+// scene class stores navigation dialog state step tracking and glow hint controllers
 export default class SchoolBathroomScene extends Phaser.Scene {
     constructor() {
         super("SchoolBathroomScene");
@@ -32,6 +41,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         this._hints = { tap: null, soapBar: null, soapBottle: null };
     }
 
+    // preload loads any missing textures once so re entry is instant and avoids duplicate loads
     preload() {
         if (!this.textures.exists(BG_KEY)) this.load.image(BG_KEY, BG_PATH);
         if (!this.textures.exists(TAP_KEY)) this.load.image(TAP_KEY, TAP_PATH);
@@ -43,6 +53,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         if (!this.textures.exists(DIALOG_BALLOON_KEY)) this.load.image(DIALOG_BALLOON_KEY, DIALOG_BALLOON_PATH);
     }
 
+    // create builds layout attaches interactions restores audio and sets up hint state and dev shortcuts
     create(data = {}) {
         const { width, height } = this.scale;
         const skipIntro = !!data.skipIntro;
@@ -51,6 +62,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             this._step1Done = true;
         }
 
+        // helper ensures only one dialog exists by destroying any open dialog before continuing an action
         const onlyIfNoDialog = (fn) => () => {
             // If a dialog is already visible, remove it immediately
             if (this._dialogRoot) {
@@ -60,8 +72,10 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             fn();
         };
 
+        // corner logo placement via shared ui helper
         systems.ui.placeLogo(this);
 
+        // audio restoration on hub entry stop any minigame audio attempt to resume the global bgm instance or create one as fallback then resume global group
         // ─────────────────────────────────────────────────────────────
         // AUDIO: Hub (bathroom) re-entry should bring back the menu BGM.
         // - Stop/clear any minigame track (game group / window.__MINI_BGM__)
@@ -116,11 +130,11 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             console.warn("[SchoolBathroomScene] Failed to resume menu BGM:", e);
         }
 
-        // Background
+        // background image added and scaled to cover screen while preserving aspect ratio
         const bg = this.add.image(width / 2, height / 2, BG_KEY).setOrigin(0.5, 0.5);
         bg.setScale(Math.max(width / bg.width, height / bg.height));
 
-        // Layout
+        // relative layout anchors for tap soap bar and soap bottle and a helper to scale by target height for consistent sizing
         const pos = {
             tap:        { x: width * 0.35, y: height * 0.73, h: height * 0.51 },
             soapBar:    { x: width * 0.75, y: height * 0.85, h: height * 0.35 },
@@ -129,29 +143,30 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
         const fitH = (img, targetH) => img.setScale(targetH / img.height);
 
-        // Tap → CleanCatch
+        // interactive tap setup represents step one and later routes to CleanCatch after confirmation
         const tap = this.add.image(pos.tap.x, pos.tap.y, TAP_KEY)
             .setOrigin(0.5)
             .setDepth(5)
             .setInteractive({ useHandCursor: true });
         fitH(tap, pos.tap.h);
 
-        // Soap bar → SoapSplash
+        // interactive soap bar setup represents scrubbing route to SoapSplash after step one
         const soapBar = this.add.image(pos.soapBar.x, pos.soapBar.y, SOAPBAR_KEY)
             .setOrigin(0.5)
             .setDepth(5)
             .setInteractive({ useHandCursor: true });
         fitH(soapBar, pos.soapBar.h);
 
-        // Soap bottle → SoapSplash
+        // interactive soap bottle setup same behavior as soap bar offers player choice of soap item
         const soapBottle = this.add.image(pos.soapBottle.x, pos.soapBottle.y, SOAPBOTTLE_KEY)
             .setOrigin(0.5)
             .setDepth(5)
             .setInteractive({ useHandCursor: true });
         fitH(soapBottle, pos.soapBottle.h);
 
-        // (Removed previous AudioManager.play(..., "global_bg")) — we only want the menu track back.
+        // older global bg audio call intentionally removed because the menu track is already restored above
 
+        // ensure no lingering mini game scenes or audio are active when entering the hub
         try {
             this.scene.stop("CleanCatchScene");
             this.scene.stop("CleanCatchExplain");
@@ -164,7 +179,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             AudioManager.resumeGroup?.("global");
         } catch {}
 
-        // Hover pulse
+        // small hover affordance grows item slightly on over and returns on out
         const makeHover = (img, factor = 1.06, dur = 120) => {
             const baseX = img.scaleX;
             const baseY = img.scaleY;
@@ -196,7 +211,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
         makeHover(tap); makeHover(soapBar); makeHover(soapBottle);
 
-        // --------- Hints: glow guidance ----------
+        // initial hint routing glow all three before step one then only the soaps after step one
         if (!this._step1Done) {
             // white glow on tap + both soaps (less obvious)
             this._enableStep1Hints(tap, soapBar, soapBottle);
@@ -205,7 +220,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             this._enableStep2Hints(soapBar, soapBottle);
         }
 
-        // If returning from CleanCatch, show Let's Scrub dialog now
+        // when returning from CleanCatch show scrub dialog immediately switch hints to soaps
         if (data.showScrubDialog) {
             this._step1Done = true; // tap step already completed
             this._clearHints();     // remove any misleading glows
@@ -214,7 +229,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             });
         }
 
-
+        // click behavior for tap correct before step one wrong after returning from minigame dialogs manage user feedback and timing
         // Click routing (blocked until dialog closes)
         // TAP is the FIRST correct step
         tap.on("pointerdown", onlyIfNoDialog(() => {
@@ -240,6 +255,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             );
         }));
 
+        // soap click behavior wrong before step one correct after step one shows dialog then fades into SoapSplash
         // SOAP is WRONG if tap not done yet
         const handleSoapClick = onlyIfNoDialog(() => {
             if (!this._step1Done) {
@@ -263,6 +279,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         soapBar.on("pointerdown", handleSoapClick);
         soapBottle.on("pointerdown", handleSoapClick);
 
+        // single fadeout handler centralizes scene transitions and ensures hints are cleared before leaving
         // Single fadeout handler — goes only where you clicked
         this.cameras.main.once("camerafadeoutcomplete", () => {
             // cleanup hints when leaving
@@ -279,6 +296,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             }
         });
 
+        // dev mode accelerators for difficulty quick jumps and leaderboard access
         if (CONFIG.isDevMode) {
             // 1/2/3 = set difficulty level
             const setLvl = (n) => this.registry.set("difficulty", n);
@@ -299,15 +317,18 @@ export default class SchoolBathroomScene extends Phaser.Scene {
             });
         }
 
+        // entry dialog appears unless explicitly skipped and is dismissed with the arrow inside the panel
         if (!skipIntro) {
             this._showEntryDialog();
         }
 
+        // lifecycle cleanup to ensure glow tweens and duplicates are not left around on scene change
         // Also clean up hints on shutdown
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this._clearHints());
         this.events.once(Phaser.Scenes.Events.DESTROY, () => this._clearHints());
     }
 
+    // starts SoapSplash with explicit difficulty and ensures any prior instance is stopped first
     // NEW: start SoapSplash cleanly with explicit difficulty and belt-and-braces stop
     startSoapSplash() {
         const difficulty = this.registry.get("difficulty") ?? 1;
@@ -315,11 +336,13 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         this.scene.start("SoapSplash", { difficulty, fromHub: true });
     }
 
+    // stores the target scene key and triggers a camera fade to hand off control in the fadeoutcomplete listener
     _fadeTo(sceneKey) {
         this.nextSceneKey = sceneKey; // must match your scene keys
         this.cameras.main.fadeOut(300, 0, 0, 0);
     }
 
+    // modal entry dialog container overlay panel kiko art title copy and a next arrow that closes the dialog
     _showEntryDialog() {
         const { width, height } = this.scale;
 
@@ -376,6 +399,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         });
     }
 
+    // modal scrub dialog shown when coming back from CleanCatch includes callback to re enable soap hints
     _showScrubDialog(onClose) {
         const { width, height } = this.scale;
 
@@ -448,6 +472,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         });
     }
 
+    // small top balloon used for gentle corrections auto closes after duration blocks clicks behind while visible
     _showSmallDialog(message, duration = 5000) {
         const onlyIfNoDialog = (fn) => () => {
             if (this._dialogRoot) {
@@ -491,6 +516,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         });
     }
 
+    // success balloon variant accepts callback and duration used to bridge into the next scene after readable pause
     _showCorrectDialog(message, onDone, duration = 8000) {
         const onlyIfNoDialog = (fn) => () => {
             if (this._dialogRoot) {
@@ -534,6 +560,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
 
 // ---------------- Glow helpers & hint control ----------------
 
+    // glow utility creates a subtle pulse using postfx when available or an additive aura fallback returns a stop handle for cleanup
     /** Create a subtle pulsing glow around an image.
      *  Prefers postFX glow; falls back to an additive aura.
      *  Returns { stop() } which cleans up the effect.
@@ -594,6 +621,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         };
     }
 
+    // clears any active glow handles and resets the hint registry used when switching steps or leaving the scene
     _clearHints() {
         try { this._hints?.tap?.stop?.(); } catch(e) {}
         try { this._hints?.soapBar?.stop?.(); } catch(e) {}
@@ -601,6 +629,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         this._hints = { tap: null, soapBar: null, soapBottle: null };
     }
 
+    // step one hints neutral white glow on tap and both soaps to encourage exploration without revealing the answer
     _enableStep1Hints(tapImg, soapBarImg, soapBottleImg) {
         this._clearHints();
         // white glow on all three so the first step isn't obvious
@@ -609,6 +638,7 @@ export default class SchoolBathroomScene extends Phaser.Scene {
         this._hints.soapBottle = this._makeGlow(soapBottleImg, { color: 0xffffff, alpha: 0.35, scale: 1, pulseMs: 1600 });
     }
 
+    // step two hints neutral white glow only on the soap items guiding the player to the scrubbing step after the tap is complete
     _enableStep2Hints(soapBarImg, soapBottleImg) {
         this._clearHints();
         this._hints.soapBar    = this._makeGlow(soapBarImg,    { color: 0xffffff, alpha: 0.35, scale: 1 });

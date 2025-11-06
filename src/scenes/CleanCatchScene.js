@@ -1,16 +1,21 @@
 // src/scenes/CleanCatchScene.js
 // Clean Catch mini-game scene — patched so EndingScene scoreboard gets totals.
-//
-// Key changes:
-// 1) Robust _snapshotScoreFromRuntime(): tries many likely fields/functions.
-// 2) Periodic sampler mirrors score → registry, localStorage, and window global.
-// 3) On finalize: pushes mirrors, calls DB.saveRound("CleanCatch", ...), and
-//    DB.finalizeRound(roundId, ...). EndingScene also reads the mirrors defensively.
+
+// overview
+// this scene runs the Clean Catch mini game and keeps its score consistent across the app
+// it owns audio for the game group starts and finalizes a DB round and exposes scores to EndingScene through registry localstorage and a window global
+// most gameplay graphics are produced by systems cleancatcher with this scene acting as host and coordinator
+
+
 
 import systems from "../systems.js";
 import { AudioManager } from "../systems.js";
 import { DB } from "../db.js";
 
+
+// scene lifecycle and state
+// the constructor initializes flags for runtime audio pause ui and scene leaving
+// it also prepares round tracking fields that are written to DB and mirrored for the scoreboard
 export default class CleanCatchScene extends Phaser.Scene {
     constructor() {
         super("CleanCatch");
@@ -21,18 +26,20 @@ export default class CleanCatchScene extends Phaser.Scene {
 
         // Scoreboard/DB state
         this._roundId = null;
-        this._score = 0;
         this._bestStreak = 0;
         this._breaches = 0;
         this._scoreSampler = null;
     }
 
+
+
     // ─────────────────────────────────────────────────────────────
     // Score mirrors
     // ─────────────────────────────────────────────────────────────
+    // central helper to push the latest score into three places
+    // registry is the preferred in scene store localstorage survives scene switches and window global is a last resort read by EndingScene
     _pushCatchScore(score) {
         const s = Number(score) || 0;
-        this._score = s;
 
         // Registry mirrors (multiple keys for compatibility)
         try {
@@ -52,10 +59,13 @@ export default class CleanCatchScene extends Phaser.Scene {
         try { window.__CLEAN_CATCH_SCORE__ = s; } catch {}
     }
 
+
+
     // ─────────────────────────────────────────────────────────────
     // Snapshot score from whatever structure the runtime uses
-    // (function, plain field, nested state/stats, or systems helper)
     // ─────────────────────────────────────────────────────────────
+    // pulls a single numeric score from the runtime regardless of how the engine exposes it
+    // tries getScore then common fields then a systems helper and finally returns zero
     _snapshotScoreFromRuntime() {
         const rt = this._runtime || {};
 
@@ -90,9 +100,13 @@ export default class CleanCatchScene extends Phaser.Scene {
         return 0;
     }
 
+
+
     // ─────────────────────────────────────────────────────────────
     // Always use this to leave the scene (finalizes first)
     // ─────────────────────────────────────────────────────────────
+    // wrapper for all scene exits
+    // guarantees _finalizeRoundSafe runs once and returns audio to the global group before switching to another scene
     leaveTo(targetKey, data) {
         if (this._leaving) return;
         this._leaving = true;
@@ -110,9 +124,13 @@ export default class CleanCatchScene extends Phaser.Scene {
         if (targetKey) this.scene.start(targetKey, data);
     }
 
+
+
     // ─────────────────────────────────────────────────────────────
     // Phaser lifecycle
     // ─────────────────────────────────────────────────────────────
+    // preload ensures all minimal assets exist to avoid runtime errors in create
+    // art and sfx keys are checked before loading so repeated entries do not duplicate cache items
     preload() {
         // Minimal art/sfx guards (kept from your original)
         if (!this.textures.exists("dialog_skin")) {
@@ -133,6 +151,11 @@ export default class CleanCatchScene extends Phaser.Scene {
             this.load.audio("sfx_beep", "assets/sounds/timerSound.m4a");
     }
 
+
+
+    // create wires the scene together
+    // it stores player and difficulty info owns the game audio starts or resumes a DB session and round builds a html canvas host and creates the cleancatcher runtime via systems
+    // it also installs a periodic sampler that mirrors score fields and sets up cleanup on shutdown
     create(data) {
         if (data?.difficulty) this.registry.set("difficulty", data.difficulty);
         if (data?.playerName) this.registry.set("playerName", data.playerName);
@@ -239,9 +262,13 @@ export default class CleanCatchScene extends Phaser.Scene {
         });
     }
 
+
+
     // ─────────────────────────────────────────────────────────────
     // Finalize exactly once — records a round and prevents duplicates
     // ─────────────────────────────────────────────────────────────
+    // finalization writes the best known score to mirrors logs a saveRound entry for EndingScene totals and calls DB finalize for analytics
+    // it guards against duplicate calls and tries to recover a zero score from mirrors before giving up
     _finalizeRoundSafe(reason = "finalize") {
         try {
             if (!this._roundId) return; // already finalized or never started
