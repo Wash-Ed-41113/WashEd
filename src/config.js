@@ -14,7 +14,7 @@ window.CONFIG = {
     // ui defaults: fonts, sizes, and common widget styling read by systems.ui helpers
     // keep these generic so scenes don’t hardcode visuals
     ui: {
-        fontFamily: "Montserrat",        // default font for text
+        fontFamily: "Montserrat",   // default font for text
         titleFontSize: 230,         // large font size for title text
         typeSpeedMs: 120,           // default typewriter speed for dialog
 
@@ -22,8 +22,8 @@ window.CONFIG = {
         button: {
             width: 300,             // button rectangle width
             height: 76,             // button rectangle height
-            fill: 0x00c2ff,         // fill color
-            stroke: 0xffffff,       // border color
+            fill: 0x00c2ff,         // fill colour
+            stroke: 0xffffff,       // border colour
             strokeThickness: 4,     // border thickness
             fontSize: 28,           // button text font size
             fontColor: "#111",      // button text color
