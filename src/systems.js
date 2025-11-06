@@ -1616,7 +1616,7 @@ const soapsplash = (() => {
 // -----------------------------
 const cleancatcher = {
     create(scene, canvas, difficulty = "easy") {
-        //difficulty levels
+        //difficulty levels clarification
         if (difficulty === 1) difficulty = "easy";
         else if (difficulty === 2) difficulty = "normal";
         else if (difficulty === 3) difficulty = "hard";
@@ -1624,8 +1624,10 @@ const cleancatcher = {
 
         const CC = CONFIG.cleanCatch;
         const ctx = canvas.getContext("2d");
-        //toast system for dialogue
+        //toast system for dialogue (pop-up messages)
         let activeToasts = [];
+
+        //Kiko sprite setup (happy/sad reactions)
         const kikoCheer = new Image();
         kikoCheer.src = CONFIG.assets.kiko?.cheer || "assets/images/Kiko/WashEd_kiko_sprite_cheer.png";
         const kikoSad = new Image();
@@ -1633,7 +1635,7 @@ const cleancatcher = {
 
         ctx.imageSmoothingEnabled = true;
 
-        // images and word lists
+        // images and word lists used in gameplay , doesn't need to be changed for reskinning
         const A = CONFIG.assets.cleanCatch || {};
         const background = new Image();
         background.src = A.background || "";
@@ -1652,15 +1654,13 @@ const cleancatcher = {
         const backgroundNoLife = new Image();
         backgroundNoLife.src = A.backgroundNoLife || "";
 
-        //count for water/soap catched for dialogues
+        //count for water/soap caught for dialogues
         let goodCatchCount = 0;
 
         //  Sound Effects Setup
         let catchGoodSound = null;
         let catchBadSound = null;
         let timerBeepSound = null;
-
-        // Initialise Phaser sounds if available
         if (scene.sound) {
             catchGoodSound = scene.sound.add("sfx_goodCatch", { volume: 0.5 });
             catchBadSound = scene.sound.add("sfx_badCatch", { volume: 0.5 });
@@ -1668,7 +1668,6 @@ const cleancatcher = {
         } else {
             console.warn("[CleanCatch] No Phaser sound system found — skipping sound effects.");
         }
-
 
 
         const goodMessages = [
@@ -1688,7 +1687,7 @@ const cleancatcher = {
             "Watch out for those germs!"
         ];
 
-        // --- Kiko Toast Builder ---
+        // Kiko Toast Builder, kiko pop-up
         function makeToast(mood, text, ttl = 1800) {
             activeToasts.push({
                 mood,
@@ -1697,7 +1696,6 @@ const cleancatcher = {
                 ttl
             });
         }
-
 
         // current message to display and timer
         let currentMessage = "";       // the text to show
@@ -1715,6 +1713,7 @@ const cleancatcher = {
             return {w, h, r: (w && h) ? w / h : 1};
         }
 
+        //appropriate drawing size for each image
         function sizeFrom(img, opts = {}, defaultSquare = 120) {
             const {w: iw, h: ih, r} = aspect(img);
             const fallback = opts.fallbackSize ?? defaultSquare;

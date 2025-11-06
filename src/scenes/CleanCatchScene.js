@@ -264,9 +264,9 @@ export default class CleanCatchScene extends Phaser.Scene {
 
 
 
-    // ─────────────────────────────────────────────────────────────
-    // Finalize exactly once — records a round and prevents duplicates
-    // ─────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────
+    // Finalise exactly once, records a round and prevents duplicates
+    // ─────────────────────────────────────────────────────────────────
     // finalization writes the best known score to mirrors logs a saveRound entry for EndingScene totals and calls DB finalize for analytics
     // it guards against duplicate calls and tries to recover a zero score from mirrors before giving up
     _finalizeRoundSafe(reason = "finalize") {
@@ -303,7 +303,7 @@ export default class CleanCatchScene extends Phaser.Scene {
             // IMPORTANT: EndingScene sums saveRound() entries
             try { DB.saveRound?.("CleanCatch", score, this._bestStreak || 0); } catch {}
 
-            // Also finalize the open round
+            // Also finalise the open round
             DB.finalizeRound?.(this._roundId, {
                 score,
                 bestStreak: this._bestStreak || 0,
@@ -311,7 +311,7 @@ export default class CleanCatchScene extends Phaser.Scene {
                 reason
             });
 
-            // Prevent double finalize
+            // Prevent double finalise
             this._roundId = null;
         } catch (e) {
             console.warn("[CleanCatch] finalizeRound failed:", e);
