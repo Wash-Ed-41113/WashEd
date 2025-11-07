@@ -1,14 +1,75 @@
-// this module collects all shared helpers ui widgets mini game engines and simple menus
-// scenes import this module as systems to access these features
-// everything below is inline documented so you can read top to bottom and understand the flow
+/**
+ + * # Module: systems.js
+ + *
+ + * ## Purpose in the system
+ + * Central utility module imported as `systems` by scenes. It centralizes:
+ + * audio orchestration (AudioManager), UI helpers (logo/topbar/buttons/pause/name dialog),
+ + * mini-game engines (Soap Splash + Clean Catch), generic helpers, telemetry stubs,
+ + * and a simple vertical menu builder. It also exports legacy aliases for Soap Splash sub-namespaces.
+ + *
+ + * ## Public surface
+ + * - export const AudioManager { play, stop, pauseGroup, resumeGroup, stopGroup, hardReset }
+ + * - export default systems {
+ + *     helpers, ui, soapsplash, cleancatcher, menu,
+ + *     spawn, movement, rules, timer, typing (legacy aliases to soapsplash.*)
+ + *   }
+ + * ## Dependencies
+ + * - External: Phaser 3 (sound/tweens/scene lifecycle).
+ + * - Internal: ./db.js for telemetry; window.CONFIG for assets & tuning.
+ + */
 import { DB } from "./db.js";
-// === AudioManager ============================================================
-// Groups:
-//  - "global": your story bg (Bathroom → Handwash → Ending)
-//  - "game": per-mini-game music (CleanCatch / SoapSplash)
-// Behavior:
-//  - When any "game" track starts, we PAUSE the "global" group (with fade).
-//  - When the game scene shuts down, we RESUME the "global" group (with fade).
+
+/**
+ * Class/Type: AudioManager (module IIFE)
+ *
+ * Responsibility: Centralized music/SFX control per scene and per logical "group" (e.g., "global", "game").
+ * Collaborators: Phaser.Sound, Phaser.Tweens, Scene events; uses scene events to auto-clean on shutdown.
+ * Invariants:
+ *   - Each playing sound is tracked by both its owning scene and (optionally) a logical group.
+ *   - `GROUPS` contains only live sounds; sounds are removed on stop/destroy.
+ *   - Starting a "game" group track pauses/ducks the "global" group; resuming "global" happens on scene shutdown.
+ *
+ * Construction/Lifecycle: Lazy; created on first import. No explicit dispose—call `hardReset()` between games.
+ * Thread-safety/Mutability: Phaser main thread only. Mutates internal Maps; not re-entrant across scenes.
+ * Complexity hotspots: Group fades iterate O(n_sounds_in_group); scene shutdown stops O(n_scene_sounds).
+ * Serialization/Format: N/A.
+ * Smell to call out: Keep it focused on routing and lifecycles; avoid embedding game rules in here.
+ *
+ * Public API
+ *   play(scene, key, {loop=true, volume=1, group="global", fadeIn=400})
+ *     – Start (or re-assert) a sound by cache key; auto-tracks ownership & group; fades in.
+ *   stop(scene)
+ *     – Fade/stop every sound owned by `scene`; clears ownership tracking.
+ *   pauseGroup(group, fadeMs=400)
+ *     – Fade to 0 then pause every sound in `group`. Idempotent if nothing is playing.
+ *   resumeGroup(group, fadeMs=400, toVol=1)
+ *     – Resume (if paused) and fade up to `toVol`; or just fade up if already playing.
+ *   stopGroup(group, fadeMs=150)
+ *     – Fast fade/stop every sound in `group` and drop them from tracking.
+ *   hardReset()
+ *     – Brutal global stop; clears all maps (owners, groups, current).
+ *
+ * Errors/Exceptions:
+ *   - Missing cache key: warns and returns null from `play()`. Safe to ignore.
+ *   - Tween failures during teardown are caught and ignored.
+ * Caller-recoverable: Yes; a `null` return from `play()` means "no audio available."
+ *
+ * Performance notes:
+ *   - Fades allocate Tweens; avoid extremely short repeated play/stop loops to reduce churn.
+ *   - `CURRENT` is a key→instance map; reusing the same key avoids re-allocating sounds.
+ *
+ * Concurrency/Reentrancy: Not re-entrant across threads; Phaser is single-threaded. Safe to call repeatedly.
+ * Security/Privacy: No PII; reads asset keys only.
+ *
+ * Example (80% use case):
+ *   // In a scene's create():
+ *   AudioManager.play(this, "global_bg", { group: "global", volume: 0.6 });
+ *   // While entering gameplay:
+ *   AudioManager.play(this, "soap_splash_music", { group: "game", volume: 0.8 });
+ *   // On pause menu close or scene shutdown:
+ *   AudioManager.stop(this); // stops what this scene owns and resumes "global" automatically
+ */
+
 export const AudioManager = (() => {
     const SCENE_OWNERS = new Map(); // scene => Set(Phaser.Sound.BaseSound)
     const GROUPS = new Map();       // group => Set(sound)
@@ -172,11 +233,33 @@ const safeDB = {
     }
 };
 
+/**
+ * Package/Module: helpers
+ *
+ * Purpose: Small, pure utilities for geometry, random sampling, formatting, collision, and word lists.
+ * Public surface:
+ *   - sampleAngle(minDeg, maxDeg) → rad
+ *   - sampleRadius(rInner, rOuter) → px
+ *   - polarToWorld(origin, r, theta) → {x,y}
+ *   - clamp(v, lo, hi) → number
+ *   - aabbIntersect(ax,ay,aw,ah, bx,by,bw,bh) → boolean
+ *   - isOnScreen(scene, x, y, margin=10) → boolean
+ *   - words: { soapSplashWords(), cleanGood(), cleanBad(), pick(list) }
+ *   - mmss(ms) → "MM:SS"
+ *   - streakPopup(scene, _, x, y) → void
+ *
+ * Invariants: Functions are side-effect free except `streakPopup` (spawns a HUD transient).
+ * Dependencies: Phaser.Math for trig/Distance; CONFIG for word lists and fonts.
+ * Performance: O(1) across the board; `streakPopup` creates a short-lived Text + Tween.
+ * Error model: Defensive null checks; returns safe defaults on bad inputs.
+ * Security: No PII; reads CONFIG only.
+ *
+ * Example:
+ *   const theta = helpers.sampleAngle(12, 45);
+ *   const r     = helpers.sampleRadius(120, 240);
+ *   const p     = helpers.polarToWorld(sink, r, theta);
+ */
 
-// -----------------------------
-// helpers
-// small pure functions that do math picking words formatting time and simple checks
-// -----------------------------
 const helpers = {
     // pick a random angle between two degrees inclusive
     // returned angle is in radians because trig functions use radians
@@ -260,6 +343,24 @@ const helpers = {
     },
 };
 
+/**
+ * Package/Module: telemetry
+ *
+ * Purpose: Thin, non-breaking wrapper around DB typing events (per-word complete, mistake).
+ * Public surface:
+ *   - onWordComplete(scene, g, clean:boolean)
+ *   - onMistake(scene)
+ *
+ * Invariants: Never throws into gameplay; uses `safeDB.logTyping(...)` which catches internally.
+ * Dependencies: DB.logTyping (optional); scene.roundId presence gates logging.
+ * Performance: O(1); tiny payloads.
+ * Error model: Swallows errors; gameplay never depends on telemetry.
+ * Security/Privacy: Avoids PII; logs streak/score/word only. Caller must ensure content is child-safe.
+ *
+ * Example:
+ *   telemetry.onWordComplete(this, germ, true);
+ */
+
 const telemetry = {
     onWordComplete(scene, g, clean) {
         if (!scene.roundId) return;
@@ -282,10 +383,34 @@ const telemetry = {
 };
 
 
-// -----------------------------
-// ui
-// immediate mode ui helpers built on phaser primitives
-// -----------------------------
+/**
+ * Package/Module: ui
+ *
+ * Purpose: Immediate-mode UI helpers made from Phaser primitives (logo, buttons, dialogs, topbar, pause).
+ * Public surface:
+ *   - placeLogo(scene, opts) → Phaser.Image
+ *   - button(scene, x, y, label, onClick) → { btn, txt }
+ *   - nameDialog(scene, onOk(name)) → void (modal)
+ *   - topbar(scene, {onHome, onPause, onSettings, showMute}) → { home, pause, settings, destroy }
+ *   - pauseOverlay(scene, {onResume, onHome}) → { destroy }
+ *   - togglePause.call(scene) → void
+ *
+ * Invariants:
+ *   - All UI elements self-clean on Scene SHUTDOWN (where applicable).
+ *   - Elements are fixed to camera; resize listeners keep layout in corners.
+ *
+ * Dependencies: Phaser.Display, Tweens, DOM Elements (`nameDialog`), CONFIG.ui for styling.
+ * Performance: Lightweight; text/images + a handful of tweens at most.
+ * Concurrency/Reentrancy: Run on Phaser main thread. `togglePause` assumes it’s `this`-bound to a Scene.
+ * Error model: Missing textures lead to graceful no-ops or rectangle fallbacks.
+ * Security/Privacy: `nameDialog` stores a display name in `scene.registry`; do not store PII.
+ *
+ * Example:
+ *   ui.placeLogo(this, { maxWidth: 140 });
+ *   const { btn } = ui.button(this, cx, cy, "Start", () => this.scene.start("PlaygroundScene"));
+ *   const bar = ui.topbar(this, { onHome: () => this.scene.start("MenuScene"), showMute: true });
+ */
+
 const ui = {
 
     // bottom-right sticky logo (fixed to screen, auto-resizes, easy cleanup)
@@ -654,14 +779,22 @@ const ui = {
     }
 };
 
-// -----------------------------
-// streak / score engine
-// rules:
-// - keep a "clean run" count of consecutive clean completions (no mistakes in that word)
-// - a streak starts ONLY after two clean words in a row:
-// - totalScore = baseScore * (streak * 0.5)
-// - any mistake before a word completes resets cleanRun and streak to 0
-// -----------------------------
+/**
+ * Class/Type: streakScore (module)
+ *
+ * Responsibility: Maintain base points and streak-based multiplier, producing a total game score.
+ * Collaborators: `typing` and SoapSplash scenes call `addBase`, `onWord`, `onMistake`.
+ * Invariants:
+ *   - totalScore = floor(baseScore * (1 + 0.5 * streak)).
+ *   - `bestStreak` tracks the max observed `streak`.
+ *
+ * Lifecycle: Call `streakScore.create()` per round; no global state.
+ * Thread-safety: Phaser main thread; purely synchronous; mutation confined to the returned object.
+ * Complexity: O(1) per update.
+ * Example:
+ *   const s = streakScore.create(); s.addBase(10); s.onWord(true); const total = s.totalScore;
+ */
+
 const streakScore = (() => {
     function create() {
         return {
@@ -710,12 +843,6 @@ const streakScore = (() => {
     }
     return { create };
 })();
-
-// -----------------------------
-// soap splash engine
-// includes spawn movement rules timer and typing logic
-// implemented as an iife that returns namespaces
-// -----------------------------
 const soapsplash = (() => {
     // create a germ with sprite labels caret and optional debug circle
     function addGerm(scene, pos, word) {
@@ -1610,10 +1737,7 @@ const soapsplash = (() => {
     return { spawn, movement, rules, timer, typing };
 })();
 
-// -----------------------------
-// clean catch engine
-// returns an object with destroy and setPaused so the scene can control it
-// -----------------------------
+
 const cleancatcher = {
     create(scene, canvas, difficulty = "easy") {
         //difficulty levels clarification

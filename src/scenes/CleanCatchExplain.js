@@ -1,80 +1,143 @@
-// scene overview
-// CleanCatchExplain is a tutorial scene that introduces rules and controls then hands off to CleanCatch
+/*
+ * Purpose:
+ *  Tutorial scene for the Clean Catch aka “Soap Splasher” mini-game.
+ *  It safely loads a small art+audio set, pauses any global menu/hub BGM,
+ *  defers starting its own BGM until the first user gesture (browser policy),
+ *  presents a short, personalized copy deck with a Next arrow,
+ *  then fades out and `scene.start("CleanCatch", { difficulty })`.
+ *
+ * Public surface:
+ *  export default class CleanCatchExplain extends Phaser.Scene  (key: "CleanCatchExplain")
+ *
+ * Invariants:
+ *  - Failed BGM load only warns; scene continues.  // see loaderror wiring
+ *  - If menu/hub BGM is playing, it is paused when this tutorial begins,
+ *    and the tutorial's own looping BGM becomes the active handle.
+ *  - BGM playback begins only after first input (pointer/key) due to autoplay rules.
+ *
+ * Dependencies:
+ *  - Phaser 3 (scene lifecycle, display, tweens, input)
+ *  - CONFIG (asset & audio paths)
+ *  - Global BGM handles (window.__GLOBAL_BGM__, window.__MINI_BGM__) shared across scenes
+ *
+ * Performance:
+ *  - Minimal loads (panel, Kiko poses, one background, one audio key).
+ *  - No game loop; event-driven UI and a single exit tween.
+ *
+ * Concurrency:
+ *  - Single-threaded Phaser model.
+ *  - Audio start guarded by once() listeners to prevent duplicate starts.
+ *
+ * Error model:
+ *  - Missing BGM logs a warning via the loader’s "loaderror" event; and keeps running.
+ *  - Panel has a rectangle fallback if skin texture is missing.
+ *
+ * Security/Privacy:
+ *  - Reads player name from registry for personalization.
+ *  - Does not persist additional data; no external network calls.
+ *
+ * Example:
+ *  this.scene.start("CleanCatchExplain", { difficulty: 2 });
+ *
+ * Where:
+ *  - Kept as this top-of-file header for quick onboarding.
+ */
 
-// bgm constants
-// defines BGM_KEY and BGM_PATH for scene specific looped music so this scene controls its own audio
+/* ===========================
+ * Module constants / config
+ * ===========================
+ * Notes:
+ * - BGM_KEY is a stable key across the project for this scene’s tutorial loop.
+ * - CA, assets, CC, ui are read from CONFIG to avoid hardcoding paths.
+ */
 const BGM_KEY  = "cleanCatcher_bgm";
-const BGM_PATH = "assets/sounds/cleanCatcher.mp3";
+const CA = CONFIG.audio;
+const assets = CONFIG.assets.kiko;
+const CC  = CONFIG.assets.cleanCatch;
+const ui = CONFIG.assets.ui;
 
-
-// class setup
-// declares CleanCatchExplain scene with simple flags for one time actions and an array for future unbinders
+/**
+ * Class: CleanCatchExplain
+ * Responsibility: show a short, input-gated tutorial and handoff to "CleanCatch".
+ * Collaborators: Phaser loader/display/input/tweens; CONFIG; global BGM handles.
+ * Lifecycle:
+ *   - preload(): load lightweight art+audio, add warn-only loaderror
+ *   - create(data): build UI, adopt BGM ownership, transition to CleanCatch
+ * Thread-safety: Phaser single-threaded; event-driven; guarded once() audio start.
+ * Smell guard: if tutorial steps grow a lot, extract to a small "TutorialPlayer".
+ */
 export default class CleanCatchExplain extends Phaser.Scene {
     constructor() {
-        super("CleanCatchExplain");
-        this._started = false;
-        this._gateFired = false;
-        this._unbinders = [];
+        super("CleanCatchExplain"); // scene key registration
     }
 
-    // preload assets
-    // pulls paths from CONFIG and loads KikoBase KikoCheer DialogPanel UI_Next and a fallback background
-    // loads bgm if missing and warns once on load error so the scene still runs without audio
+    /**
+     * preload()
+     * What: Loads minimal art + BGM and installs a one-time loaderror guard so audio failure
+     *       never blocks the tutorial.
+     * Side effects: Populates texture/audio caches; registers loader error handler.
+     * Errors: Warn-only on BGM load failure; scene remains usable without audio.
+     * Determinism: Deterministic loads; cached assets reused across runs.
+     */
     preload() {
-        const explain = CONFIG.assets?.kiko || {};
-        const A  = CONFIG.assets?.cleanCatch || {};
-        const ui = CONFIG.assets?.ui || {};
+        // ---- artwork (safe: textures cache de-dupes duplicates) ----
+        this.load.image("KikoBase", assets.base);
+        this.load.image("KikoCheer", assets.cheer);
+        this.load.image("DialogPanel", ui.dialogPanel);
+        this.load.image("UI_Next", ui.next);
+        this.load.image("backgroundFullLives", CC.backgroundFullLives);
 
-        if (!this.textures.exists("KikoBase") && explain.base) this.load.image("KikoBase", explain.base);
-        if (!this.textures.exists("KikoCheer") && explain.cheer) this.load.image("KikoCheer", explain.cheer);
-        if (!this.textures.exists("DialogPanel") && ui.dialogPanel) this.load.image("DialogPanel", ui.dialogPanel);
-        if (!this.textures.exists("UI_Next") && ui.next) this.load.image("UI_Next", ui.next);
+        // ---- audio (local tutorial loop) ----
+        this.load.audio(BGM_KEY, CA.cleanCatch);
 
-        if (!this.textures.exists("backgroundFullLives"))
-            this.load.image("backgroundFullLives", A.background || "assets/images/CleanCatcher/1.jpg");
-
-        if (!this.cache.audio.exists(BGM_KEY)) this.load.audio(BGM_KEY, [BGM_PATH]);
-
-        // attach a one time loaderror so failed bgm does not crash the scene
+        // Warn-only; keep running even if audio fails
         this.load.on("loaderror", (f) => { if (f?.key === BGM_KEY) console.warn("[CleanCatchExplain] BGM load failed:", f.src || f.url); });
     }
 
-    // create resume and audio wiring
-    // reads width height username and difficulty then pauses window __GLOBAL_BGM__ if any
-    // defines playBgmNow to unlock web audio resume context add or get BGM_KEY loop and play it and store handle in window __MINI_BGM__
+    /**
+     * create(data)
+     * What (one line): Builds the tutorial UI, manages audio handoff, and transitions into the game.
+     * Params:
+     *   - data.difficulty (number|string): requested difficulty; falls back to registry.
+     * Returns: void
+     * Side effects: Pauses global BGM, starts local BGM on first gesture, displays copy, transitions.
+     * Preconditions: CONFIG assets/audio available; Phaser sound system present.
+     * Postconditions: On completion, scene key becomes "CleanCatch".
+     * Performance: Light; single fade tween on exit; no hot loops.
+     * Determinism & idempotency: Input-gated BGM via once(); Enter key mirrors Next.
+     */
     create(data) {
         const { width: W, height: H } = this.scale;
         const username   = this.registry.get("playerName") || "friend";
         const difficulty = data?.difficulty || this.registry.get("difficulty") || "easy";
 
-
+        // Global BGM → pause if active; this scene owns its own loop.
         try {
             const g = window.__GLOBAL_BGM__;
-            if (g?.isPlaying) g.pause();
+            if (g?.isPlaying) g.pause(); // BGM from main menu stops playing when this tutorial scene strats
         } catch {}
 
+        // Local helper to safely start this scene’s BGM exactly once.
+        // Error model: silent no-op on audio subsystem issues; music is optional.
         const playBgmNow = () => {
-            try { if (this.sound.locked) this.sound.unlock(); } catch {}
-            try { this.sound.context?.resume?.(); } catch {}
-            let inst = this.sound.get(BGM_KEY);
-            if (!inst) inst = this.sound.add(BGM_KEY, { loop: true, volume: 0.75 });
+            /*This codeblock guaranteesm clean cathcer tutorial music starst exactly once,playes on loop and replaces any previous global music*/
+            try { if (this.sound.locked) this.sound.unlock(); } catch {} //in some browsers phaser's audio is initially locked.. this unlocks it
+            let inst = this.sound.get(BGM_KEY); // gets the existing sound interface
+            if (!inst) inst = this.sound.add(BGM_KEY, { loop: true, volume: CA.cleanCatchBGAudio }); // to be safe, check if not addes and re adds BGM key
             if (!inst.isPlaying) inst.play();
             window.__MINI_BGM__ = inst;
             window.__GLOBAL_BGM__ = undefined;
         };
 
-        // bind one time user gesture to satisfy browser audio policies for autoplay
+        // Concurrency/Autoplay policy: first gesture wins; once() avoids duplicate starts.
         this.input.once("pointerdown", playBgmNow);
         this.input.keyboard?.once("keydown", playBgmNow);
 
-        // background and dim
-        // add full bleed background and a dark overlay to focus attention under the dialog ui
+        // Stage background + vignette to focus attention on dialog panel
         this.add.image(W / 2, H / 2, "backgroundFullLives").setDisplaySize(W, H).setDepth(0);
         this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.45).setDepth(1);
 
-
-        // dialog panel
-        // use DialogPanel texture when available else draw a styled rectangle and compute panelW and panelH for layout
+        // Dialog panel with skin (fallback rectangle preserves layout if texture missing)
         let panel;
         const maxPanelW = Math.min(W * 1.5, 1500);
         const maxPanelH = Math.min(H * 2, 520);
@@ -95,8 +158,7 @@ export default class CleanCatchExplain extends Phaser.Scene {
         const panelW = panel.displayWidth;
         const panelH = panel.displayHeight;
 
-        // kiko sprite
-        // position the guide avatar near panel corner and scale to fit panel height
+        // Kiko avatar anchored near panel corner; scaled to fit panel height budget
         this.kiko = this.add.sprite(
             panel.x - panelW * 0.70,
             panel.y + panelH * 0.47,
@@ -108,9 +170,7 @@ export default class CleanCatchExplain extends Phaser.Scene {
         const kikoMaxH = panelH * 0.95;
         this.kiko.setScale(kikoMaxH / this.kiko.height);
 
-
-        // tutorial copy
-        // ordered lines that explain clean catch goals controls time limit and lives personalized with username
+        // Tutorial copy deck (ordered lines; toggles Kiko pose every other step)
         const lines = [
             `${username}! Are you ready for the Soap Splasher game? Let’s play!`,
             `Here’s how it works!`,
@@ -123,10 +183,9 @@ export default class CleanCatchExplain extends Phaser.Scene {
 
         let i = 0;
 
-        // text style and first line
-        // montserrat font and word wrap sized from panel height then create centered text for lines[i]
+        // Text: sized from panel height, centered, wrapped to panel width
         const style = {
-            fontFamily: "Montserrat",
+            fontFamily: CONFIG.ui.fontFamily,
             fontSize: Math.max(30, panelH * 0.10) + "px",
             color: "#000000",
             wordWrap: { width: panelW * 0.85 },
@@ -140,8 +199,7 @@ export default class CleanCatchExplain extends Phaser.Scene {
             style
         ).setOrigin(0.5).setDepth(4);
 
-        // next button
-        // interactive UI_Next arrow positioned at panel edge scaled for consistent size and triggers playBgmNow
+        // Next button (green arrow), consistent on-screen size via scale
         const nx = panel.x + panelW * 0.60;
         const ny = panel.y + panelH * 0.02;
         const nextBtn = this.add.image(nx, ny, "UI_Next")
@@ -152,10 +210,12 @@ export default class CleanCatchExplain extends Phaser.Scene {
         const btnScale = Math.min(120, H * 0.12) / nextBtn.height;
         nextBtn.setScale(btnScale);
 
-        // advance logic
-        // step through lines swap KikoBase to KikoCheer on even steps then fade out and start CleanCatch with difficulty
+        // Advance logic:
+        // - step text through lines[]
+        // - swap Kiko pose on even steps
+        // - on last step, fade out all UI and start CleanCatch
         nextBtn.on("pointerdown", () => {
-            playBgmNow();
+            playBgmNow(); // also ensures audio if user skipped earlier
             i++;
             if (i < lines.length) {
                 text.setText(lines[i]);
@@ -175,10 +235,8 @@ export default class CleanCatchExplain extends Phaser.Scene {
             }
         });
 
-        // keyboard shortcut
-        // pressing enter fires the same flow as clicking next for accessible progression
+        // Accessibility & keyboard parity: Enter = Next
         this.input.keyboard.on("keydown-ENTER", () => nextBtn.emit("pointerdown"));
     }
 
 }
-

@@ -1,3 +1,79 @@
+/**
+ * MODULE.md — MenuScene
+ *
+ * Document
+ * Purpose in the system (one paragraph).
+ * - MenuScene is the entry point and main launcher UI for Kiko’s Day. It boots/guards WebAudio,
+ *   renders the animated landing background, captures the player name and difficulty, opens the
+ *   mini-game hub (PlaygroundScene), and creates a DB session when play begins. It also manages
+ *   one-shot gesture gates required by browsers before audio can play.
+ *
+ * Public surface: exported symbols (functions/classes/types).
+ * - default export class MenuScene extends Phaser.Scene
+ *   Public-ish methods (used by other scenes/helpers): goToPlaygroundSmooth(), openNameDialog(),
+ *   openDifficultyDialog(), createStartButton(), layoutUI(), calcButtonScale(), ensureAudioStartOnce()
+ *
+ * Invariants this module maintains.
+ * - At most one audio “gesture gate” (_uiBlocker) is armed at a time; it’s always cleared on leave.
+ * - Scene transition is single-shot: _leaving prevents double navigation.
+ * - Global BGM ownership: when menu starts playing the “global” track, any “game” group tracks are paused.
+ * - Registry keys (“playerName”, “difficulty”, “mute”) reflect the latest UI state.
+ *
+ * Dependencies (internal + external) and why they’re chosen.
+ * - Phaser 3 Scene lifecycle: rendering, input, tweens, DOM elements.
+ * - systems.js (AudioManager, systems.ui helpers) to centralize audio fade/ducking and shared UI widgets.
+ * - db.js (DB) to start sessions before launching gameplay so rounds can be recorded consistently.
+ * - CONFIG for assets/layout so art and positions can be swapped without code edits.
+ *
+ * Performance notes (big-O, hot paths, memory gotchas).
+ * - All UI builds are O(1) relative to screen size; the heaviest element is a single looping video.
+ * - Video is resized on “loadeddata” and on resize events; work is trivial vs. frame budget.
+ * - No per-frame polling; only a small fade/tween on show/hide. Avoid leaking _uiBlocker/video by always
+ *   destroying on transition (done in goToPlaygroundSmooth()).
+ *
+ * Concurrency model (threads, async, locks, queues) and reentrancy caveats.
+ * - Phaser is single-threaded; “concurrency” is via event callbacks and timers/tweens.
+ * - Reentrancy is guarded with _gateArmed (audio unlock) and _leaving (navigation). Input handlers use
+ *   once() when appropriate to avoid duplicate fires.
+ *
+ * Error model (exceptions/errors thrown; retryability).
+ * - All critical platform calls (AudioContext resume/unlock, scene.stop, etc.) are wrapped in try/catch.
+ *   Failures log a console.warn and continue with sensible fallbacks (e.g., muted audio or static bg).
+ * - Missing assets fall back to vector/solid-color UI.
+ *
+ * Security/Privacy concerns (input trust level, data classification).
+ * - Player name is free-text, stored in Phaser registry and used to seed DB session; treat as low-risk PII.
+ * - Session id is kept on window.__SESSION_ID__ for handoff; no sensitive tokens are persisted.
+ * - No network calls from this module; DB wrapper is expected to handle privacy/storage policy.
+ *
+ * Example usage snippet covering 80% use case.
+ *   // In main boot flow:
+ *   game.scene.add("MenuScene", MenuScene, true); // autostart after PreloadScene
+ *   // From any other scene to return to menu:
+ *   this.scene.start("MenuScene", { resetSession: true });
+ *
+ * Where
+ * - This documentation sits as a top-of-file header. If it grows, mirror it to MODULE.md next to the file.
+ */
+
+/* ------------------------------
+ * Class / Type — MenuScene
+ * Responsibility:
+ *   Orchestrate the landing UI, capture player metadata, unlock WebAudio, and route to the hub.
+ * Collaborators & invariants:
+ *   Uses systems.ui (logo), AudioManager (bgm), DB (session), CONFIG (assets/layout), Phaser video/audio.
+ * Construction & lifecycle:
+ *   new MenuScene() → preload() → create() → (user presses Start) → goToPlaygroundSmooth() → PlaygroundScene.
+ * Thread-safety / mutability:
+ *   All mutable state (_leaving, _gateArmed, _uiBlocker) is scene-scoped; not shared across threads.
+ * Complexity hotspots:
+ *   None significant; input gating and video resize are the trickiest event flows.
+ * Serialization/format:
+ *   N/A.
+ * Smell to call out:
+ *   If this class accumulates additional dialogs/menus, split into UI helpers or a MenuUI sub-module.
+ * ------------------------------ */
+
 // this block imports shared helpers used by the menu and game flow and audio systems and the client side db layer
 import systems from "../systems.js";
 import { DB } from "../db.js";
@@ -22,9 +98,34 @@ export default class MenuScene extends Phaser.Scene {
         this._audioEnsured = false;
         this._gateArmed = false;
         this._uiBlocker = null;
-
     }
 
+    /**
+     * Function / Method — preload
+     * What it does (one line):
+     *   Load minimal art/audio for the menu (bg image, looping video, dialog chrome, bgm).
+     *
+     * Parameters:
+     *   (none) — uses CONFIG for asset paths.
+     *
+     * Return value:
+     *   void.
+     *
+     * Side effects:
+     *   Populates Phaser caches (image, video, audio).
+     *
+     * Preconditions / postconditions:
+     *   CONFIG.assets.* paths exist or safe fallbacks are used. After preload, create() can reference keys.
+     *
+     * Errors/exceptions:
+     *   Asset load failures are handled by Phaser; video/audio missing fall back to static image / muted state.
+     *
+     * Performance characteristics:
+     *   O(1) loads; no heavy decoding in JS land.
+     *
+     * Determinism & idempotency:
+     *   Deterministic given CONFIG; safe to reenter on hot-reload, as caches de-duplicate by key.
+     */
     // preload loads the light assets needed by the menu including bg image looping video dialog art and bgm
     preload() {
         const BG = (typeof CONFIG !== "undefined" && CONFIG.assets && CONFIG.assets.backgrounds) || {};
@@ -46,6 +147,33 @@ export default class MenuScene extends Phaser.Scene {
         this.load.audio("kikos_day", "assets/sounds/kikos_day.mp3");
     }
 
+    /**
+     * Function / Method — create
+     * What it does (one line):
+     *   Arm WebAudio unlock, build background/video, place Start, then run name→difficulty flow and enter the hub.
+     *
+     * Parameters:
+     *   data?: {
+     *     resetSession?: boolean — if true, clears window.__SESSION_ID__ before starting.
+     *     quickRestart?: boolean — skip dialogs and go straight to PlaygroundScene.
+     *     restartName?: string   — name to use on quick restart (default "Kiko").
+     *   }
+     *
+     * Return value:
+     *   void.
+     *
+     * Side effects:
+     *   Starts/controls global BGM; attaches one-shot input gates; may create a DB session; writes to registry.
+     *
+     * Preconditions / postconditions:
+     *   Assumes CONFIG and systems are initialized. After success, either stays in menu or transitions away.
+     *
+     * Errors/exceptions:
+     *   Audio unlock/resume is best-effort; failures log warnings but do not block navigation.
+     *
+     * Determinism & idempotency:
+     *   Deterministic given user input; guarded by _gateArmed and event .once() to avoid double fires.
+     */
     // create wires audio bootstrapping global bgm and builds the background video and start button then opens name and difficulty flow or quick restart
     create(data) {
         if (data?.resetSession) {
@@ -230,6 +358,31 @@ export default class MenuScene extends Phaser.Scene {
         this.cameras.main.fadeIn(800, 0, 0, 0);
     }
 
+    /**
+     * Function / Method — goToPlaygroundSmooth
+     * What it does (one line):
+     *   Performs a guarded fade-out and switches to PlaygroundScene, ensuring input gates are cleared.
+     *
+     * Parameters:
+     *   playerName: string — name to pass forward.
+     *   difficulty: number — 1..3 difficulty value.
+     *   dur?: number — fade-out duration in ms (default 600).
+     *
+     * Return value:
+     *   void.
+     *
+     * Side effects:
+     *   Disables input, stops video, clears _uiBlocker, flips _leaving guard, performs scene transition.
+     *
+     * Preconditions / postconditions:
+     *   Should only be called once per button press; after completion, MenuScene is stopped.
+     *
+     * Errors/exceptions:
+     *   None thrown; all internals are guarded.
+     *
+     * Determinism & idempotency:
+     *   Idempotent per call thanks to _leaving guard.
+     */
     // this helper performs a guarded fade out transition to PlaygroundScene and prevents double navigation and also removes the audio gate blocker
     goToPlaygroundSmooth(playerName, difficulty, dur = 600) {
 
@@ -252,6 +405,30 @@ export default class MenuScene extends Phaser.Scene {
         this.cameras.main.fadeOut(dur, 0, 0, 0);
     }
 
+    /**
+     * Function / Method — openNameDialog
+     * What it does (one line):
+     *   Render a modal dialog to capture player name and invoke a continuation on submit.
+     *
+     * Parameters:
+     *   onOk: (name: string) => void — callback invoked with validated name.
+     *
+     * Return value:
+     *   void.
+     *
+     * Side effects:
+     *   Creates Phaser display objects and a DOM form; installs temporary input listeners.
+     *
+     * Preconditions / postconditions:
+     *   Requires “dialog_skin”, “kiko_dialog” textures present (fallbacks are applied if missing elsewhere).
+     *   Post: cleans up all objects/listeners before invoking onOk.
+     *
+     * Errors/exceptions:
+     *   None thrown; minor layout operations wrapped defensively.
+     *
+     * Determinism & idempotency:
+     *   Deterministic UI; can be reopened after close.
+     */
     // openNameDialog draws a modal dialog with a dom input captures a validated name and calls back then disposes all listeners and nodes
     openNameDialog(onOk) {
         const { width, height } = this.scale;
@@ -420,6 +597,29 @@ export default class MenuScene extends Phaser.Scene {
         this.ensureAudioStartOnce();
     }
 
+    /**
+     * Function / Method — openDifficultyDialog
+     * What it does (one line):
+     *   Show Easy/Normal/Hard choices and resolve to a numeric 1..3 difficulty.
+     *
+     * Parameters:
+     *   onPick: (level: number) => void — callback with 1|2|3.
+     *
+     * Return value:
+     *   void.
+     *
+     * Side effects:
+     *   Creates a modal container and interactive buttons; writes “difficulty” to registry on pick.
+     *
+     * Preconditions / postconditions:
+     *   Requires “dialog_skin” texture; cleans up all listeners and tweens on close.
+     *
+     * Errors/exceptions:
+     *   None thrown; safe guards around tweens and destruction.
+     *
+     * Determinism & idempotency:
+     *   Deterministic UI; idempotent cleanup.
+     */
     // openDifficultyDialog renders three large buttons easy normal hard and returns a numeric level to the caller while cleaning up listeners and tweens on close
     openDifficultyDialog(onPick) {
         const { width, height } = this.scale;
@@ -563,6 +763,26 @@ export default class MenuScene extends Phaser.Scene {
         this.events.once("shutdown", destroyDialog);
     }
 
+    /**
+     * Function / Method — createStartButton
+     * What it does (one line):
+     *   Build the “Start” CTA (sprite or drawn fallback), wire hover/click tweens, and remember refs for layout.
+     *
+     * Parameters:
+     *   onStart: () => void — invoked when the button is clicked/activated.
+     *
+     * Return value:
+     *   void.
+     *
+     * Side effects:
+     *   Creates display objects; writes this.startButton/shadow/label; installs pointer handlers.
+     *
+     * Preconditions / postconditions:
+     *   Requires either “ui_start” texture or generates a vector fallback.
+     *
+     * Performance characteristics:
+     *   O(1) draw; textures are cached.
+     */
     // createStartButton draws either a sprite based start button or a vector fallback wires hover and click tweens and stores references for responsive layout
     createStartButton(onStart) {
         const { width, height } = this.scale;
@@ -679,6 +899,23 @@ export default class MenuScene extends Phaser.Scene {
         this.layoutUI();
     }
 
+    /**
+     * Function / Method — layoutUI
+     * What it does (one line):
+     *   Reposition/scale the start button cluster to remain responsive to viewport changes and CONFIG.
+     *
+     * Parameters:
+     *   (none) — uses current scale and CONFIG.menu.buttonsX/Y.
+     *
+     * Return value:
+     *   void.
+     *
+     * Side effects:
+     *   Mutates positions/scales of existing button/shadow/label.
+     *
+     * Determinism & idempotency:
+     *   Pure relative to current scale/CONFIG and current textures.
+     */
     // layoutUI repositions and rescales the start button and its shadow and label when the screen size or config positioning changes
     layoutUI() {
         const { width, height } = this.scale;
@@ -705,6 +942,21 @@ export default class MenuScene extends Phaser.Scene {
         }
     }
 
+    /**
+     * Function / Method — calcButtonScale
+     * What it does (one line):
+     *   Compute a sprite scale so the Start button fits a target fraction of the viewport.
+     *
+     * Parameters:
+     *   nativeW: number — source texture width in px.
+     *   nativeH: number — source texture height in px.
+     *
+     * Return value:
+     *   number — uniform scale factor.
+     *
+     * Determinism & idempotency:
+     *   Pure calculation from current viewport and provided native size.
+     */
     // calcButtonScale computes a scale factor for the start button sprite so it fits a target fraction of the viewport
     calcButtonScale(nativeW, nativeH) {
         const { width, height } = this.scale;
@@ -713,6 +965,26 @@ export default class MenuScene extends Phaser.Scene {
         return Math.min(sW, sH);
     }
 
+    /**
+     * Function / Method — ensureAudioStartOnce
+     * What it does (one line):
+     *   Arm one-shot global gesture listeners that emit “menu:startPressed” to unlock WebAudio contexts.
+     *
+     * Parameters:
+     *   (none)
+     *
+     * Return value:
+     *   void.
+     *
+     * Side effects:
+     *   Adds window/document event listeners (once) to trigger audio resume/unlock via create()’s gate.
+     *
+     * Preconditions / postconditions:
+     *   Safe to call multiple times; guarded by _audioEnsured flag.
+     *
+     * Determinism & idempotency:
+     *   Idempotent; installs listeners exactly once per scene lifetime.
+     */
     // ensureAudioStartOnce adds one shot global gesture listeners that emit menu start to unlock web audio on platforms with user gesture requirements
     ensureAudioStartOnce() {
         if (this._audioEnsured) return;

@@ -1,79 +1,156 @@
-// this file is the main hub scene that greets the player and routes them to difficulty and game mode
-// it relies on systems ui helpers and db session tracking and phaser scene lifecycle
-// scope is limited to showing the intro messages building a difficulty picker and then opening game scenes
+/**
+ * MODULE: GameScene (Phaser.Scene)
+ * -----------------------------------------------------------------------------
+ * Purpose
+ *   Entry hub for “Kiko’s Day” after boot/preload. Welcomes the player,
+ *   collects/stores player name, lets them pick difficulty, and routes to either
+ *   the hub (Playground) or a chosen mini-game. Owns no gameplay itself; it
+ *   orchestrates UI, session creation, and scene transitions.
+ *
+ * Public surface (exports)
+ *   - default export class GameScene extends Phaser.Scene
+ *
+ * Invariants
+ *   - Player name is persisted in Phaser registry key "playerName" once known.
+ *   - A DB session exists in window.__SESSION_ID__ before launching a game scene.
+ *   - Registry "difficulty" ∈ {1,2,3} (mapped from {easy,normal,hard} when used).
+ *   - Sound mute state mirrors registry key "mute".
+ *
+ * Dependencies
+ *   - ../systems.js  (as `systems`)
+ *       UI helpers (logo/topbar/toasts), dev keybinds, general utilities.
+ *   - ../db.js       (as `DB`)
+ *       Session lifecycle (beginSession) and later round scaffolding by other scenes.
+ *   - Phaser 3       (framework)
+ *       Scene lifecycle, input, tweens, DOM/text rendering.
+ *
+ */
 
 import systems from "../systems.js";
 import { DB } from "../db.js";
 
-// imports
-// brings in shared helpers via systems and a simple persistence api via db
-// nothing is executed at import time only symbols are referenced later in create
-
+/**
+ * Class: GameScene
+ * Responsibility
+ *   Present the landing conversation, handle difficulty selection, and navigate
+ *   to the hub or chosen mini-game while ensuring a DB session exists.
+ *
+ * Collaborators
+ *   - systems.ui (logo, topbar, toasts), DB (session), downstream scenes:
+ *     MenuScene, PlaygroundScene, SoapSplash, SoapSplashExplain, LeaderboardScene,
+ *     EndingScene.
+ *
+ * Construction & lifecycle
+ *   - constructor(): set small state flags.
+ *   - create(data): wire greeting → difficulty → mode panel, then route.
+ *   - Scene transitions dispose timers/listeners via explicit cleanup.
+ *
+ * Thread-safety / mutability
+ *   - Single-threaded Phaser runtime. Internal flags (`_typing`, `_navigating`)
+ *     protect against double-invocation.
+ *
+ * Complexity hotspots
+ *   - None. Typewriter effect uses a short repeating timer and string concat.
+ *
+ * Serialization / formats
+ *   - N/A. Reads/writes registry keys ("playerName", "difficulty", "mute").
+ *
+ * Example (minimal)
+ *   // Add to Phaser config as a scene and start:
+ *   this.scene.add("GameScene", GameScene, true);
+ */
 export default class GameScene extends Phaser.Scene {
     constructor() {
         super("GameScene");
+        /** @private {null|{timer:Phaser.Time.TimerEvent|null,msgIndex:number,isRunning:boolean,currentFull:string}} */
         this._typing = null;
+        /** @private {boolean} prevents double navigation while tweening/transitioning */
         this._navigating = false;
     }
 
-    // class header and constructor
-    // registers the scene key gamescene and sets up two flags
-    // _typing holds state for the typewriter effect and _navigating guards against double transitions
-
+    /**
+     * Method: create
+     * What it does (one line):
+     *   Builds greeting + choice UI, ensures a DB session, manages mute state,
+     *   and routes to hub or mini-game based on user actions/params.
+     *
+     * Parameters
+     *   @param {{playerName?:string, skipDifficulty?:boolean, route?:'hub'|'menu'|string}} [data]
+     *     - playerName: optional initial name to stash into registry.
+     *     - skipDifficulty: when true, jump straight to hub/mode menu.
+     *     - route: when 'hub', send user to the hub/Playground flow.
+     *
+     * Returns
+     *   void (Phaser scene side-effects and scene switches).
+     *
+     * Side effects
+     *   - Writes to this.registry ("playerName","difficulty","mute").
+     *   - May set window.__SESSION_ID__ (DB session).
+     *   - Installs timers, input handlers; starts other scenes.
+     *
+     * Preconditions / postconditions
+     *   - Pre: PreloadScene has loaded assets; CONFIG is available.
+     *   - Post: If user proceeds, exactly one next scene is started and local UI
+     *     timers/handlers are cleaned up or become unreachable.
+     *
+     * Errors/exceptions
+     *   - Best-effort guards; recover by no-op if optional APIs absent.
+     *
+     * Determinism & idempotency
+     *   - Deterministic given same inputs/user interactions. Not idempotent
+     *     (creates UI/timers each call).
+     */
     create(data) {
-        // create start
-        // accepts optional data such as playername skipdifficulty and route
-        // writes playername into the phaser registry for cross scene access and draws the sticky logo
+        // Persist incoming name if provided.
         if (data?.playerName) this.registry.set("playerName", data.playerName);
 
         const playerName = this.registry.get("playerName") || "Player";
 
+        // Brand watermark (non-blocking). Pure side-effect.
         systems.ui.placeLogo(this);
 
-        // skipdifficulty and hub route branch
-        // if skipdifficulty is true or route equals hub then ensure a session id exists in db
-        // prefer your own hub functions if present showhubmenu or showmodepanel otherwise fall back to playgroundscene
-        // returns early to avoid building the greeting ui when jumping straight to hub
+        // --- Early fast-path: hub / dev route --------------------------------
+        /** When true, skip difficulty, ensure session, and go straight to hub/mode. */
         const skipDifficulty = !!data?.skipDifficulty;
         if (skipDifficulty || data?.route === "hub") {
+            // Ensure session invariant before leaving.
             if (!window.__SESSION_ID__) {
                 window.__SESSION_ID__ = DB.beginSession(playerName);
             }
             const difficulty = this.registry.get("difficulty") || 2;
 
+            // Allow subclasses/variants to override hub or mode panel.
             if (typeof this.showHubMenu === "function") {
                 this.showHubMenu();
                 return;
             }
-
             if (typeof this.showModePanel === "function") {
                 this.showModePanel(difficulty);
                 return;
             }
 
+            // Default: go to hub scene.
             this.scene.start("PlaygroundScene", { playerName, difficulty });
             return;
         }
 
-        // mute wiring
-        // keeps audio mute state in sync across phaser sound registry and any external htmlaudio element soapsplashmusic
-        // reacts to changedata mute so the toggle in other scenes updates this scene immediately
+        // --- Audio mute handshake (mirrors registry<->Phaser.Sound) -----------
         const initialMute = !!this.registry.get("mute");
         if (this.sound) this.sound.mute = initialMute;
+        // NOTE: "soapSplashMusic" is referenced defensively for legacy code; safe if absent.
         try { soapSplashMusic.muted = initialMute; } catch (_) {}
         this.registry.events?.on("changedata-mute", (_key, _prev, v) => {
             if (this.sound) this.sound.mute = !!v;
             try { soapSplashMusic.muted = !!v; } catch (_) {}
         });
-        const { width, height } = this.scale;
 
-        // session bootstrap and kiko sprite
-        // ensures a db session exists then adds the kiko_base image pinned to bottom and applies a gentle idle tween
-        // tween uses sine ease and infinite yoyo to keep kiko lively while text animates
+        // --- Session guard (idempotent) ---------------------------------------
+        const { width, height } = this.scale;
         if (!window.__SESSION_ID__) {
             window.__SESSION_ID__ = DB.beginSession(playerName);
         }
 
+        // --- Greeting character + subtle idle tween ---------------------------
         const kiko = this.add
             .image(width * 0.32, height * 0.8, "kiko_base")
             .setDisplaySize(600, 600)
@@ -88,9 +165,7 @@ export default class GameScene extends Phaser.Scene {
             ease: "Sine.easeInOut",
         });
 
-        // speech bubble layout
-        // computes bubble center and size then draws a rounded white rectangle and a text object for the greeting
-        // text uses config ui font family and wraps within the bubble width
+        // --- Dialog bubble -----------------------------------------------------
         const bubbleX = width * 0.62;
         const bubbleY = height * 0.45;
         const bubbleW = 720;
@@ -112,9 +187,7 @@ export default class GameScene extends Phaser.Scene {
             .setOrigin(0.5)
             .setDepth(6);
 
-        // greeting messages and timing constants
-        // messages is the rotating script for the typewriter experience personalizing with playername
-        // type_base_ms is the per character delay and punct_pause_ms adds a small pause near punctuation for readability
+        // Conversation script (small, linear).
         const messages = [
             `Hi, ${playerName}!`,
             `Welcome to Kiko's Day!`,
@@ -122,23 +195,26 @@ export default class GameScene extends Phaser.Scene {
             "Select your difficulty!",
         ];
 
+        // Typewriter pacing.
         const TYPE_BASE_MS   = 9000;
         const PUNCT_PAUSE_MS = { ",": 140, ".": 280, "!": 280, "?": 280, "…": 320, ";": 160, ":": 160 };
 
-        // typing state and next label updater
-        // _typing tracks the timer index running flag and full message
-        // updatenextlabel switches the button copy between skip next and done based on typing progress
         this._typing = { timer: null, msgIndex: 0, isRunning: false, currentFull: "" };
 
+        /** Internal: reflect typing state to CTA label. */
         const updateNextLabel = () => {
             if (this._typing.isRunning) nextLabel.setText("Skip");
             else nextLabel.setText(this._typing.msgIndex >= messages.length - 1 ? "Done" : "Next ▶");
         };
 
-        // starttyping function
-        // cancels any previous timer clears the text and starts adding characters one by one
-        // places a soft blinking cursor at the end of the text and advances with punctuation aware delays
-        // when the message completes it stops the cursor tween clears the timer and updates the next button state
+        /**
+         * startTyping(msg)
+         * What: animates the typewriter effect for a line and updates the cursor.
+         * Params:
+         *   - msg {string} non-empty UI string.
+         * Returns: void. Side-effects: greetText content & timer installation.
+         * Notes: idempotently clears previous timer; deterministic given msg.
+         */
         const startTyping = (msg) => {
             if (this._typing.timer) {
                 this._typing.timer.remove(false);
@@ -149,11 +225,11 @@ export default class GameScene extends Phaser.Scene {
             this._typing.isRunning = true;
             this._typing.currentFull = msg;
 
-            let cursor = this.add.text(greetText.x + greetText.displayWidth / 2 + 6, greetText.y, "│", {
-                fontFamily: greetText.style.fontFamily,
-                fontSize: greetText.style.fontSize,
-                color: "#000000",
-            }).setOrigin(0, 0.5).setDepth(greetText.depth + 1);
+            // Inline “cursor” with subtle blink.
+            let cursor = this.add.text(
+                greetText.x + greetText.displayWidth / 2 + 6, greetText.y, "│",
+                { fontFamily: greetText.style.fontFamily, fontSize: greetText.style.fontSize, color: "#000000" }
+            ).setOrigin(0, 0.5).setDepth(greetText.depth + 1);
             const cursorTw = this.tweens.add({ targets: cursor, alpha: { from: 1, to: 0.25 }, duration: 450, yoyo: true, repeat: -1 });
 
             let i = 0;
@@ -184,9 +260,7 @@ export default class GameScene extends Phaser.Scene {
             updateNextLabel();
         };
 
-        // next button visuals
-        // draws a dark rounded rectangle and a white label stacked above it both interactive and at higher depth
-        // the label mirrors button interactions so keyboard and mouse clicks feel identical
+        // --- Next/Skip control -------------------------------------------------
         const nextBtn = this.add
             .rectangle(bubbleX + bubbleW / 2 - 110, bubbleY + bubbleH / 2 - 20, 180, 56, 0x111111, 0.85)
             .setStrokeStyle(2, 0xffffff).setOrigin(0.5)
@@ -198,14 +272,17 @@ export default class GameScene extends Phaser.Scene {
             })
             .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(7);
 
-        // onnext handler
-        // if a transition is already running it exits early
-        // if the typewriter is active it fast forwards and prints the whole message
-        // otherwise it advances to the next message or fades out the bubble and builds the difficulty panel
-        // removes bound listeners before continuing to avoid accidental double fires
+        /**
+         * onNext()
+         * What: advances typing (reveal/skip), or transitions to difficulty panel.
+         * Params: none. Returns: void.
+         * Side effects: stops timers, removes listeners, starts panel tween.
+         * Preconditions: not navigating. Post: either more text or difficulty panel shown.
+         */
         const onNext = () => {
             if (this._navigating) return;
 
+            // If line is mid-type, reveal immediately.
             if (this._typing.isRunning) {
                 if (this._typing.timer) { this._typing.timer.remove(false); this._typing.timer = null; }
                 this._typing.isRunning = false;
@@ -213,12 +290,14 @@ export default class GameScene extends Phaser.Scene {
                 return;
             }
 
+            // Move to next line or end dialog.
             if (this._typing.msgIndex < messages.length - 1) {
                 this._typing.msgIndex += 1;
                 startTyping(messages[this._typing.msgIndex]);
                 return;
             }
 
+            // Dialog finished → animate out and show difficulty.
             this._navigating = true;
             this.input.keyboard.off("keydown-SPACE", onNext);
             this.input.keyboard.off("keydown-ENTER", onNext);
@@ -245,9 +324,7 @@ export default class GameScene extends Phaser.Scene {
             });
         };
 
-        // developer hotkeys binder
-        // binds enter to advance s to launch soapsplash side by side with its explain scene and l to open leaderboard or ending
-        // cleans the temporary keys on scene shutdown to avoid leaks across reloads
+        /** Dev helpers: ENTER => next; S => SoapSplash; L => Leaderboard/Ending. */
         const bindDevKeys = () => {
             const ENTER = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
             const S     = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
@@ -275,19 +352,25 @@ export default class GameScene extends Phaser.Scene {
         };
         bindDevKeys();
 
-        // wire interactions and kick off typing
-        // connects mouse clicks and space or enter to onnext and starts the first greeting line
+        // Pointer & keyboard bindings for Next.
         nextBtn.on("pointerdown", onNext);
         nextLabel.on("pointerdown", onNext);
         this.input.keyboard.on("keydown-SPACE", onNext);
         this.input.keyboard.on("keydown-ENTER", onNext);
 
+        // Begin dialog.
         startTyping(messages[0]);
 
-        // showdifficultypanel definition
-        // creates a masked white panel that slides open above the bubble and reveals a title and three buttons
-        // easy normal and hard buttons call finalizeselection and are also mapped to keys 1 2 3 including numpad variants
-        // when a choice is made it writes difficulty into the registry gives a quick toast and collapses the panel
+        /**
+         * showDifficultyPanel(ctx)
+         * What: animates in a difficulty panel (Easy/Normal/Hard), maps to 1/2/3,
+         *       stores registry value, then calls showModePanel().
+         * Params:
+         *   - ctx {object} geometry for where to place the panel (bubbleX/Y/W/H).
+         * Return: void.
+         * Side effects: sets registry.difficulty ∈ {1,2,3}; installs temporary key
+         *               handlers 1/2/3; launches tweens.
+         */
         this.showDifficultyPanel = ({ bubbleX, bubbleY, bubbleW, bubbleH }) => {
             const panelW = bubbleW, panelFinalH = 340, panelX = bubbleX;
             const panelTopY = bubbleY - bubbleH / 2 - 50;
@@ -306,6 +389,7 @@ export default class GameScene extends Phaser.Scene {
 
             let selectedDifficulty = null;
 
+            // Factory for one button row.
             const makeBtn = (label, y, key) => {
                 const btn = this.add.rectangle(0, y, 520, 64, 0x142038, 1)
                     .setStrokeStyle(2, 0xffffff).setOrigin(0.5)
@@ -333,6 +417,7 @@ export default class GameScene extends Phaser.Scene {
 
             content.add([title]);
 
+            // Slide-open animation with alpha reveal.
             this.tweens.add({
                 targets: panelRect,
                 height: panelFinalH,
@@ -351,13 +436,16 @@ export default class GameScene extends Phaser.Scene {
                 }
             });
 
-            // finalizeselection internals
-            // guards against re entry with _navigating disables all inputs and maps key names to numeric levels
-            // collapses the panel then calls showmodepanel with the chosen difficulty after cleaning up key listeners
+            // Disable all interactions once a choice is made.
             const disableAll = () => {
                 [b1, b2, b3].forEach(({ btn, txt }) => { btn.disableInteractive(); txt.disableInteractive(); });
             };
 
+            /**
+             * finalizeSelection(difficultyKey, btn, txt)
+             * Maps "easy|normal|hard" → 1|2|3, sets registry, provides feedback, and
+             * then transitions to the mode picker.
+             */
             const finalizeSelection = (difficultyKey, btn, txt) => {
                 if (this._navigating) return;
                 this._navigating = true;
@@ -389,6 +477,7 @@ export default class GameScene extends Phaser.Scene {
                 });
             };
 
+            // Keyboard shortcuts: 1/2/3 (also numpad).
             const keys = this.input.keyboard.addKeys({
                 one:   Phaser.Input.Keyboard.KeyCodes.ONE,
                 two:   Phaser.Input.Keyboard.KeyCodes.TWO,
@@ -415,12 +504,14 @@ export default class GameScene extends Phaser.Scene {
             this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupKeys);
         };
 
-        // showmodepanel definition
-        // builds a centered white modal with a scale in animation and then fades in its contents
-        // draws a title and uses a helper to make two large rectangular buttons via makebtn logic
-        // go function fades out the camera and then starts the requested scene with difficulty and playername
-        // systems ui topbar is attached to give home and mute controls and esc closes back to menuscene
-        // while the panel is open s jumps to soapsplash and l jumps to leaderboard or ending where available
+        /**
+         * showModePanel(difficulty)
+         * What: modal chooser for which game flow to launch next.
+         * Params:
+         *   - difficulty {1|2|3|string} accepted as numeric or label; forwarded
+         *     untouched to next scene (SoapSplash/CleanCatch/etc.).
+         * Returns: void. Side effects: scene transition on click/keys.
+         */
         this.showModePanel = (difficulty) => {
             const cx = this.scale.width / 2;
             const cy = this.scale.height / 2;
@@ -444,6 +535,7 @@ export default class GameScene extends Phaser.Scene {
             }).setOrigin(0.5, 0);
             content.add(title);
 
+            // Standardized button builder (uses CONFIG.ui.button dims).
             const makeBtn = (label, y, onClick) => {
                 const Bw = CONFIG?.ui?.button?.width  ?? 560;
                 const Bh = CONFIG?.ui?.button?.height ?? 68;
@@ -470,6 +562,7 @@ export default class GameScene extends Phaser.Scene {
                 return { rect, txt };
             };
 
+            // Animate panel in, then reveal content.
             this.tweens.add({
                 targets: bg,
                 scaleY: 1,
@@ -480,6 +573,7 @@ export default class GameScene extends Phaser.Scene {
                 }
             });
 
+            // Helper to transition to a scene key with fade.
             const go = (sceneKey) => {
                 this._navigating = true;
 
@@ -494,16 +588,19 @@ export default class GameScene extends Phaser.Scene {
                 });
             };
 
+            // Topbar with optional Home and live mute toggle.
             systems.ui.topbar(this, {
                 onHome: () => this.scene.start("GameScene", { playerName: this.registry.get("playerName") }),
                 showMute: true
             });
 
+            // Escape returns to MenuScene.
             this.input.keyboard.once("keydown-ESC", () => {
                 bg.destroy(); content.destroy();
                 this.scene.start("MenuScene");
             });
 
+            // Quick keys
             const keysMode = this.input.keyboard.addKeys({
                 s: Phaser.Input.Keyboard.KeyCodes.S,
                 l: Phaser.Input.Keyboard.KeyCodes.L
@@ -518,9 +615,7 @@ export default class GameScene extends Phaser.Scene {
             });
         };
 
-        // dev helpers at bottom
-        // if config is in dev mode number keys one two three set the difficulty directly and show a tiny toast
-        // useful during testing to skip the picker and verify downstream logic quickly
+        // Dev difficulty hotkeys (1/2/3) to set registry immediately.
         if (CONFIG.isDevMode) {
             const setLvl = (n) => {
                 this.registry.set("difficulty", n);

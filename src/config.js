@@ -8,8 +8,17 @@ window.CONFIG = {
     width: 1920,
     height: 1080,
 
-    // feature flags and switches for build variants or in-dev behavior
-    isLeaderboardsSwas: false,
+    // audio paths, used in kikos day seperated by scene names.
+    audio: {
+        cleanCatch: "assets/sounds/cleanCatcher.mp3",
+        cleanCatchBGAudio: 0.75,
+        cleanCatchAudioGood: "assets/sounds/bubble pop Soap Splasher.wav",
+        cleanCatchAudioBad: "assets/sounds/badPop.mp3",
+        cleanCatchBeepAudio: "assets/sounds/timerSound.m4a",
+        menuAudio: "assets/sounds/kikos_day.mp3",
+        magic_sparkle: "assets/sounds/magic_sparkle.mp3",
+    },
+
 
     // ui defaults: fonts, sizes, and common widget styling read by systems.ui helpers
     // keep these generic so scenes don’t hardcode visuals
@@ -76,6 +85,8 @@ window.CONFIG = {
             frontpage: "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png",
             sand: "assets/images/backgrounds/sand.png",     // placeholder
             school: "assets/images/backgrounds/school.png", // placeholder
+            confetti: "assets/images/backgrounds/confetti.png",
+            classroon: "assets/images/background/classroom.png",
         },
 
         // shared UI components: buttons, dialog panels, and navigation affordances
@@ -125,6 +136,10 @@ window.CONFIG = {
         // menu specific art (front page / landing background)
         menu: {
             frontpage: "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_01_bathroom_start.png",
+            WASH1_PATH: "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_02_bathroom_wash-hands.png",
+            WASH2_PATH: "assets/images/Menu/washed_kikos-day_LEVEL_01_scene_02_action_03_bathroom_sparkle.png",
+            ARROW_RIGHT_PATH: "assets/images/UI/washed_kikos-day_UI-Button_ARROW_Right.png",
+
         },
 
         // ending / scoreboard screen assets including music and celebration overlays
