@@ -801,6 +801,7 @@ const streakScore = (() => {
             baseScore: 0,
             totalScore: 0,
             cleanRun: 0,
+            peakTotal: 0,
             streak: 0,
             bestStreak: 0,
 
@@ -838,6 +839,7 @@ const streakScore = (() => {
             _recompute() {
                 // total = baseScore * multiplier
                 this.totalScore = Math.floor(this.baseScore * this.multiplier());
+                this.peakTotal = Math.max(this.peakTotal, this.totalScore);
             }
         };
     }
@@ -1127,20 +1129,20 @@ const soapsplash = (() => {
                     }
 
                     if (scene.streakSys) {
-                        // Deduct from BASE so total recomputes with the (streak * 0.5) multiplier
-                        // Flat penalty in TOTAL points (not scaled by multiplier)
-                        const P = SS.breachPenalty ?? 100;
-                        const m = scene.streakSys?.multiplier?.() ?? 1;
-                        scene.streakSys.addBase(-(P / Math.max(1, m)));
-
-
+                        const P = SS.breachPenalty ?? 100;              // flat total penalty
+                        const m = Math.max(1, scene.streakSys.multiplier?.() ?? 1);
+                        const curTotal  = scene.streakSys.totalScore || 0;
+                        const peak      = scene.streakSys.peakTotal || 0;
+                        const floorKeep = Math.floor(peak * 0.25);      // keep at least 25% of peak
+                        const nextTotal = Math.max(curTotal - P, floorKeep, 0);
+                        const neededBase = Math.ceil(nextTotal / m);
+                        const deltaBase  = neededBase - (scene.streakSys.baseScore || 0);
+                        scene.streakSys.addBase(deltaBase);             // recomputes + clamps internally
                         // Sync legacy fields used by overlay & any other UI
                         scene.typing.score = scene.streakSys.totalScore;
                         scene.typing.streak = scene.streakSys.streak;
                         scene.typing.bestStreak = Math.max(scene.typing.bestStreak, scene.streakSys.bestStreak);
-
-                        // Refresh HUD so the penalty is visible immediately
-                        soapsplash.typing.updateHud(scene);
+                        soapsplash.typing.updateHud(scene);             // refresh immediately
                     }
 
                     if (scene.breaches >= maxBreaches) timer.endGame(scene, "Too many breaches");
@@ -1328,9 +1330,9 @@ const soapsplash = (() => {
             window.__SS_LAST_SCORE__ = { total: finalScore };
             localStorage.setItem("ss_score", finalScore);
 
-
+// One handler used by both the rect button and its label
             const goBack = () => {
-                // ✅ Persist Soap Splash score
+                // Persist score mirrors (belt & braces)
                 try {
                     const finalScore = scene.streakSys ? scene.streakSys.totalScore : 0;
                     window.__SS_LAST_SCORE__ = { total: finalScore };
@@ -1341,16 +1343,29 @@ const soapsplash = (() => {
                     console.warn("Failed to save Soap Splash score", err);
                 }
 
+                // Stop game bgm, resume global
                 try {
                     AudioManager.stopGroup?.("game");
                     AudioManager.resumeGroup?.("global");
                 } catch {}
+
+                // Prefer the scene’s robust one-shot transition helper
                 dialogRoot.destroy(true);
-                scene.scene.start("HandwashAnimationScene", { skipIntro: true });
+                if (typeof scene.endGameAndGoto === "function") {
+                    scene.endGameAndGoto("HandwashAnimationScene", { skipIntro: true }, "ui-continue");
+                } else {
+                    // Fallback to direct start (kept for safety)
+                    scene.scene.start("HandwashAnimationScene", { skipIntro: true });
+                }
             };
 
+// ✅ attach listeners OUTSIDE the handler (this is the fix)
             btn.on("pointerup", goBack);
             btnLabel.setInteractive({ useHandCursor: true }).on("pointerup", goBack);
+
+// (nothing else down here)
+
+
         },
 
     };

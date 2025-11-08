@@ -12,6 +12,11 @@ export default class PreloadScene extends Phaser.Scene {
 
     // preload runs first and loads required images
     preload() {
+
+        // in PreloadScene.preload()
+        this.load.script('webfont', 'https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js');
+
+
         // short names for asset sections from CONFIG
         const KI = CONFIG.assets.kiko;
         const BG = CONFIG.assets.backgrounds;
@@ -63,6 +68,12 @@ export default class PreloadScene extends Phaser.Scene {
         // place logo (keeps your existing visual)
         // safe to call in any scene and it anchors the brand at bottom right
         systems.ui.placeLogo(this);
+
+        WebFont.load({
+            google: { families: ['Chewy'] },
+            active: () => this.scene.start('MenuScene')
+        });
+
 
         // wait until main.js marks words as ready, then continue flow
         // this scene does not parse words it only blocks until CONFIGwordsReady is true
